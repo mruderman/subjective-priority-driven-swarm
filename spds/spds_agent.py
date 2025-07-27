@@ -308,11 +308,21 @@ IMPORTANCE_TO_GROUP: X
         # Check if agent has tools (Letta default agents require using send_message tool)
         has_tools = hasattr(self.agent, 'tools') and len(self.agent.tools) > 0
         
+        # Determine if this is an initial response or a reply
+        is_initial_response = "Now that you've heard everyone's initial thoughts" not in conversation_history
+        
         if has_tools:
             # For agents with tools, be very explicit about using send_message
-            prompt = f"""{conversation_history}
+            if is_initial_response:
+                # Initial independent thoughts
+                prompt = f"""{conversation_history}
 
-Based on my assessment of this conversation, I need you to respond to the human. Use the send_message tool with your contribution to this discussion. Remember to call the send_message function with your response as the message parameter."""
+Based on my assessment of this topic, I want to share my thoughts. Please use the send_message tool to contribute your perspective to this discussion. Remember to call the send_message function with your response as the message parameter."""
+            else:
+                # Response phase - reacting to others
+                prompt = f"""{conversation_history}
+
+Based on what everyone has shared, I'd like to respond. Please use the send_message tool to share your response to the discussion. Remember to call the send_message function with your response as the message parameter."""
         else:
             # For agents without tools, use simple prompt
             prompt = f"{conversation_history}\nBased on my assessment, here is my contribution:"

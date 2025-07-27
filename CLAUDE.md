@@ -93,6 +93,36 @@ pre-commit run --all-files
 - **Authentication Fixed**: Proper self-hosted Letta server authentication with password
 - **Model Diversity**: Agents preserve their existing ADE model configurations
 - **Robust Response Parsing**: Handles both tool-based and regular agent responses
+- **Web GUI Implementation**: Full Flask-based web interface with WebSocket real-time communication
+- **Fixed Agent Response Issues**: Improved prompting for initial vs response phases in hybrid mode
+
+### Web GUI Setup
+The project now includes a web GUI in the `swarms-web` directory:
+
+```bash
+# Install letta-flask from GitHub (not on PyPI)
+cd /path/to/letta-flask
+pip install -e .
+
+# Run the web GUI
+cd swarms-web
+python app.py  # Runs on http://localhost:5002
+```
+
+**Web GUI Features:**
+- Real-time WebSocket communication for instant updates
+- Agent selection with visual cards interface
+- Live secretary commands and export functionality
+- Responsive Bootstrap 5 design with cyan/marigold/amber color scheme
+- Support for all conversation modes and secretary features
+
+**Fixed Issues:**
+- Agent prompting now distinguishes between initial thoughts and response phases
+- Improved message extraction to handle tool calls, tool returns, and assistant messages
+- Self-contained JavaScript to avoid complex dependency chains
+- Fixed duplicate message display by clearing socket event listeners before re-registering
+- Fixed participants list by correcting agent ID reference (agent.agent.id)
+- **Secretary Implementation Fixed**: Completely rewrote secretary to use proper Letta API patterns with real AI-powered meeting documentation
 
 ### Required Setup
 1. Set `LETTA_API_KEY` in `config.py`
@@ -151,11 +181,13 @@ tests/
 ## Secretary Agent & Meeting Minutes
 
 ### Secretary Agent Features
-- **Neutral Observer**: Records conversations without participating in discussions
+- **AI-Powered Documentation**: Uses real Letta agent intelligence with proper memory blocks and active message processing
+- **Active Processing**: Processes conversation messages in real-time using `client.agents.messages.create()` for authentic AI analysis
+- **Memory Block Architecture**: Stores meeting context, participant info, and notes style in dedicated memory blocks
 - **Dual Personalities**: Formal board secretary vs. friendly meeting facilitator
 - **Adaptive Mode**: Automatically adjusts style based on conversation tone
 - **Live Commands**: Real-time meeting management and documentation
-- **Auto-Detection**: Automatically identifies action items and decisions
+- **Auto-Detection**: Automatically identifies action items and decisions using AI analysis
 
 ### Meeting Minute Formats
 
@@ -188,6 +220,56 @@ tests/
 - **✅ Action Items** (.md) - Formatted task checklist
 - **📊 Executive Summary** (.md) - Brief meeting overview
 - **📦 Complete Package** - All formats bundled together
+
+## Secretary Implementation Details
+
+### Technical Architecture
+The secretary agent implementation was completely rewritten to use proper Letta API patterns:
+
+#### Agent Creation with Memory Blocks
+```python
+self.agent = self.client.agents.create(
+    name=name,
+    memory_blocks=[
+        CreateBlock(label="human", value="I am working with a team of AI agents..."),
+        CreateBlock(label="persona", value=persona),
+        CreateBlock(label="meeting_context", value="No active meeting...", description="Stores current meeting information..."),
+        CreateBlock(label="notes_style", value=f"Documentation style: {self.mode}", description="Preferred style...")
+    ],
+    model=config.DEFAULT_AGENT_MODEL,
+    embedding=config.DEFAULT_EMBEDDING_MODEL,
+    include_base_tools=True,
+)
+```
+
+#### Active Message Processing
+```python
+def observe_message(self, speaker: str, message: str, metadata: Optional[Dict] = None):
+    self.client.agents.messages.create(
+        agent_id=self.agent.id,
+        messages=[MessageCreate(role="user", content=f"Please note this in the meeting: {formatted_message}")]
+    )
+```
+
+#### AI-Generated Meeting Minutes
+```python
+def generate_minutes(self) -> str:
+    minutes_request = (f"Please generate meeting minutes for our {self.meeting_metadata.get('meeting_type', 'discussion')} about '{self.meeting_metadata.get('topic', 'Unknown Topic')}'. Use {self.mode} style documentation...")
+    response = self.client.agents.messages.create(agent_id=self.agent.id, messages=[MessageCreate(role="user", content=minutes_request)])
+```
+
+### Key Improvements
+- **Real AI Processing**: Secretary now uses actual Letta agent AI instead of static formatting
+- **Active Communication**: Uses `client.agents.messages.create()` for real-time processing
+- **Memory Persistence**: Meeting context stored in agent memory blocks
+- **Agent Reuse**: Prevents duplicate secretary creation by checking existing agents
+- **Proper Response Extraction**: Handles Letta agent responses correctly
+
+### Fixed Issues
+- **Static Implementation**: Removed all static minute generation methods
+- **Duplicate Agents**: Added agent reuse logic to prevent multiple secretary instances
+- **PostgreSQL Errors**: Addressed by focusing on proper Letta API usage
+- **UI Updates**: WebSocket integration for real-time secretary status updates
 
 ## Secrets and Environment Variables
 

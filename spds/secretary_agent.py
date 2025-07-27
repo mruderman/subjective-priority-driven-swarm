@@ -1,6 +1,6 @@
 # spds/secretary_agent.py
 
-from letta_client import Letta
+from letta_client import Letta, CreateBlock, MessageCreate
 from letta_client.types import AgentState
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -12,31 +12,28 @@ import json
 class SecretaryAgent:
     """
     A specialized secretary agent that observes conversations and generates meeting minutes.
-    Supports both formal board meeting minutes and casual group discussion notes.
+    Uses Letta agent AI to actively take notes and generate insights.
     """
     
     def __init__(self, client: Letta, mode: str = "adaptive"):
         self.client = client
         self.mode = mode  # "formal", "casual", or "adaptive"
         self.agent = None
-        self.conversation_log = []
         self.meeting_metadata = {}
-        self.action_items = []
-        self.decisions = []
-        self.topics_covered = []
         
         # Create the secretary agent
         self._create_secretary_agent()
     
     def _create_secretary_agent(self):
-        """Creates a specialized secretary agent on the Letta server."""
+        """Creates or retrieves a specialized secretary agent using proper Letta patterns."""
         
         if self.mode == "formal":
             persona = (
                 "I am the Recording Secretary for Cyan Society. I maintain professional "
                 "board meeting minutes following nonprofit governance standards. I use "
                 "formal language and ensure proper documentation of motions, decisions, "
-                "and action items."
+                "and action items. I store meeting information in my memory and can generate "
+                "comprehensive meeting minutes when requested."
             )
             name = "Cyan Secretary"
         elif self.mode == "casual":
@@ -44,33 +41,59 @@ class SecretaryAgent:
                 "I'm a friendly meeting facilitator who takes great notes! I capture "
                 "the energy and key insights from group discussions in a conversational, "
                 "approachable style. I help teams remember what they decided and what "
-                "comes next."
+                "comes next. I store conversation highlights in my memory."
             )
             name = "Meeting Buddy"
         else:  # adaptive
             persona = (
                 "I am an adaptive meeting secretary who adjusts my documentation style "
                 "to match the conversation. I can switch between formal board meeting "
-                "minutes and casual group discussion notes based on the context and tone."
+                "minutes and casual group discussion notes based on the context and tone. "
+                "I actively listen to conversations, store key information in my memory, "
+                "and generate appropriate meeting documentation when requested."
             )
             name = "Adaptive Secretary"
         
-        system_prompt = (
-            f"You are {name}. {persona} "
-            "You observe conversations without participating in the main discussion. "
-            "Your role is to document meetings, track decisions, and note action items. "
-            "You have excellent attention to detail and organizational skills."
-        )
+        # First, try to find an existing secretary agent
+        try:
+            existing_agents = self.client.agents.list()
+            for agent in existing_agents:
+                if agent.name == name:
+                    self.agent = agent
+                    print(f"♻️ Reusing existing secretary agent: {name}")
+                    return
+        except Exception as e:
+            print(f"⚠️ Could not search for existing agents: {e}")
         
+        # Create new agent using proper Letta memory blocks pattern
         try:
             self.agent = self.client.agents.create(
                 name=name,
-                system=system_prompt,
+                memory_blocks=[
+                    CreateBlock(
+                        label="human",
+                        value="I am working with a team of AI agents in group conversations and meetings."
+                    ),
+                    CreateBlock(
+                        label="persona",
+                        value=persona
+                    ),
+                    CreateBlock(
+                        label="meeting_context",
+                        value="No active meeting. Ready to take notes when a meeting begins.",
+                        description="Stores current meeting information, participants, topic, and ongoing notes"
+                    ),
+                    CreateBlock(
+                        label="notes_style",
+                        value=f"Documentation style: {self.mode}",
+                        description="Preferred style for meeting documentation (formal, casual, or adaptive)"
+                    )
+                ],
                 model=config.DEFAULT_AGENT_MODEL,
                 embedding=config.DEFAULT_EMBEDDING_MODEL,
                 include_base_tools=True,
             )
-            print(f"✅ Created secretary agent: {name}")
+            print(f"✅ Created new secretary agent: {name}")
         except Exception as e:
             print(f"❌ Failed to create secretary agent: {e}")
             raise
@@ -84,7 +107,7 @@ class SecretaryAgent:
         print(f"📝 Secretary mode changed to: {mode}")
     
     def start_meeting(self, topic: str, participants: List[str], meeting_type: str = "discussion"):
-        """Initialize meeting metadata and start documentation."""
+        """Initialize meeting using agent communication."""
         self.meeting_metadata = {
             "topic": topic,
             "participants": participants,
@@ -93,307 +116,185 @@ class SecretaryAgent:
             "mode": self.mode,
             "conversation_mode": None,  # Will be set by SwarmManager
         }
-        self.conversation_log = []
-        self.action_items = []
-        self.decisions = []
-        self.topics_covered = []
         
-        print(f"📋 Meeting started: {topic}")
-        print(f"👥 Participants: {', '.join(participants)}")
+        # Send meeting start message to the secretary agent
+        meeting_start_message = (
+            f"A new {meeting_type} meeting has started.\n"
+            f"Topic: {topic}\n"
+            f"Participants: {', '.join(participants)}\n"
+            f"Please begin taking notes in {self.mode} style. "
+            f"Store the meeting information in your memory and prepare to document the conversation."
+        )
+        
+        try:
+            response = self.client.agents.messages.create(
+                agent_id=self.agent.id,
+                messages=[
+                    MessageCreate(
+                        role="user",
+                        content=meeting_start_message
+                    )
+                ]
+            )
+            print(f"📋 Meeting started: {topic}")
+            print(f"👥 Participants: {', '.join(participants)}")
+            print(f"🤖 Secretary: {self._extract_agent_response(response)}")
+        except Exception as e:
+            print(f"❌ Failed to notify secretary of meeting start: {e}")
+            
+    def _extract_agent_response(self, response) -> str:
+        """Extract the main response from agent messages."""
+        for msg in response.messages:
+            if hasattr(msg, 'message_type') and msg.message_type == 'assistant_message':
+                if hasattr(msg, 'content') and msg.content:
+                    return msg.content
+        # Fallback
+        return "Secretary is ready to take notes."
     
     def observe_message(self, speaker: str, message: str, metadata: Optional[Dict] = None):
-        """Record a message from the conversation."""
-        timestamp = datetime.now()
+        """Send conversation message to the secretary agent for active processing."""
+        if not self.agent:
+            return
+            
+        # Format message for the secretary
+        formatted_message = f"{speaker}: {message}"
         
-        entry = {
-            "timestamp": timestamp,
-            "speaker": speaker,
-            "message": message,
-            "metadata": metadata or {}
-        }
-        
-        self.conversation_log.append(entry)
-        
-        # Auto-detect action items and decisions in the message
-        self._auto_detect_content(speaker, message)
+        # Send to secretary agent for processing and note-taking
+        try:
+            self.client.agents.messages.create(
+                agent_id=self.agent.id,
+                messages=[
+                    MessageCreate(
+                        role="user",
+                        content=f"Please note this in the meeting: {formatted_message}"
+                    )
+                ]
+            )
+        except Exception as e:
+            print(f"⚠️ Secretary failed to process message from {speaker}: {e}")
     
-    def _auto_detect_content(self, speaker: str, message: str):
-        """Automatically detect action items, decisions, and topic changes."""
-        
-        # Simple detection patterns - could be enhanced with LLM analysis
-        action_patterns = [
-            r"I'll|I will|I can|I should|let me",
-            r"action item|todo|task|follow up|next step",
-            r"by \w+day|by \w+ \d+|due|deadline"
-        ]
-        
-        decision_patterns = [
-            r"we decided|we agreed|consensus|motion|approved|adopted",
-            r"let's go with|we'll use|final decision|settled on"
-        ]
-        
-        # Check for action items
-        for pattern in action_patterns:
-            if re.search(pattern, message, re.IGNORECASE):
-                self.action_items.append({
-                    "speaker": speaker,
-                    "content": message,
-                    "timestamp": datetime.now(),
-                    "status": "pending"
-                })
-                break
-        
-        # Check for decisions
-        for pattern in decision_patterns:
-            if re.search(pattern, message, re.IGNORECASE):
-                self.decisions.append({
-                    "speaker": speaker,
-                    "content": message,
-                    "timestamp": datetime.now()
-                })
-                break
+    # Removed old static implementations - now using AI agent for everything
     
     def add_action_item(self, description: str, assignee: str = None, due_date: str = None):
-        """Manually add an action item."""
-        action_item = {
-            "description": description,
-            "assignee": assignee,
-            "due_date": due_date,
-            "timestamp": datetime.now(),
-            "status": "pending"
-        }
-        self.action_items.append(action_item)
-        print(f"✅ Action item added: {description}")
+        """Manually add an action item through the secretary agent."""
+        if not self.agent:
+            print(f"⚠️ Secretary agent not available")
+            return
+            
+        action_message = f"Please record this action item: {description}"
+        if assignee:
+            action_message += f" (assigned to: {assignee})"
+        if due_date:
+            action_message += f" (due: {due_date})"
+            
+        try:
+            self.client.agents.messages.create(
+                agent_id=self.agent.id,
+                messages=[
+                    MessageCreate(
+                        role="user",
+                        content=action_message
+                    )
+                ]
+            )
+            print(f"✅ Action item recorded: {description}")
+        except Exception as e:
+            print(f"❌ Failed to record action item: {e}")
     
     def add_decision(self, decision: str, context: str = None):
-        """Manually record a decision."""
-        decision_record = {
-            "decision": decision,
-            "context": context,
-            "timestamp": datetime.now()
-        }
-        self.decisions.append(decision_record)
-        print(f"📋 Decision recorded: {decision}")
+        """Manually record a decision through the secretary agent."""
+        if not self.agent:
+            print(f"⚠️ Secretary agent not available")
+            return
+            
+        decision_message = f"Please record this decision: {decision}"
+        if context:
+            decision_message += f" (context: {context})"
+            
+        try:
+            self.client.agents.messages.create(
+                agent_id=self.agent.id,
+                messages=[
+                    MessageCreate(
+                        role="user",
+                        content=decision_message
+                    )
+                ]
+            )
+            print(f"📋 Decision recorded: {decision}")
+        except Exception as e:
+            print(f"❌ Failed to record decision: {e}")
+            
+    def get_conversation_stats(self) -> Dict[str, Any]:
+        """Get conversation statistics from the secretary agent."""
+        if not self.agent:
+            return {}
+            
+        try:
+            response = self.client.agents.messages.create(
+                agent_id=self.agent.id,
+                messages=[
+                    MessageCreate(
+                        role="user",
+                        content="Please provide a summary of the meeting statistics - how many messages, participants, decisions, action items, etc."
+                    )
+                ]
+            )
+            
+            stats_text = self._extract_agent_response(response)
+            
+            # Parse basic stats from the meeting metadata
+            if self.meeting_metadata:
+                duration = (datetime.now() - self.meeting_metadata["start_time"]).seconds // 60
+                return {
+                    "duration_minutes": duration,
+                    "participants": self.meeting_metadata.get("participants", []),
+                    "topic": self.meeting_metadata.get("topic", "Unknown"),
+                    "meeting_type": self.meeting_metadata.get("meeting_type", "discussion"),
+                    "summary": stats_text
+                }
+            
+            return {"summary": stats_text}
+            
+        except Exception as e:
+            print(f"❌ Failed to get conversation stats: {e}")
+            return {}
     
     def generate_minutes(self) -> str:
-        """Generate meeting minutes in the appropriate format."""
+        """Generate meeting minutes using the secretary agent's AI capabilities."""
+        if not self.agent:
+            return "Secretary agent not available."
+            
         if not self.meeting_metadata:
             return "No meeting in progress."
         
-        if self.mode == "formal" or (self.mode == "adaptive" and self._should_use_formal()):
-            return self._generate_formal_minutes()
-        else:
-            return self._generate_casual_minutes()
-    
-    def _should_use_formal(self) -> bool:
-        """Determine if adaptive mode should use formal style."""
-        # Check for formal indicators in conversation
-        formal_indicators = [
-            "motion", "board", "approve", "consensus", "meeting minutes",
-            "agenda", "official", "record", "vote", "resolution"
-        ]
+        # Ask the secretary agent to generate meeting minutes
+        minutes_request = (
+            f"Please generate meeting minutes for our {self.meeting_metadata.get('meeting_type', 'discussion')} "
+            f"about '{self.meeting_metadata.get('topic', 'Unknown Topic')}'. "
+            f"Use {self.mode} style documentation. "
+            f"Include all the key points, decisions, and action items from the conversation you've been observing. "
+            f"Format the minutes appropriately for the meeting type."
+        )
         
-        conversation_text = " ".join([entry["message"] for entry in self.conversation_log])
-        formal_count = sum(1 for indicator in formal_indicators 
-                          if indicator in conversation_text.lower())
-        
-        # Use formal style if multiple formal indicators present
-        return formal_count >= 2
-    
-    def _generate_formal_minutes(self) -> str:
-        """Generate formal board meeting minutes."""
-        metadata = self.meeting_metadata
-        start_time = metadata["start_time"]
-        end_time = datetime.now()
-        duration = end_time - start_time
-        
-        # Format duration
-        duration_str = f"{duration.seconds // 60} minutes"
-        
-        minutes = f"""# CYAN SOCIETY
-## MINUTES OF THE BOARD OF DIRECTORS MEETING
-
-**Meeting Type**: {metadata.get('meeting_type', 'Regular Board Meeting').title()}
-**Date**: {start_time.strftime('%B %d, %Y')}
-**Time**: {start_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')} ({duration_str})
-**Location**: Virtual Meeting via SPDS Platform
-**Topic**: {metadata['topic']}
-
-### ATTENDANCE
-**Present**: """
-        
-        # Add participants
-        for participant in metadata['participants']:
-            minutes += f"\n- {participant} - Board Member"
-        
-        minutes += f"\n\n**Recording Secretary**: {self.agent.name if self.agent else 'Secretary Agent'}"
-        minutes += f"\n**Quorum**: Present ✅"
-        
-        minutes += "\n\n### CALL TO ORDER"
-        minutes += f"\nThe meeting was called to order at {start_time.strftime('%I:%M %p')}."
-        
-        # Add main discussion
-        minutes += f"\n\n### DISCUSSION AND ACTIONS\n"
-        minutes += f"#### Topic: {metadata['topic']}\n"
-        
-        # Summarize key discussion points
-        if self.conversation_log:
-            minutes += "**Discussion Summary**: "
-            minutes += self._summarize_discussion_formal()
-        
-        # Add decisions
-        if self.decisions:
-            minutes += "\n\n**Decisions Made**:\n"
-            for i, decision in enumerate(self.decisions, 1):
-                minutes += f"{i}. {decision['decision']}\n"
-        
-        # Add action items
-        if self.action_items:
-            minutes += "\n**Action Items**:\n"
-            for item in self.action_items:
-                assignee = item.get('assignee', 'Board')
-                due = item.get('due_date', 'TBD')
-                description = item.get('description', item.get('content', ''))
-                minutes += f"- [ ] {description} - Assigned to: {assignee} - Due: {due}\n"
-        
-        minutes += f"\n### ADJOURNMENT"
-        minutes += f"\nThe meeting was adjourned at {end_time.strftime('%I:%M %p')}."
-        
-        minutes += f"\n\n---"
-        minutes += f"\n**Minutes Prepared by**: {self.agent.name if self.agent else 'Secretary Agent'}"
-        minutes += f"\n**Date of Preparation**: {datetime.now().strftime('%B %d, %Y')}"
-        minutes += f"\n**Status**: Draft"
-        
-        return minutes
-    
-    def _generate_casual_minutes(self) -> str:
-        """Generate casual meeting notes."""
-        metadata = self.meeting_metadata
-        start_time = metadata["start_time"]
-        end_time = datetime.now()
-        duration = end_time - start_time
-        
-        # Format duration
-        duration_str = f"{duration.seconds // 60} minutes"
-        
-        minutes = f"""# 💬 Group Discussion: {metadata['topic']}
-
-**Date**: {start_time.strftime('%B %d, %Y')}  
-**Duration**: {duration_str}  
-**Participants**: {', '.join(metadata['participants'])}  
-**Vibe**: {self._get_conversation_vibe()} 
-
-## 🎯 What We Talked About
-
-### {metadata['topic']}
-"""
-        
-        # Add casual summary
-        if self.conversation_log:
-            minutes += self._summarize_discussion_casual()
-        
-        # Add decisions in casual style
-        if self.decisions:
-            minutes += "\n\n## ✅ What We Decided\n"
-            for decision in self.decisions:
-                minutes += f"- {decision['decision']}\n"
-        
-        # Add action items in casual style
-        if self.action_items:
-            minutes += "\n## 📋 Action Items\n"
-            for item in self.action_items:
-                assignee = item.get('assignee', 'Someone')
-                description = item.get('description', item.get('content', ''))
-                minutes += f"- [ ] {description}"
-                if assignee != 'Someone':
-                    minutes += f" ({assignee})"
-                minutes += "\n"
-        
-        # Add some fun elements
-        if len(self.conversation_log) > 10:
-            minutes += "\n## 💭 Random Good Ideas\n"
-            minutes += "- Some great insights shared!\n"
-            minutes += "- Lots of creative energy in this discussion\n"
-        
-        minutes += f"\n**Next Hangout**: TBD - same energy! 🚀"
-        
-        return minutes
-    
-    def _get_conversation_vibe(self) -> str:
-        """Determine the overall vibe of the conversation."""
-        if len(self.conversation_log) < 3:
-            return "Quick sync"
-        elif len(self.conversation_log) > 20:
-            return "Deep dive discussion 🧠"
-        elif len(self.decisions) > 0:
-            return "Productive decision-making 💪"
-        else:
-            return "Collaborative brainstorming 🧠"
-    
-    def _summarize_discussion_formal(self) -> str:
-        """Create a formal summary of the discussion."""
-        if not self.conversation_log:
-            return "Discussion details were not recorded."
-        
-        # Group messages by speaker
-        speaker_points = {}
-        for entry in self.conversation_log:
-            speaker = entry["speaker"]
-            if speaker not in speaker_points:
-                speaker_points[speaker] = []
-            speaker_points[speaker].append(entry["message"])
-        
-        summary = []
-        for speaker, messages in speaker_points.items():
-            if len(messages) > 0:
-                # Take first substantial message as key point
-                key_message = next((msg for msg in messages if len(msg) > 20), messages[0])
-                summary.append(f"{speaker} emphasized: {key_message[:100]}...")
-        
-        return " ".join(summary)
-    
-    def _summarize_discussion_casual(self) -> str:
-        """Create a casual summary of the discussion."""
-        if not self.conversation_log:
-            return "We had a great chat but I missed some details! 😅"
-        
-        participants = list(set(entry["speaker"] for entry in self.conversation_log))
-        
-        summary = f"The crew dove into {self.meeting_metadata['topic']}! "
-        
-        if len(participants) > 1:
-            summary += f"{participants[0]} kicked things off, "
-            if len(participants) > 2:
-                summary += f"{', '.join(participants[1:-1])} jumped in with insights, "
-                summary += f"and {participants[-1]} brought it home. "
+        try:
+            response = self.client.agents.messages.create(
+                agent_id=self.agent.id,
+                messages=[
+                    MessageCreate(
+                        role="user",
+                        content=minutes_request
+                    )
+                ]
+            )
+            
+            # Extract the agent's response
+            minutes = self._extract_agent_response(response)
+            if minutes and len(minutes) > 50:  # Ensure we got substantial content
+                return minutes
             else:
-                summary += f"and {participants[1]} brought some great perspectives. "
-        
-        summary += "Lots of good energy and solid ideas shared!"
-        
-        return summary
-    
-    def get_conversation_stats(self) -> Dict[str, Any]:
-        """Get statistics about the conversation."""
-        if not self.conversation_log:
-            return {}
-        
-        participants = {}
-        for entry in self.conversation_log:
-            speaker = entry["speaker"]
-            if speaker not in participants:
-                participants[speaker] = {"messages": 0, "words": 0}
-            participants[speaker]["messages"] += 1
-            participants[speaker]["words"] += len(entry["message"].split())
-        
-        total_messages = len(self.conversation_log)
-        duration = (datetime.now() - self.meeting_metadata["start_time"]).seconds // 60
-        
-        return {
-            "total_messages": total_messages,
-            "duration_minutes": duration,
-            "participants": participants,
-            "action_items": len(self.action_items),
-            "decisions": len(self.decisions),
-            "messages_per_minute": round(total_messages / max(duration, 1), 1)
-        }
+                return "Secretary is still processing the meeting notes. Please try again in a moment."
+                
+        except Exception as e:
+            print(f"❌ Failed to generate minutes: {e}")
+            return f"Error generating minutes: {str(e)}"

@@ -220,6 +220,16 @@ class SwarmManager:
                             except:
                                 pass
                 
+                # Check for tool return messages (when agent uses send_message)
+                if not message_text and hasattr(msg, 'tool_return') and msg.tool_return:
+                    # Tool returns often contain status messages we can ignore
+                    continue
+                
+                # Check assistant messages (direct responses without tools)
+                if not message_text and hasattr(msg, 'message_type') and msg.message_type == 'assistant_message':
+                    if hasattr(msg, 'content') and msg.content:
+                        message_text = msg.content
+                
                 # If no tool call, try regular content extraction
                 if not message_text and hasattr(msg, 'content'):
                     if isinstance(msg.content, str):

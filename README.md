@@ -1,6 +1,6 @@
 # Subjective Priority-Driven Swarm (SPDS)
 
-This project implements a multi-agent group chat system based on the Subjective Priority-Driven Swarm (SPDS) framework, using real computational beings from a Letta ADE server. The interactive terminal application features an intuitive agent selection interface and multiple conversation modes for rich, dynamic discussions.
+This project implements a multi-agent group chat system based on the Subjective Priority-Driven Swarm (SPDS) framework, using real computational beings from a Letta ADE server. Available as both a CLI application and a modern web interface, it features intuitive agent selection and multiple conversation modes for rich, dynamic discussions.
 
 **Key Innovation**: Agents use their own LLM models to perform real subjective assessment of conversations, creating authentic computational personalities that naturally respond, agree, disagree, and build on each other's ideas.
 
@@ -24,26 +24,35 @@ This project implements a multi-agent group chat system based on the Subjective 
 
 ## ✨ Features
 
+### Core Functionality
 - **🤖 Interactive Agent Selection**: Checkbox-based UI to select computational beings from your Letta server
 - **🎭 Multiple Conversation Modes**: Four distinct modes for different discussion dynamics
-- **📝 Secretary Agent**: Optional neutral observer for meeting documentation
+- **📝 Secretary Agent**: AI-powered meeting documentation using real Letta agent intelligence
 - **📋 Meeting Minutes**: Both formal board minutes and casual discussion notes
 - **🧠 Real Agent Intelligence**: Agents use their own LLM models for authentic conversation assessment
 - **🔄 Natural Group Dynamics**: Agents respond, agree, disagree, and build on each other's ideas
 - **⚡ Priority-Based Responses**: Dynamic turn-taking based on agent motivation and expertise
 - **💾 Multi-Format Export**: Export conversations, minutes, transcripts, and summaries
+
+### Interface Options
+- **🖥️ Command Line Interface**: Interactive terminal application with checkbox selection
+- **🌐 Web Interface**: Modern Bootstrap 5 web GUI with real-time WebSocket communication
+- **📱 Responsive Design**: Web interface works seamlessly on desktop and mobile devices
+
+### Technical Features
 - **🌐 Model Diversity**: Supports agents with different LLM providers (OpenAI, Anthropic, Meta, etc.)
 - **🔐 Secure Authentication**: Proper self-hosted Letta server integration with password authentication
 - **📊 Real-Time Assessment**: Agents evaluate conversation relevance across 7 dimensions
 - **💬 Human-in-the-Loop**: Seamless interaction between user and computational beings
 - **⌨️ Live Commands**: Real-time meeting management with slash commands
+- **🚀 WebSocket Communication**: Real-time updates and live agent responses in web interface
 
 ## Setup
 
 1.  **Project Structure:** Ensure your files are arranged correctly in a Python package.
     ```
     spds_project/
-    |-- spds/
+    |-- spds/                 # Core CLI application
     |   |-- __init__.py
     |   |-- config.py
     |   |-- tools.py
@@ -53,14 +62,24 @@ This project implements a multi-agent group chat system based on the Subjective 
     |   |-- meeting_templates.py
     |   |-- export_manager.py
     |   |-- main.py
+    |-- swarms-web/          # Web GUI application
+    |   |-- app.py           # Flask web server
+    |   |-- run.py           # Quick start script
+    |   |-- templates/       # HTML templates
+    |   |-- static/          # CSS, JS, assets
+    |   |-- requirements.txt # Web-specific dependencies
     |-- exports/              # Generated meeting minutes and exports
-    |-- requirements.txt
+    |-- requirements.txt      # Core dependencies
     |-- creative_swarm.json
     ```
 
 2.  **Install Dependencies:**
     ```bash
+    # Core CLI dependencies
     pip install -r requirements.txt
+    
+    # Additional web interface dependencies
+    pip install -r swarms-web/requirements.txt
     ```
 
 3.  **Configure Environment Variables:**
@@ -77,9 +96,35 @@ This project implements a multi-agent group chat system based on the Subjective 
 
 ## 🚀 Running the Application
 
-### Interactive Mode (Recommended)
+Choose between the web interface (recommended for most users) or the command line interface:
 
-Launch the intuitive interface for agent selection and conversation mode choice:
+### 🌐 Web Interface (Recommended)
+
+Launch the modern web GUI with real-time features:
+
+```bash
+# Quick start
+cd swarms-web
+python run.py
+
+# Or manually
+python app.py
+```
+
+Then open your browser to **http://localhost:5002**
+
+**Web Interface Features:**
+- 🖱️ **Point-and-click agent selection** with visual cards
+- 🎨 **Modern Bootstrap 5 interface** with responsive design
+- ⚡ **Real-time WebSocket communication** for live updates
+- 📊 **Live agent scores and phase indicators** during conversations
+- 📝 **Interactive secretary panel** with live minutes and commands
+- 💾 **One-click export** with download buttons for all formats
+- 📱 **Mobile-friendly design** that works on any device
+
+### 🖥️ Command Line Interface
+
+Launch the interactive terminal interface for agent selection and conversation mode choice:
 
 ```bash
 python -m spds.main
@@ -152,7 +197,7 @@ Diana: "Building on both perspectives, what if we considered..."
 
 ## 📝 Secretary Agent & Meeting Minutes
 
-The secretary agent acts as a neutral observer, documenting conversations without participating. It offers two distinct documentation styles:
+The secretary agent uses AI-powered note-taking to actively document conversations through real agent communication. Built with proper Letta API patterns using memory blocks and active message processing, it provides intelligent meeting documentation that goes beyond simple transcription:
 
 ### Meeting Types
 
@@ -323,16 +368,19 @@ Morgan: As the product owner, I believe we should prioritize mobile development.
 ### Core Components
 - **SPDSAgent**: Individual agent with subjective assessment capabilities
 - **SwarmManager**: Orchestrates multi-agent conversations with secretary integration
-- **SecretaryAgent**: Neutral observer for meeting documentation
+- **SecretaryAgent**: AI-powered meeting documentation using real Letta agent communication
 - **MeetingTemplates**: Formal and casual minute formatting engines
 - **ExportManager**: Multi-format export system for all conversation data
 - **SubjectiveAssessment**: Tool for agents to evaluate their motivation
 - **Letta Integration**: Leverages Letta's stateful agent framework
 
 ### Key Features
-- **Real-time Documentation**: Secretary observes without interfering
+- **Real-time AI Processing**: Secretary actively processes conversations using Letta agent intelligence
+- **Memory Block Architecture**: Uses proper Letta memory blocks for meeting context, notes style, and ongoing documentation
+- **Active Agent Communication**: Secretary receives and processes messages through `client.agents.messages.create()` for real AI-powered analysis
+- **AI-Generated Minutes**: Meeting minutes are generated by the secretary's AI model, not static templates
 - **Dual Personality**: Formal board secretary vs. casual note-taker
-- **Auto-detection**: Identifies decisions and action items automatically
+- **Auto-detection**: Identifies decisions and action items automatically using AI analysis
 - **Live Commands**: Manage meetings in real-time with slash commands
 - **Flexible Export**: Multiple formats for different audiences
 
