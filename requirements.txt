@@ -1,0 +1,30 @@
+# Core client for Letta
+letta-client
+
+# Required by the Letta client
+httpx>=0.21.2
+httpx-sse==0.4.0
+pydantic>=1.9.2
+
+# For interacting with OpenAI models
+openai
+
+# For environment variable management
+python-dotenv
+
+# For interactive CLI interfaces
+questionary
+
+# For testing (optional)
+pytest
+pytest-asyncio
+
+# For linting and code quality (optional)
+flake8
+black
+pylint
+isort
+pre-commit
+
+# For test coverage
+pytest-cov

@@ -1,0 +1,254 @@
+# Subjective Priority-Driven Swarm (SPDS)
+
+This project implements a multi-agent group chat system based on the Subjective Priority-Driven Swarm (SPDS) framework, using real computational beings from a Letta ADE server. The interactive terminal application features an intuitive agent selection interface and multiple conversation modes for rich, dynamic discussions.
+
+**Key Innovation**: Agents use their own LLM models to perform real subjective assessment of conversations, creating authentic computational personalities that naturally respond, agree, disagree, and build on each other's ideas.
+
+## 🎭 Conversation Modes
+
+**🔄 Hybrid Mode (Recommended)**: Two-phase conversations
+- **Phase 1**: All motivated agents share independent thoughts on the topic
+- **Phase 2**: Agents respond to each other's ideas with rebuttals, agreements, or new insights
+
+**👥 All-Speak Mode**: Fast-paced group discussions  
+- All motivated agents respond in priority order
+- Each agent sees previous responses within the same turn
+
+**🔀 Sequential Mode**: Traditional turn-taking
+- One agent speaks per turn with fairness rotation
+- Prevents any single agent from dominating
+
+**🎯 Pure Priority Mode**: Meritocratic discussions
+- The most motivated agent always speaks
+- Natural leader-follower dynamics
+
+## ✨ Features
+
+- **🤖 Interactive Agent Selection**: Checkbox-based UI to select computational beings from your Letta server
+- **🎭 Multiple Conversation Modes**: Four distinct modes for different discussion dynamics
+- **🧠 Real Agent Intelligence**: Agents use their own LLM models for authentic conversation assessment
+- **🔄 Natural Group Dynamics**: Agents respond, agree, disagree, and build on each other's ideas
+- **⚡ Priority-Based Responses**: Dynamic turn-taking based on agent motivation and expertise
+- **🌐 Model Diversity**: Supports agents with different LLM providers (OpenAI, Anthropic, Meta, etc.)
+- **🔐 Secure Authentication**: Proper self-hosted Letta server integration with password authentication
+- **📊 Real-Time Assessment**: Agents evaluate conversation relevance across 7 dimensions
+- **💬 Human-in-the-Loop**: Seamless interaction between user and computational beings
+
+## Setup
+
+1.  **Project Structure:** Ensure your files are arranged correctly in a Python package.
+    ```
+    spds_project/
+    |-- spds/
+    |   |-- __init__.py
+    |   |-- config.py
+    |   |-- tools.py
+    |   |-- spds_agent.py
+    |   |-- swarm_manager.py
+    |   |-- main.py
+    |-- requirements.txt
+    |-- creative_swarm.json
+    ```
+
+2.  **Install Dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3.  **Configure Environment Variables:**
+    Create a `.env` file in the project root or set environment variables:
+    ```bash
+    LETTA_API_KEY=your-api-key-here
+    LETTA_PASSWORD=your-server-password
+    LETTA_BASE_URL=http://localhost:8283  # For self-hosted
+    LETTA_ENVIRONMENT=SELF_HOSTED  # Or LETTA_CLOUD
+    ```
+
+4.  **Configure Docker (if using self-hosted Letta):**
+    Ensure your `docker-compose.yml` or `docker run` command correctly mounts your project directory and sets the `TOOL_EXEC_DIR` and `TOOL_EXEC_VENV_NAME` environment variables as previously discussed.
+
+## 🚀 Running the Application
+
+### Interactive Mode (Recommended)
+
+Launch the intuitive interface for agent selection and conversation mode choice:
+
+```bash
+python -m spds.main
+```
+
+**What you'll see:**
+1. **🤖 Agent Discovery**: Automatically finds all agents on your Letta server
+2. **☑️ Agent Selection**: Checkbox interface to select computational beings
+3. **🎭 Mode Selection**: Choose from 4 conversation modes with descriptions
+4. **💬 Topic Input**: Enter your discussion topic
+5. **🔄 Rich Conversations**: Experience dynamic, multi-layered discussions
+
+### Command Line Options (Advanced)
+
+**Run with specific agents by ID:**
+```bash
+python -m spds.main --agent-ids ag-123-abc ag-456-def
+```
+
+**Run with specific agents by name:**
+```bash
+python -m spds.main --agent-names "Project Manager Alex" "Designer Jordan"
+```
+
+**Run with custom ephemeral swarm:**
+```bash
+python -m spds.main --swarm-config creative_swarm.json
+```
+
+## 📖 Example Session
+
+```
+🤖 Discovering available agents from Letta server...
+✅ Found 8 available agents
+
+📋 Select agents for your swarm:
+☑️ Alice (Research Scientist) - openai/gpt-4.1
+☑️ Bob (Creative Director) - anthropic/claude-3-5-sonnet
+☐ Charlie (Data Analyst) - together/llama-3.3-70b
+☑️ Diana (Product Manager) - google/gemini-pro
+
+🎭 Select conversation mode:
+❯ 🔄 Hybrid (independent thoughts + response round) [RECOMMENDED]
+
+💬 Enter conversation topic: "The future of AI in creative industries"
+
+🎯 Selected 3 agents for discussion in HYBRID mode: 'The future of AI in creative industries'
+
+=== 🧠 INITIAL RESPONSES ===
+Alice: [Independent research perspective]
+Bob: [Creative industry insights] 
+Diana: [Product strategy viewpoint]
+
+=== 💬 RESPONSE ROUND ===
+Alice: "I agree with Bob's point about human creativity, but..."
+Bob: "Diana raises an interesting product angle that makes me think..."
+Diana: "Building on both perspectives, what if we considered..."
+```
+
+## 🔧 How It Works
+
+### Real Agent Intelligence
+Each computational being uses its own LLM to assess conversation relevance:
+
+1. **🧠 Subjective Assessment**: Agents evaluate conversations across 7 dimensions using their own models:
+   - **Importance to Self**: How personally significant is the topic? (0-10)
+   - **Perceived Gap**: Are crucial points missing? (0-10)
+   - **Unique Perspective**: Do I have insights others haven't shared? (0-10)
+   - **Emotional Investment**: How much do I care about the outcome? (0-10)
+   - **Expertise Relevance**: How applicable is my domain knowledge? (0-10)
+   - **Urgency**: How time-sensitive is this topic? (0-10)
+   - **Group Impact**: What's the potential impact on group understanding? (0-10)
+
+2. **⚡ Priority Calculation**: Dynamic scoring determines speaking order:
+   - **Motivation Score**: Sum of first 5 dimensions (must exceed threshold of 30)
+   - **Priority Score**: (Urgency × 0.6) + (Group Impact × 0.4)
+   - Higher priority agents speak first in their mode
+
+3. **🎭 Mode-Based Conversations**: Different interaction patterns:
+   - **Hybrid**: Independent → Responses (natural rebuttals/agreements)
+   - **All-Speak**: Sequential priority order with context building
+   - **Sequential**: Turn-taking with fairness rotation
+   - **Pure Priority**: Highest motivation always leads
+
+4. **🧬 Authentic Personalities**: Each agent maintains unique:
+   - **Persona**: Distinct personality and communication style  
+   - **Expertise**: Domain knowledge and areas of interest
+   - **Model**: Their own LLM provider and capabilities
+   - **Memory**: Persistent conversation history and context
+
+## Configuration
+
+Edit `spds/config.py` or use environment variables to customize:
+
+- **API Keys**: `LETTA_API_KEY`, `LETTA_PASSWORD`
+- **Server**: `LETTA_BASE_URL`, `LETTA_ENVIRONMENT`
+- **Default Models**: `DEFAULT_AGENT_MODEL`, `DEFAULT_EMBEDDING_MODEL` (fallback values)
+- **Thresholds**: `PARTICIPATION_THRESHOLD`, `URGENCY_WEIGHT`, `IMPORTANCE_WEIGHT`
+- **Agent Profiles**: Modify the `AGENT_PROFILES` list
+
+### Model Diversity Support
+
+SPDS supports diverse computational lineages through per-agent model configuration:
+
+```python
+# Agent profiles can specify different models
+AGENT_PROFILES = [
+    {
+        "name": "OpenAI Agent",
+        "persona": "A strategic analyst",
+        "expertise": ["analysis", "planning"],
+        "model": "openai/gpt-4",
+        "embedding": "openai/text-embedding-ada-002"
+    },
+    {
+        "name": "Anthropic Agent", 
+        "persona": "A creative problem solver",
+        "expertise": ["creativity", "innovation"],
+        "model": "anthropic/claude-3-5-sonnet-20241022",
+        "embedding": "openai/text-embedding-ada-002"
+    },
+    {
+        "name": "Meta Agent",
+        "persona": "A technical implementer",
+        "expertise": ["engineering", "implementation"],
+        "model": "meta-llama/llama-3.1-70b-instruct",
+        "embedding": "openai/text-embedding-ada-002"
+    }
+]
+```
+
+**Supported Model Providers:**
+- OpenAI (GPT-4, GPT-3.5)
+- Anthropic (Claude 3.5 Sonnet, Claude 3 Opus)
+- Meta (Llama 3.1)
+- Google (Gemini Pro)
+- Alibaba (Qwen)
+- And others supported by Letta
+
+**Model Configuration Options:**
+- `model`: Optional field in agent profiles to specify the LLM model
+- `embedding`: Optional field to specify the embedding model
+- If not specified, agents use `DEFAULT_AGENT_MODEL` and `DEFAULT_EMBEDDING_MODEL`
+- Existing agents preserve their original model configuration when loaded
+
+## Example Output
+
+```
+Swarm chat started. Type 'quit' or Ctrl+D to end the session.
+Enter the topic of conversation: Should we prioritize mobile or web development?
+
+You: I think we need to decide our platform strategy for the next quarter.
+
+--- Assessing agent motivations ---
+  - Alex: Motivation Score = 45, Priority Score = 42.00
+  - Jordan: Motivation Score = 72, Priority Score = 64.80
+  - Casey: Motivation Score = 38, Priority Score = 34.80
+  - Morgan: Motivation Score = 89, Priority Score = 80.60
+
+Morgan: As the product owner, I believe we should prioritize mobile development...
+```
+
+## Architecture
+
+- **SPDSAgent**: Individual agent with subjective assessment capabilities
+- **SwarmManager**: Orchestrates multi-agent conversations
+- **SubjectiveAssessment**: Tool for agents to evaluate their motivation
+- **Letta Integration**: Leverages Letta's stateful agent framework
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
