@@ -98,6 +98,35 @@ def interactive_agent_selection(client: Letta):
         print("❌ No conversation mode selected. Exiting.")
         return None, None, None
 
+    # Get secretary preferences
+    enable_secretary = questionary.confirm(
+        "📝 Enable meeting secretary? (Records minutes and allows export)",
+        default=True
+    ).ask()
+    
+    secretary_mode = "adaptive"
+    meeting_type = "discussion"
+    
+    if enable_secretary:
+        # Get meeting type
+        meeting_type_choice = questionary.select(
+            "📋 What type of meeting is this?",
+            choices=[
+                "💬 Casual Group Discussion",
+                "📋 Formal Board Meeting (Cyan Society)",
+                "🤖 Let Secretary Decide (Adaptive)"
+            ],
+            default="🤖 Let Secretary Decide (Adaptive)"
+        ).ask()
+        
+        meeting_type_mapping = {
+            "💬 Casual Group Discussion": ("casual", "discussion"),
+            "📋 Formal Board Meeting (Cyan Society)": ("formal", "board_meeting"),
+            "🤖 Let Secretary Decide (Adaptive)": ("adaptive", "discussion")
+        }
+        
+        secretary_mode, meeting_type = meeting_type_mapping.get(meeting_type_choice, ("adaptive", "discussion"))
+
     # Get topic from user
     topic = questionary.text(
         "💬 Enter the conversation topic or meeting agenda:"
@@ -105,10 +134,13 @@ def interactive_agent_selection(client: Letta):
     
     if not topic:
         print("❌ No topic provided. Exiting.")
-        return None, None, None
+        return None, None, None, None, None
     
     print(f"\n🎯 Selected {len(selected_agent_ids)} agents for discussion in {conversation_mode.upper()} mode: '{topic}'")
-    return selected_agent_ids, topic, conversation_mode
+    if enable_secretary:
+        print(f"📝 Secretary: {secretary_mode} mode for {meeting_type}")
+    
+    return selected_agent_ids, topic, conversation_mode, enable_secretary, secretary_mode, meeting_type
 
 
 def main():
@@ -169,17 +201,22 @@ def main():
     else:
         # No arguments provided - use interactive selection
         print("Mode: Interactive agent selection")
-        selected_agent_ids, topic, conversation_mode = interactive_agent_selection(client)
+        result = interactive_agent_selection(client)
         
-        if not selected_agent_ids:
+        if not result or len(result) < 6:
             sys.exit(1)  # User cancelled or no agents selected
             
+        selected_agent_ids, topic, conversation_mode, enable_secretary, secretary_mode, meeting_type = result
         agent_ids = selected_agent_ids
-        # We'll use the topic and conversation_mode directly in the swarm manager
 
     try:
         # Set conversation mode - default to hybrid for interactive, sequential for others
         mode = conversation_mode if 'conversation_mode' in locals() else "sequential"
+        
+        # Set secretary options - default to disabled for non-interactive mode
+        secretary_enabled = enable_secretary if 'enable_secretary' in locals() else False
+        sec_mode = secretary_mode if 'secretary_mode' in locals() else "adaptive"
+        meet_type = meeting_type if 'meeting_type' in locals() else "discussion"
         
         swarm = SwarmManager(
             client=client,
@@ -187,6 +224,9 @@ def main():
             agent_ids=agent_ids,
             agent_names=agent_names,
             conversation_mode=mode,
+            enable_secretary=secretary_enabled,
+            secretary_mode=sec_mode,
+            meeting_type=meet_type,
         )
         
         # If we used interactive selection, start with the provided topic

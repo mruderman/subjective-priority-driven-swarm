@@ -61,15 +61,20 @@ pre-commit run --all-files
 ### Core Components
 1. **SPDSAgent** (`spds_agent.py`): Individual agent implementation with real LLM-based subjective assessment
 2. **SwarmManager** (`swarm_manager.py`): Orchestrates multi-agent conversations with 4 conversation modes
-3. **Tools** (`tools.py`): Defines the SubjectiveAssessment model for agent decision-making
-4. **Config** (`config.py`): Contains API keys, agent profiles, and conversation parameters
-5. **Interactive Selection** (`main.py`): User-friendly agent and conversation mode selection
+3. **SecretaryAgent** (`secretary_agent.py`): Neutral observer for meeting minutes and export features
+4. **MeetingTemplates** (`meeting_templates.py`): Formal board minutes and casual group discussion formats
+5. **ExportManager** (`export_manager.py`): Multi-format export system for conversations and minutes
+6. **Tools** (`tools.py`): Defines the SubjectiveAssessment model for agent decision-making
+7. **Config** (`config.py`): Contains API keys, agent profiles, conversation parameters, and secretary settings
+8. **Interactive Selection** (`main.py`): User-friendly agent selection, conversation modes, and meeting types
 
 ### Key Design Patterns
 - **Agent-based Architecture**: Each agent has unique persona, expertise, and state
 - **Real LLM Assessment**: Agents use their own models to evaluate conversation relevance
 - **Multi-Mode Conversations**: Four conversation modes for different discussion styles
-- **Interactive UX**: Checkbox-based agent selection with conversation mode options
+- **Secretary Integration**: Optional neutral observer for meeting documentation
+- **Dual Meeting Formats**: Formal board minutes and casual group discussion notes
+- **Interactive UX**: Checkbox-based agent selection with conversation mode and meeting type options
 
 ### Important Configuration
 - **PARTICIPATION_THRESHOLD**: Minimum priority score (default: 30) for agent to speak
@@ -105,6 +110,9 @@ spds/
 ├── tools.py
 ├── spds_agent.py
 ├── swarm_manager.py
+├── secretary_agent.py
+├── meeting_templates.py
+├── export_manager.py
 └── main.py
 
 tests/
@@ -122,20 +130,64 @@ tests/
 
 ### Key Workflow Patterns
 1. **Interactive Setup**: Users select agents via checkbox UI and choose conversation mode
-2. **Real Assessment**: Each agent uses their own LLM to evaluate conversation relevance
-3. **Mode-Based Conversations**: 
+2. **Meeting Configuration**: Optional secretary agent with formal or casual minute styles
+3. **Real Assessment**: Each agent uses their own LLM to evaluate conversation relevance
+4. **Mode-Based Conversations**: 
    - **Hybrid**: Independent thoughts → Response round (rebuttals, agreements, new insights)
    - **All-Speak**: Everyone responds in priority order, seeing previous responses
    - **Sequential**: One speaker per turn with fairness rotation
    - **Pure Priority**: Highest motivated agent always speaks
-4. **Natural Flow**: Agents respond, agree, disagree, and build on each other's ideas
-5. **Continuous Loop**: Conversation continues until user types 'quit'
+5. **Secretary Observation**: Neutral documentation of all conversations and decisions
+6. **Live Commands**: `/minutes`, `/export`, `/formal`, `/casual`, `/action-item` during conversation
+7. **Natural Flow**: Agents respond, agree, disagree, and build on each other's ideas
+8. **Export Options**: Multiple formats available at conversation end
 
 ### Conversation Modes Details
 - **🔄 Hybrid (Recommended)**: Two-phase conversations for rich, multi-layered discussions
 - **👥 All-Speak**: Fast-paced discussions where all motivated agents contribute immediately  
 - **🔀 Sequential**: Traditional turn-taking with fairness to prevent agent monopolization
 - **🎯 Pure Priority**: Meritocratic discussions where most motivated agent leads
+
+## Secretary Agent & Meeting Minutes
+
+### Secretary Agent Features
+- **Neutral Observer**: Records conversations without participating in discussions
+- **Dual Personalities**: Formal board secretary vs. friendly meeting facilitator
+- **Adaptive Mode**: Automatically adjusts style based on conversation tone
+- **Live Commands**: Real-time meeting management and documentation
+- **Auto-Detection**: Automatically identifies action items and decisions
+
+### Meeting Minute Formats
+
+#### Formal Board Minutes (Cyan Society)
+- Professional board of directors format
+- Compliance with nonprofit governance standards
+- Includes attendance, motions, decisions, and action items
+- Sequential meeting numbering and proper legal documentation
+- Perfect for official organizational records
+
+#### Casual Group Discussion Notes
+- Friendly, conversational tone with emojis
+- Captures the energy and vibe of brainstorming sessions
+- Focus on key insights and good ideas shared
+- Great for team collaboration and creative sessions
+
+### Live Secretary Commands
+- `/minutes` - Generate current meeting minutes
+- `/export [format]` - Export meeting (minutes/casual/transcript/actions/summary/all)
+- `/formal` - Switch secretary to formal board mode
+- `/casual` - Switch secretary to casual discussion mode
+- `/action-item [description]` - Manually add action item
+- `/stats` - Show conversation participation statistics
+- `/help` - Display all available commands
+
+### Export Formats
+- **📋 Board Minutes** (.md) - Official Cyan Society board format
+- **💬 Casual Notes** (.md) - Friendly group discussion summary
+- **📝 Raw Transcript** (.txt) - Complete conversation log
+- **✅ Action Items** (.md) - Formatted task checklist
+- **📊 Executive Summary** (.md) - Brief meeting overview
+- **📦 Complete Package** - All formats bundled together
 
 ## Secrets and Environment Variables
 

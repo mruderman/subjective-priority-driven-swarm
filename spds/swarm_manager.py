@@ -2,6 +2,8 @@
 
 import time
 from .spds_agent import SPDSAgent
+from .secretary_agent import SecretaryAgent
+from .export_manager import ExportManager
 from letta_client import Letta
 from letta_client.errors import NotFoundError
 
@@ -14,9 +16,15 @@ class SwarmManager:
         agent_ids: list = None,
         agent_names: list = None,
         conversation_mode: str = "hybrid",
+        enable_secretary: bool = False,
+        secretary_mode: str = "adaptive",
+        meeting_type: str = "discussion",
     ):
         self.client = client
         self.agents = []
+        self.enable_secretary = enable_secretary
+        self.secretary = None
+        self.export_manager = ExportManager()
 
         if agent_ids:
             self._load_agents_by_id(agent_ids)
@@ -33,6 +41,16 @@ class SwarmManager:
         self.conversation_history = ""
         self.last_speaker = None  # For fairness tracking
         self.conversation_mode = conversation_mode
+        self.meeting_type = meeting_type
+        
+        # Initialize secretary if enabled
+        if enable_secretary:
+            try:
+                self.secretary = SecretaryAgent(client, mode=secretary_mode)
+                print(f"📝 Secretary enabled in {secretary_mode} mode")
+            except Exception as e:
+                print(f"⚠️  Failed to create secretary agent: {e}")
+                self.enable_secretary = False
         
         # Validate conversation mode
         valid_modes = ["hybrid", "all_speak", "sequential", "pure_priority"]
@@ -89,7 +107,7 @@ class SwarmManager:
             print("\nExiting.")
             return
 
-        self.conversation_history += f"System: The topic is '{topic}'.\n"
+        self._start_meeting(topic)
 
         while True:
             try:
@@ -101,16 +119,30 @@ class SwarmManager:
             if human_input.lower() == "quit":
                 print("Exiting chat.")
                 break
+            
+            # Check for secretary commands
+            if self._handle_secretary_commands(human_input):
+                continue
+                
             self.conversation_history += f"You: {human_input}\n"
+            
+            # Let secretary observe the human message
+            if self.secretary:
+                self.secretary.observe_message("You", human_input)
 
             self._agent_turn(topic)
+        
+        self._end_meeting()
 
     def start_chat_with_topic(self, topic: str):
         """Starts and manages the group chat with a pre-set topic."""
         print(f"\nSwarm chat started with topic: '{topic}' (Mode: {self.conversation_mode.upper()})")
+        if self.secretary:
+            print(f"📝 Secretary: {self.secretary.agent.name if self.secretary.agent else 'Recording'} ({self.secretary.mode} mode)")
         print("Type 'quit' or Ctrl+D to end the session.")
+        print("Available commands: /minutes, /export, /formal, /casual, /action-item")
         
-        self.conversation_history += f"System: The topic is '{topic}'.\n"
+        self._start_meeting(topic)
 
         while True:
             try:
@@ -122,9 +154,20 @@ class SwarmManager:
             if human_input.lower() == "quit":
                 print("Exiting chat.")
                 break
+            
+            # Check for secretary commands
+            if self._handle_secretary_commands(human_input):
+                continue
+                
             self.conversation_history += f"You: {human_input}\n"
+            
+            # Let secretary observe the human message
+            if self.secretary:
+                self.secretary.observe_message("You", human_input)
 
             self._agent_turn(topic)
+        
+        self._end_meeting()
 
     def _agent_turn(self, topic: str):
         """Manages a single turn of agent responses based on conversation mode."""
@@ -215,6 +258,8 @@ class SwarmManager:
                 message_text = self._extract_agent_response(response)
                 initial_responses.append((agent, message_text))
                 print(f"{agent.name}: {message_text}")
+                # Notify secretary
+                self._notify_secretary_agent_response(agent.name, message_text)
             except Exception as e:
                 fallback = "I have some thoughts but I'm having trouble expressing them."
                 initial_responses.append((agent, fallback))
@@ -240,6 +285,8 @@ class SwarmManager:
                 print(f"{agent.name}: {message_text}")
                 # Add responses to conversation history
                 self.conversation_history += f"{agent.name}: {message_text}\n"
+                # Notify secretary
+                self._notify_secretary_agent_response(agent.name, message_text)
             except Exception as e:
                 fallback = "I find the different perspectives here really interesting and would like to engage more with these ideas."
                 print(f"{agent.name}: {fallback}")
@@ -258,6 +305,8 @@ class SwarmManager:
                 print(f"{agent.name}: {message_text}")
                 # Add each response to history so subsequent agents can see it
                 self.conversation_history += f"{agent.name}: {message_text}\n"
+                # Notify secretary
+                self._notify_secretary_agent_response(agent.name, message_text)
             except Exception as e:
                 fallback = "I have some thoughts but I'm having trouble expressing them clearly."
                 print(f"{agent.name}: {fallback}")
@@ -289,10 +338,14 @@ class SwarmManager:
             message_text = self._extract_agent_response(response)
             print(f"{speaker.name}: {message_text}")
             self.conversation_history += f"{speaker.name}: {message_text}\n"
+            # Notify secretary
+            self._notify_secretary_agent_response(speaker.name, message_text)
         except Exception as e:
             fallback = "I have some thoughts but I'm having trouble phrasing them."
             print(f"{speaker.name}: {fallback}")
             self.conversation_history += f"{speaker.name}: {fallback}\n"
+            # Notify secretary of fallback too
+            self._notify_secretary_agent_response(speaker.name, fallback)
             print(f"[Debug: Error in sequential response - {e}]")
 
     def _pure_priority_turn(self, motivated_agents: list, topic: str):
@@ -306,8 +359,179 @@ class SwarmManager:
             message_text = self._extract_agent_response(response)
             print(f"{speaker.name}: {message_text}")
             self.conversation_history += f"{speaker.name}: {message_text}\n"
+            # Notify secretary
+            self._notify_secretary_agent_response(speaker.name, message_text)
         except Exception as e:
             fallback = "I have thoughts on this topic but I'm having difficulty expressing them."
             print(f"{speaker.name}: {fallback}")
             self.conversation_history += f"{speaker.name}: {fallback}\n"
+            # Notify secretary of fallback too
+            self._notify_secretary_agent_response(speaker.name, fallback)
             print(f"[Debug: Error in pure priority response - {e}]")
+    
+    def _start_meeting(self, topic: str):
+        """Initialize meeting with secretary if enabled."""
+        self.conversation_history += f"System: The topic is '{topic}'.\n"
+        
+        if self.secretary:
+            # Get participant names
+            participant_names = [agent.name for agent in self.agents]
+            
+            # Start the meeting in the secretary
+            self.secretary.start_meeting(
+                topic=topic,
+                participants=participant_names,
+                meeting_type=self.meeting_type
+            )
+            
+            # Set conversation mode in metadata
+            self.secretary.meeting_metadata["conversation_mode"] = self.conversation_mode
+    
+    def _end_meeting(self):
+        """End meeting and offer export options."""
+        if self.secretary:
+            print("\n" + "="*50)
+            print("🏁 Meeting ended! Export options available.")
+            self._offer_export_options()
+    
+    def _handle_secretary_commands(self, user_input: str) -> bool:
+        """Handle secretary-related commands. Returns True if command was handled."""
+        if not user_input.startswith('/'):
+            return False
+        
+        command_parts = user_input[1:].split(' ', 1)
+        command = command_parts[0].lower()
+        args = command_parts[1] if len(command_parts) > 1 else ""
+        
+        if not self.secretary:
+            if command in ['minutes', 'export', 'formal', 'casual', 'action-item']:
+                print("❌ Secretary is not enabled. Please restart with secretary mode.")
+                return True
+            return False
+        
+        if command == "minutes":
+            print("\n📋 Generating current meeting minutes...")
+            minutes = self.secretary.generate_minutes()
+            print(minutes)
+            return True
+        
+        elif command == "export":
+            self._handle_export_command(args)
+            return True
+        
+        elif command == "formal":
+            self.secretary.set_mode("formal")
+            print("📝 Secretary mode changed to formal")
+            return True
+        
+        elif command == "casual":
+            self.secretary.set_mode("casual")
+            print("📝 Secretary mode changed to casual")
+            return True
+        
+        elif command == "action-item":
+            if args:
+                self.secretary.add_action_item(args)
+            else:
+                print("Usage: /action-item <description>")
+            return True
+        
+        elif command == "stats":
+            stats = self.secretary.get_conversation_stats()
+            print("\n📊 Conversation Statistics:")
+            for key, value in stats.items():
+                print(f"  - {key}: {value}")
+            return True
+        
+        elif command in ["help", "commands"]:
+            self._show_secretary_help()
+            return True
+        
+        return False
+    
+    def _handle_export_command(self, args: str):
+        """Handle export command with optional format specification."""
+        if not self.secretary:
+            print("❌ Secretary not available")
+            return
+        
+        # Get current meeting data
+        meeting_data = {
+            "metadata": self.secretary.meeting_metadata,
+            "conversation_log": self.secretary.conversation_log,
+            "action_items": self.secretary.action_items,
+            "decisions": self.secretary.decisions,
+            "stats": self.secretary.get_conversation_stats()
+        }
+        
+        format_type = args.strip().lower() if args else "minutes"
+        
+        try:
+            if format_type in ["minutes", "formal"]:
+                file_path = self.export_manager.export_meeting_minutes(meeting_data, "formal")
+            elif format_type == "casual":
+                file_path = self.export_manager.export_meeting_minutes(meeting_data, "casual")
+            elif format_type == "transcript":
+                file_path = self.export_manager.export_raw_transcript(
+                    self.secretary.conversation_log, self.secretary.meeting_metadata
+                )
+            elif format_type == "actions":
+                file_path = self.export_manager.export_action_items(
+                    self.secretary.action_items, self.secretary.meeting_metadata
+                )
+            elif format_type == "summary":
+                file_path = self.export_manager.export_executive_summary(meeting_data)
+            elif format_type == "all":
+                files = self.export_manager.export_complete_package(meeting_data, self.secretary.mode)
+                print(f"✅ Complete package exported: {len(files)} files")
+                return
+            else:
+                print(f"❌ Unknown export format: {format_type}")
+                print("Available formats: minutes, casual, transcript, actions, summary, all")
+                return
+            
+            print(f"✅ Exported: {file_path}")
+            
+        except Exception as e:
+            print(f"❌ Export failed: {e}")
+    
+    def _offer_export_options(self):
+        """Offer export options at the end of meeting."""
+        if not self.secretary:
+            return
+        
+        print("\nWould you like to export the meeting? Available options:")
+        print("  📋 /export minutes - Formal board minutes")
+        print("  💬 /export casual - Casual meeting notes")
+        print("  📝 /export transcript - Raw conversation")
+        print("  ✅ /export actions - Action items list")
+        print("  📊 /export summary - Executive summary")
+        print("  📦 /export all - Complete package")
+        print("\nOr type any command, or just press Enter to finish.")
+        
+        try:
+            choice = input("\nExport choice: ").strip()
+            if choice and choice.startswith('/'):
+                self._handle_secretary_commands(choice)
+        except (EOFError, KeyboardInterrupt):
+            pass
+        
+        print("👋 Meeting complete!")
+    
+    def _show_secretary_help(self):
+        """Show available secretary commands."""
+        print("""
+📝 Secretary Commands:
+  /minutes       - Generate current meeting minutes
+  /export [type] - Export meeting (minutes/casual/transcript/actions/summary/all)
+  /formal        - Switch to formal board minutes mode
+  /casual        - Switch to casual meeting notes mode
+  /action-item   - Add an action item
+  /stats         - Show conversation statistics
+  /help          - Show this help message
+        """)
+    
+    def _notify_secretary_agent_response(self, agent_name: str, message: str):
+        """Notify secretary of an agent response."""
+        if self.secretary:
+            self.secretary.observe_message(agent_name, message)

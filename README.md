@@ -26,13 +26,17 @@ This project implements a multi-agent group chat system based on the Subjective 
 
 - **🤖 Interactive Agent Selection**: Checkbox-based UI to select computational beings from your Letta server
 - **🎭 Multiple Conversation Modes**: Four distinct modes for different discussion dynamics
+- **📝 Secretary Agent**: Optional neutral observer for meeting documentation
+- **📋 Meeting Minutes**: Both formal board minutes and casual discussion notes
 - **🧠 Real Agent Intelligence**: Agents use their own LLM models for authentic conversation assessment
 - **🔄 Natural Group Dynamics**: Agents respond, agree, disagree, and build on each other's ideas
 - **⚡ Priority-Based Responses**: Dynamic turn-taking based on agent motivation and expertise
+- **💾 Multi-Format Export**: Export conversations, minutes, transcripts, and summaries
 - **🌐 Model Diversity**: Supports agents with different LLM providers (OpenAI, Anthropic, Meta, etc.)
 - **🔐 Secure Authentication**: Proper self-hosted Letta server integration with password authentication
 - **📊 Real-Time Assessment**: Agents evaluate conversation relevance across 7 dimensions
 - **💬 Human-in-the-Loop**: Seamless interaction between user and computational beings
+- **⌨️ Live Commands**: Real-time meeting management with slash commands
 
 ## Setup
 
@@ -45,7 +49,11 @@ This project implements a multi-agent group chat system based on the Subjective 
     |   |-- tools.py
     |   |-- spds_agent.py
     |   |-- swarm_manager.py
+    |   |-- secretary_agent.py
+    |   |-- meeting_templates.py
+    |   |-- export_manager.py
     |   |-- main.py
+    |-- exports/              # Generated meeting minutes and exports
     |-- requirements.txt
     |-- creative_swarm.json
     ```
@@ -81,8 +89,11 @@ python -m spds.main
 1. **🤖 Agent Discovery**: Automatically finds all agents on your Letta server
 2. **☑️ Agent Selection**: Checkbox interface to select computational beings
 3. **🎭 Mode Selection**: Choose from 4 conversation modes with descriptions
-4. **💬 Topic Input**: Enter your discussion topic
-5. **🔄 Rich Conversations**: Experience dynamic, multi-layered discussions
+4. **📝 Secretary Setup**: Enable optional meeting secretary
+5. **📋 Meeting Type**: Choose formal board meeting or casual discussion
+6. **💬 Topic Input**: Enter your discussion topic
+7. **🔄 Rich Conversations**: Experience dynamic, multi-layered discussions
+8. **💾 Export Options**: Save meeting minutes and transcripts at the end
 
 ### Command Line Options (Advanced)
 
@@ -116,9 +127,17 @@ python -m spds.main --swarm-config creative_swarm.json
 🎭 Select conversation mode:
 ❯ 🔄 Hybrid (independent thoughts + response round) [RECOMMENDED]
 
+📝 Enable meeting secretary? (Records minutes and allows export) Yes
+
+📋 What type of meeting is this?
+❯ 🤖 Let Secretary Decide (Adaptive)
+
 💬 Enter conversation topic: "The future of AI in creative industries"
 
 🎯 Selected 3 agents for discussion in HYBRID mode: 'The future of AI in creative industries'
+📝 Secretary: Adaptive mode for discussion
+
+Available commands: /minutes, /export, /formal, /casual, /action-item
 
 === 🧠 INITIAL RESPONSES ===
 Alice: [Independent research perspective]
@@ -129,6 +148,63 @@ Diana: [Product strategy viewpoint]
 Alice: "I agree with Bob's point about human creativity, but..."
 Bob: "Diana raises an interesting product angle that makes me think..."
 Diana: "Building on both perspectives, what if we considered..."
+```
+
+## 📝 Secretary Agent & Meeting Minutes
+
+The secretary agent acts as a neutral observer, documenting conversations without participating. It offers two distinct documentation styles:
+
+### Meeting Types
+
+**📋 Formal Board Minutes (Cyan Society)**
+- Professional board of directors format
+- Compliance with nonprofit governance standards
+- Sequential meeting numbering
+- Proper motions, decisions, and action items
+- Ideal for official organizational records
+
+**💬 Casual Group Discussion Notes**
+- Friendly, conversational tone with emojis
+- Captures the energy and vibe of discussions
+- Highlights key insights and good ideas
+- Perfect for team brainstorming sessions
+
+### Live Commands During Conversation
+
+- `/minutes` - Generate current meeting minutes
+- `/export [format]` - Export meeting in various formats
+- `/formal` - Switch to formal board secretary mode
+- `/casual` - Switch to casual discussion mode
+- `/action-item [description]` - Manually add an action item
+- `/stats` - Show conversation participation statistics
+- `/help` - Display all available commands
+
+### Export Formats
+
+When the conversation ends or using `/export`, you can save:
+
+- **📋 Board Minutes** (.md) - Official Cyan Society board format
+- **💬 Casual Notes** (.md) - Friendly group discussion summary
+- **📝 Raw Transcript** (.txt) - Complete conversation log
+- **✅ Action Items** (.md) - Formatted task checklist
+- **📊 Executive Summary** (.md) - Brief meeting overview
+- **📦 Complete Package** - All formats bundled together
+
+Example export prompt at conversation end:
+```
+==================================================
+🏁 Meeting ended! Export options available.
+
+Would you like to export the meeting? Available options:
+  📋 /export minutes - Formal board minutes
+  💬 /export casual - Casual meeting notes
+  📝 /export transcript - Raw conversation
+  ✅ /export actions - Action items list
+  📊 /export summary - Executive summary
+  📦 /export all - Complete package
+
+Export choice: /export all
+✅ Complete package exported: 6 files
 ```
 
 ## 🔧 How It Works
@@ -166,11 +242,19 @@ Each computational being uses its own LLM to assess conversation relevance:
 
 Edit `spds/config.py` or use environment variables to customize:
 
+### Core Settings
 - **API Keys**: `LETTA_API_KEY`, `LETTA_PASSWORD`
 - **Server**: `LETTA_BASE_URL`, `LETTA_ENVIRONMENT`
 - **Default Models**: `DEFAULT_AGENT_MODEL`, `DEFAULT_EMBEDDING_MODEL` (fallback values)
 - **Thresholds**: `PARTICIPATION_THRESHOLD`, `URGENCY_WEIGHT`, `IMPORTANCE_WEIGHT`
 - **Agent Profiles**: Modify the `AGENT_PROFILES` list
+
+### Secretary & Export Settings
+- **Organization**: `ORGANIZATION_NAME` (default: "CYAN SOCIETY")
+- **Export Directory**: `EXPORT_DIRECTORY` (default: "./exports")
+- **Secretary Mode**: `DEFAULT_SECRETARY_MODE` ("formal", "casual", or "adaptive")
+- **Meeting Type**: `DEFAULT_MEETING_TYPE` ("discussion", "board_meeting")
+- **Auto Export**: `AUTO_EXPORT_ON_END` (true/false)
 
 ### Model Diversity Support
 
@@ -236,10 +320,21 @@ Morgan: As the product owner, I believe we should prioritize mobile development.
 
 ## Architecture
 
+### Core Components
 - **SPDSAgent**: Individual agent with subjective assessment capabilities
-- **SwarmManager**: Orchestrates multi-agent conversations
+- **SwarmManager**: Orchestrates multi-agent conversations with secretary integration
+- **SecretaryAgent**: Neutral observer for meeting documentation
+- **MeetingTemplates**: Formal and casual minute formatting engines
+- **ExportManager**: Multi-format export system for all conversation data
 - **SubjectiveAssessment**: Tool for agents to evaluate their motivation
 - **Letta Integration**: Leverages Letta's stateful agent framework
+
+### Key Features
+- **Real-time Documentation**: Secretary observes without interfering
+- **Dual Personality**: Formal board secretary vs. casual note-taker
+- **Auto-detection**: Identifies decisions and action items automatically
+- **Live Commands**: Manage meetings in real-time with slash commands
+- **Flexible Export**: Multiple formats for different audiences
 
 ## Contributing
 

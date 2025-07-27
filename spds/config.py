@@ -55,3 +55,27 @@ AGENT_PROFILES = [
 PARTICIPATION_THRESHOLD = int(os.getenv("PARTICIPATION_THRESHOLD", "30"))
 URGENCY_WEIGHT = float(os.getenv("URGENCY_WEIGHT", "0.6"))
 IMPORTANCE_WEIGHT = float(os.getenv("IMPORTANCE_WEIGHT", "0.4"))
+
+# Secretary Agent Configuration
+ENABLE_SECRETARY_DEFAULT = True
+DEFAULT_SECRETARY_MODE = "adaptive"  # "formal", "casual", or "adaptive"
+DEFAULT_MEETING_TYPE = "discussion"  # "discussion", "board_meeting", "working_session"
+
+# Export Configuration
+DEFAULT_EXPORT_DIRECTORY = os.getenv("EXPORT_DIRECTORY", "./exports")
+DEFAULT_EXPORT_FORMAT = "minutes"  # "minutes", "casual", "transcript", "actions", "summary", "all"
+AUTO_EXPORT_ON_END = bool(os.getenv("AUTO_EXPORT_ON_END", "False"))
+
+# Organization Settings for Formal Minutes
+ORGANIZATION_NAME = os.getenv("ORGANIZATION_NAME", "CYAN SOCIETY")
+ORGANIZATION_TYPE = "nonprofit"  # "nonprofit", "corporation", "partnership"
+
+# Meeting Templates Configuration
+FORMAL_MINUTES_INCLUDE_STATS = True
+CASUAL_NOTES_INCLUDE_EMOJIS = True
+EXPORT_FILE_TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
+
+# Secretary Behavior Settings
+SECRETARY_AUTO_DETECT_DECISIONS = True
+SECRETARY_AUTO_DETECT_ACTION_ITEMS = True
+SECRETARY_INTERVENTION_LEVEL = "minimal"  # "none", "minimal", "active", "full"
