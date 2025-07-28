@@ -4,7 +4,7 @@ flask-socketio>=5.3.0
 # letta-flask - Install from GitHub:
 # git clone https://github.com/letta-ai/letta-flask.git
 # cd letta-flask && pip install -e .
-letta-client>=0.5.0
+letta-client
 python-socketio>=5.8.0
 python-engineio>=4.7.0
 requests>=2.31.0

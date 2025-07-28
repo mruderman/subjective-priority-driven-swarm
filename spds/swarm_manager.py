@@ -229,6 +229,23 @@ class SwarmManager:
             print(f"[Debug: Failed to get message count for agent {agent_id}: {e}]")
             return 0
 
+    def _warm_up_agent(self, agent, topic: str) -> bool:
+        """Ensure agent is ready for conversation by priming their context."""
+        try:
+            # Send context primer to ensure agent is ready
+            self.client.agents.messages.create(
+                agent_id=agent.agent.id,
+                messages=[{
+                    "role": "user",
+                    "content": f"We are about to discuss: {topic}. Please review your memory and prepare to contribute meaningfully to this discussion."
+                }]
+            )
+            time.sleep(0.3)  # Small delay to allow processing
+            return True
+        except Exception as e:
+            print(f"[Debug: Agent warm-up failed for {agent.name}: {e}]")
+            return False
+
     def _agent_turn(self, topic: str):
         """Manages a single turn of agent responses based on conversation mode."""
         print(f"\n--- Assessing agent motivations ({self.conversation_mode.upper()} mode) ---")
@@ -249,6 +266,11 @@ class SwarmManager:
             return
 
         print(f"\n🎭 {len(motivated_agents)} agent(s) motivated to speak in {self.conversation_mode.upper()} mode")
+        
+        # Warm up motivated agents before they speak
+        print("\n🔥 Warming up motivated agents...")
+        for agent in motivated_agents:
+            self._warm_up_agent(agent, topic)
 
         # Dispatch to appropriate conversation mode
         if self.conversation_mode == "hybrid":
@@ -264,8 +286,10 @@ class SwarmManager:
             self._sequential_turn(motivated_agents, topic)
 
     def _extract_agent_response(self, response) -> str:
-        """Helper method to extract message text from agent response."""
+        """Helper method to extract message text from agent response with robust error handling."""
         message_text = ""
+        extraction_successful = False
+        
         try:
             for msg in response.messages:
                 # Check for tool calls first (send_message)
@@ -275,10 +299,22 @@ class SwarmManager:
                             try:
                                 import json
                                 args = json.loads(tool_call.function.arguments)
-                                message_text = args.get('message', '')
-                                break
-                            except:
-                                pass
+                                candidate = args.get('message', '').strip()
+                                # Validate the extracted message
+                                if candidate and len(candidate) > 10:  # Minimum viable response
+                                    message_text = candidate
+                                    extraction_successful = True
+                                    break
+                            except json.JSONDecodeError as e:
+                                print(f"[Debug: JSON parse error in tool call: {e}]")
+                                continue
+                            except Exception as e:
+                                print(f"[Debug: Tool call extraction error: {e}]")
+                                continue
+                
+                # Only proceed if we haven't successfully extracted a message yet
+                if extraction_successful:
+                    break
                 
                 # Check for tool return messages (when agent uses send_message)
                 if not message_text and hasattr(msg, 'tool_return') and msg.tool_return:
@@ -288,12 +324,18 @@ class SwarmManager:
                 # Check assistant messages (direct responses without tools)
                 if not message_text and hasattr(msg, 'message_type') and msg.message_type == 'assistant_message':
                     if hasattr(msg, 'content') and msg.content:
-                        message_text = msg.content
+                        candidate = str(msg.content).strip()
+                        if candidate and len(candidate) > 10:
+                            message_text = candidate
+                            extraction_successful = True
                 
                 # If no tool call, try regular content extraction
                 if not message_text and hasattr(msg, 'content'):
                     if isinstance(msg.content, str):
-                        message_text = msg.content
+                        candidate = msg.content.strip()
+                        if candidate and len(candidate) > 10:
+                            message_text = candidate
+                            extraction_successful = True
                     elif isinstance(msg.content, list) and msg.content:
                         content_item = msg.content[0]
                         if hasattr(content_item, 'text'):
@@ -322,9 +364,37 @@ class SwarmManager:
         
         for i, agent in enumerate(motivated_agents, 1):
             print(f"\n({i}/{len(motivated_agents)}) {agent.name} (priority: {agent.priority_score:.2f}) - Initial thoughts...")
-            try:
-                response = agent.speak(mode="initial", topic=topic)
-                message_text = self._extract_agent_response(response)
+            
+            # Try to get response with retry logic
+            message_text = ""
+            max_attempts = 2
+            
+            for attempt in range(max_attempts):
+                try:
+                    response = agent.speak(mode="initial", topic=topic)
+                    message_text = self._extract_agent_response(response)
+                    
+                    # Validate response quality
+                    if message_text and len(message_text.strip()) > 10 and "having trouble" not in message_text.lower():
+                        # Good response
+                        break
+                    elif attempt < max_attempts - 1:
+                        # Poor response, retry once
+                        print(f"[Debug: Weak response detected, retrying...]")
+                        time.sleep(0.5)
+                        # Send a more specific prompt
+                        self.client.agents.messages.create(
+                            agent_id=agent.agent.id,
+                            messages=[{"role": "user", "content": f"Please share your specific thoughts on {topic}. What is your perspective?"}]
+                        )
+                    
+                except Exception as e:
+                    print(f"[Debug: Error in initial response attempt {attempt+1} - {e}]")
+                    if attempt < max_attempts - 1:
+                        time.sleep(0.5)
+            
+            # Use the response or a more specific fallback
+            if message_text and len(message_text.strip()) > 10:
                 initial_responses.append((agent, message_text))
                 print(f"{agent.name}: {message_text}")
                 # Update all agents' memories with this response
@@ -333,11 +403,12 @@ class SwarmManager:
                 self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
                 self._notify_secretary_agent_response(agent.name, message_text)
-            except Exception as e:
-                fallback = "I have some thoughts but I'm having trouble expressing them."
+            else:
+                # More specific fallback based on agent's expertise
+                fallback = f"As someone with expertise in {getattr(agent, 'expertise', 'this area')}, I'm processing the topic of {topic} and will share my thoughts in the next round."
                 initial_responses.append((agent, fallback))
                 print(f"{agent.name}: {fallback}")
-                print(f"[Debug: Error in initial response - {e}]")
+                self.conversation_history += f"{agent.name}: {fallback}\n"
         
         # Phase 2: Response round - agents react to each other's ideas
         print("\n=== 💬 RESPONSE ROUND ===")
