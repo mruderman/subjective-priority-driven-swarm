@@ -115,8 +115,8 @@ class WebSwarmManager:
             self._handle_secretary_command(message)
             return
         
-        # Process agent turn
-        self._web_agent_turn()
+        # Process agent turn (follow CLI pattern)
+        self._web_agent_turn(self.current_topic)
     
     def _handle_secretary_command(self, command):
         """Handle secretary commands with WebSocket responses."""
@@ -209,13 +209,13 @@ class WebSwarmManager:
                 'message': f'Export failed: {str(e)}'
             })
     
-    def _web_agent_turn(self):
-        """Process agent turn with WebSocket notifications."""
+    def _web_agent_turn(self, topic: str):
+        """Process agent turn with WebSocket notifications (follows CLI pattern)."""
         # Assess motivations
         self.emit_message('assessing_agents', {})
         
         for agent in self.swarm.agents:
-            agent.assess_motivation_and_priority("current topic")
+            agent.assess_motivation_and_priority(topic)
         
         motivated_agents = sorted(
             [agent for agent in self.swarm.agents if agent.priority_score > 0],
@@ -239,6 +239,10 @@ class WebSwarmManager:
             for agent in self.swarm.agents
         ]
         self.emit_message('agent_scores', {'scores': agent_scores})
+        
+        # Warm up motivated agents before they speak (follow CLI pattern)
+        for agent in motivated_agents:
+            self.swarm._warm_up_agent(agent, topic)
         
         # Process based on conversation mode
         if self.swarm.conversation_mode == "hybrid":
@@ -417,7 +421,7 @@ class WebSwarmManager:
         self.emit_message('agent_thinking', {'agent': speaker.name})
         
         try:
-            response = speaker.speak(mode="initial")
+            response = speaker.speak(mode="initial", topic=self.current_topic)
             message_text = self.swarm._extract_agent_response(response)
             
             self.emit_message('agent_message', {
@@ -453,7 +457,7 @@ class WebSwarmManager:
         self.emit_message('agent_thinking', {'agent': speaker.name})
         
         try:
-            response = speaker.speak(mode="initial")
+            response = speaker.speak(mode="initial", topic=self.current_topic)
             message_text = self.swarm._extract_agent_response(response)
             
             self.emit_message('agent_message', {
