@@ -95,6 +95,8 @@ pre-commit run --all-files
 - **Robust Response Parsing**: Handles both tool-based and regular agent responses
 - **Web GUI Implementation**: Full Flask-based web interface with WebSocket real-time communication
 - **Fixed Agent Response Issues**: Improved prompting for initial vs response phases in hybrid mode
+- **Token Limit Management**: Implemented proper stateful agent architecture using Letta's memory system
+- **Automatic Error Recovery**: Agent message history reset when token limits are exceeded
 
 ### Web GUI Setup
 The project now includes a web GUI in the `swarms-web` directory:
@@ -270,6 +272,8 @@ def generate_minutes(self) -> str:
 - **Duplicate Agents**: Added agent reuse logic to prevent multiple secretary instances
 - **PostgreSQL Errors**: Addressed by focusing on proper Letta API usage
 - **UI Updates**: WebSocket integration for real-time secretary status updates
+- **Token Limit Errors**: Completely refactored to use Letta's stateful agent design instead of passing conversation history
+- **Memory Management**: Agents now maintain their own memory via Letta, eliminating token overflow issues
 
 ## Secrets and Environment Variables
 

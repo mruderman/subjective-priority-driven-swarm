@@ -130,20 +130,17 @@ def perform_subjective_assessment(
             agent_id=self.agent.id, tool_id=self.assessment_tool.id
         )
 
-    def _get_full_assessment(self, conversation_history: str, topic: str):
-        """Calls the agent's LLM to perform subjective assessment of the conversation."""
+    def _get_full_assessment(self, topic: str):
+        """Calls the agent's LLM to perform subjective assessment based on internal memory."""
         
         # Check if agent has tools (need to use send_message for response)
         has_tools = hasattr(self.agent, 'tools') and len(self.agent.tools) > 0
         
         if has_tools:
             assessment_prompt = f"""
-Based on this conversation about "{topic}", please assess your motivation to contribute using the send_message tool.
+Based on our conversation about "{topic}", please assess your motivation to contribute using the send_message tool.
 
-CONVERSATION SO FAR:
-{conversation_history}
-
-Rate each dimension from 0-10 and respond using send_message with this exact format:
+You have access to our full conversation history in your memory. Please review what has been discussed and rate each dimension from 0-10, responding using send_message with this exact format:
 IMPORTANCE_TO_SELF: X
 PERCEIVED_GAP: X  
 UNIQUE_PERSPECTIVE: X
@@ -163,12 +160,9 @@ Where:
 """
         else:
             assessment_prompt = f"""
-Based on this conversation about "{topic}", please assess your motivation to contribute. 
+Based on our conversation about "{topic}", please assess your motivation to contribute. 
 
-CONVERSATION SO FAR:
-{conversation_history}
-
-Rate each dimension from 0-10:
+You have access to our full conversation history in your memory. Please review what has been discussed and rate each dimension from 0-10:
 
 1. IMPORTANCE_TO_SELF: How personally significant is this topic to you?
 2. PERCEIVED_GAP: Are there crucial points missing from the discussion? 
@@ -283,9 +277,9 @@ IMPORTANCE_TO_GROUP: X
                 
         return scores
 
-    def assess_motivation_and_priority(self, conversation_history: str, topic: str):
+    def assess_motivation_and_priority(self, topic: str):
         """Performs the full assessment and calculates motivation and priority scores."""
-        self._get_full_assessment(conversation_history, topic)
+        self._get_full_assessment(topic)
 
         assessment = self.last_assessment
         self.motivation_score = (
@@ -303,29 +297,30 @@ IMPORTANCE_TO_GROUP: X
         else:
             self.priority_score = 0
 
-    def speak(self, conversation_history: str):
-        """Generates a response from the agent."""
+    def speak(self, mode="initial", topic=None):
+        """Generates a response from the agent based on internal memory."""
         # Check if agent has tools (Letta default agents require using send_message tool)
         has_tools = hasattr(self.agent, 'tools') and len(self.agent.tools) > 0
         
-        # Determine if this is an initial response or a reply
-        is_initial_response = "Now that you've heard everyone's initial thoughts" not in conversation_history
+        # Get the last user message from conversation for context
+        recent_context = ""
+        if topic:
+            recent_context = f" The current topic is: '{topic}'."
         
         if has_tools:
             # For agents with tools, be very explicit about using send_message
-            if is_initial_response:
+            if mode == "initial":
                 # Initial independent thoughts
-                prompt = f"""{conversation_history}
-
-Based on my assessment of this topic, I want to share my thoughts. Please use the send_message tool to contribute your perspective to this discussion. Remember to call the send_message function with your response as the message parameter."""
+                prompt = f"""The user just asked a question or made a statement.{recent_context} Based on your assessment and the full conversation history in your memory, please share your initial thoughts on this. Use the send_message tool to respond. Your response should directly address what was just discussed."""
             else:
                 # Response phase - reacting to others
-                prompt = f"""{conversation_history}
-
-Based on what everyone has shared, I'd like to respond. Please use the send_message tool to share your response to the discussion. Remember to call the send_message function with your response as the message parameter."""
+                prompt = f"""Other agents have just shared their thoughts on the topic.{recent_context} Based on what everyone has shared in the conversation (which is in your memory), please share your response. You might agree, disagree, build on their ideas, or add new perspectives. Use the send_message tool to respond."""
         else:
             # For agents without tools, use simple prompt
-            prompt = f"{conversation_history}\nBased on my assessment, here is my contribution:"
+            if mode == "initial":
+                prompt = f"The user just asked a question or made a statement.{recent_context} Based on the conversation in your memory, here is my response:"
+            else:
+                prompt = f"Other agents have shared their thoughts.{recent_context} Based on what everyone has said, here is my response:"
         
         try:
             return self.client.agents.messages.create(

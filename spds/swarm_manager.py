@@ -126,6 +126,9 @@ class SwarmManager:
                 
             self.conversation_history += f"You: {human_input}\n"
             
+            # Update all agent memories with the new user message
+            self._update_agent_memories(human_input, "You")
+            
             # Let secretary observe the human message
             if self.secretary:
                 self.secretary.observe_message("You", human_input)
@@ -161,6 +164,9 @@ class SwarmManager:
                 
             self.conversation_history += f"You: {human_input}\n"
             
+            # Update all agent memories with the new user message
+            self._update_agent_memories(human_input, "You")
+            
             # Let secretary observe the human message
             if self.secretary:
                 self.secretary.observe_message("You", human_input)
@@ -169,11 +175,65 @@ class SwarmManager:
         
         self._end_meeting()
 
+    def _update_agent_memories(self, message: str, speaker: str = "User", max_retries=3):
+        """Send a message to all agents to update their internal memory with retry logic."""
+        for agent in self.agents:
+            success = False
+            for attempt in range(max_retries):
+                try:
+                    self.client.agents.messages.create(
+                        agent_id=agent.agent.id,
+                        messages=[{"role": "user", "content": f"{speaker}: {message}"}]
+                    )
+                    success = True
+                    break
+                except Exception as e:
+                    error_str = str(e)
+                    if attempt < max_retries - 1 and ("500" in error_str or "disconnected" in error_str.lower()):
+                        wait_time = 0.5 * (2 ** attempt)
+                        print(f"[Debug: Retrying {agent.name} after {wait_time}s...]")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"[Debug: Error updating {agent.name} memory: {e}]")
+                        # For token limit errors, reset and retry once
+                        if "max_tokens" in error_str.lower() or "token" in error_str.lower():
+                            print(f"[Debug: Token limit reached for {agent.name}, resetting messages...]")
+                            self._reset_agent_messages(agent.agent.id)
+                            try:
+                                self.client.agents.messages.create(
+                                    agent_id=agent.agent.id,
+                                    messages=[{"role": "user", "content": f"{speaker}: {message}"}]
+                                )
+                                success = True
+                            except Exception as retry_e:
+                                print(f"[Debug: Retry failed for {agent.name}: {retry_e}]")
+                        break
+            
+            if not success:
+                print(f"[Debug: Failed to update {agent.name} after {max_retries} attempts]")
+    def _reset_agent_messages(self, agent_id: str):
+        """Reset agent message history when token limits are reached."""
+        try:
+            self.client.agents.messages.reset(agent_id=agent_id)
+            print(f"[Debug: Successfully reset messages for agent {agent_id}]")
+        except Exception as e:
+            print(f"[Debug: Failed to reset messages for agent {agent_id}: {e}]")
+
+    def _get_agent_message_count(self, agent_id: str) -> int:
+        """Get the number of messages in an agent's history for monitoring."""
+        try:
+            messages = self.client.agents.messages.list(agent_id=agent_id, limit=1000)
+            return len(messages) if hasattr(messages, '__len__') else 0
+        except Exception as e:
+            print(f"[Debug: Failed to get message count for agent {agent_id}: {e}]")
+            return 0
+
     def _agent_turn(self, topic: str):
         """Manages a single turn of agent responses based on conversation mode."""
         print(f"\n--- Assessing agent motivations ({self.conversation_mode.upper()} mode) ---")
         for agent in self.agents:
-            agent.assess_motivation_and_priority(self.conversation_history, topic)
+            agent.assess_motivation_and_priority(topic)
             print(
                 f"  - {agent.name}: Motivation Score = {agent.motivation_score}, Priority Score = {agent.priority_score:.2f}"
             )
@@ -255,7 +315,6 @@ class SwarmManager:
 
     def _hybrid_turn(self, motivated_agents: list, topic: str):
         """Two-phase conversation: independent responses then synthesis."""
-        original_history = self.conversation_history
         
         # Phase 1: Independent responses
         print("\n=== 🧠 INITIAL RESPONSES ===")
@@ -264,10 +323,14 @@ class SwarmManager:
         for i, agent in enumerate(motivated_agents, 1):
             print(f"\n({i}/{len(motivated_agents)}) {agent.name} (priority: {agent.priority_score:.2f}) - Initial thoughts...")
             try:
-                response = agent.speak(original_history)
+                response = agent.speak(mode="initial", topic=topic)
                 message_text = self._extract_agent_response(response)
                 initial_responses.append((agent, message_text))
                 print(f"{agent.name}: {message_text}")
+                # Update all agents' memories with this response
+                self._update_agent_memories(message_text, agent.name)
+                # Add to conversation history for secretary
+                self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
                 self._notify_secretary_agent_response(agent.name, message_text)
             except Exception as e:
@@ -280,19 +343,24 @@ class SwarmManager:
         print("\n=== 💬 RESPONSE ROUND ===")
         print("Agents now respond to each other's initial thoughts...")
         
-        # Build history with all initial responses
-        history_with_initials = original_history
-        for agent, response in initial_responses:
-            history_with_initials += f"{agent.name}: {response}\n"
-        
-        response_prompt_addition = "\n\nNow that you've heard everyone's initial thoughts, please respond to what others have said. You might:\n- Agree and build on someone's idea\n- Respectfully disagree and explain why\n- Share a new insight sparked by what you heard\n- Ask questions about others' perspectives\n- Connect ideas between different responses\n\nRespond naturally to what resonates with you from the discussion above."
+        # Send instruction to all agents about response phase
+        for agent in self.agents:
+            try:
+                self.client.agents.messages.create(
+                    agent_id=agent.agent.id,
+                    messages=[{"role": "user", "content": "Now that you've heard everyone's initial thoughts, please consider how you might respond. You might agree and build on someone's idea, respectfully disagree and explain why, share a new insight sparked by what you heard, ask questions about others' perspectives, or connect ideas between different responses."}]
+                )
+            except Exception as e:
+                print(f"[Debug: Error sending response instruction to {agent.name}: {e}]")
         
         for i, agent in enumerate(motivated_agents, 1):
             print(f"\n({i}/{len(motivated_agents)}) {agent.name} - Responding to the discussion...")
             try:
-                response = agent.speak(history_with_initials + response_prompt_addition)
+                response = agent.speak(mode="response", topic=topic)
                 message_text = self._extract_agent_response(response)
                 print(f"{agent.name}: {message_text}")
+                # Update all agents' memories with this response
+                self._update_agent_memories(message_text, agent.name)
                 # Add responses to conversation history
                 self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
@@ -310,10 +378,12 @@ class SwarmManager:
         for i, agent in enumerate(motivated_agents, 1):
             print(f"\n({i}/{len(motivated_agents)}) {agent.name} (priority: {agent.priority_score:.2f}) is speaking...")
             try:
-                response = agent.speak(self.conversation_history)
+                response = agent.speak(mode="initial", topic=topic)
                 message_text = self._extract_agent_response(response)
                 print(f"{agent.name}: {message_text}")
-                # Add each response to history so subsequent agents can see it
+                # Update all agents' memories with this response
+                self._update_agent_memories(message_text, agent.name)
+                # Add each response to history for secretary
                 self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
                 self._notify_secretary_agent_response(agent.name, message_text)
@@ -344,9 +414,11 @@ class SwarmManager:
         print(f"\n({speaker.name} is speaking...)")
 
         try:
-            response = speaker.speak(self.conversation_history)
+            response = speaker.speak(mode="initial")
             message_text = self._extract_agent_response(response)
             print(f"{speaker.name}: {message_text}")
+            # Update all agents' memories with this response
+            self._update_agent_memories(message_text, speaker.name)
             self.conversation_history += f"{speaker.name}: {message_text}\n"
             # Notify secretary
             self._notify_secretary_agent_response(speaker.name, message_text)
@@ -365,9 +437,11 @@ class SwarmManager:
         print(f"\n({speaker.name} is speaking - highest priority: {speaker.priority_score:.2f})")
 
         try:
-            response = speaker.speak(self.conversation_history)
+            response = speaker.speak(mode="initial")
             message_text = self._extract_agent_response(response)
             print(f"{speaker.name}: {message_text}")
+            # Update all agents' memories with this response
+            self._update_agent_memories(message_text, speaker.name)
             self.conversation_history += f"{speaker.name}: {message_text}\n"
             # Notify secretary
             self._notify_secretary_agent_response(speaker.name, message_text)
@@ -382,6 +456,9 @@ class SwarmManager:
     def _start_meeting(self, topic: str):
         """Initialize meeting with secretary if enabled."""
         self.conversation_history += f"System: The topic is '{topic}'.\n"
+        
+        # Update all agent memories with the topic
+        self._update_agent_memories(f"The topic is '{topic}'.", "System")
         
         if self.secretary:
             # Get participant names

@@ -1,3 +1,4 @@
+import time
 # spds/secretary_agent.py
 
 from letta_client import Letta, CreateBlock, MessageCreate
@@ -8,6 +9,22 @@ from . import config
 import re
 import json
 
+
+
+def retry_with_backoff(func, max_retries=3, backoff_factor=1):
+    """Retry a function with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            if "500" in str(e) or "disconnected" in str(e).lower():
+                if attempt < max_retries - 1:
+                    wait_time = backoff_factor * (2 ** attempt)
+                    print(f"    Retrying in {wait_time}s after error: {str(e)[:50]}...")
+                    time.sleep(wait_time)
+                    continue
+            raise
+    return None
 
 class SecretaryAgent:
     """
@@ -27,6 +44,9 @@ class SecretaryAgent:
     def _create_secretary_agent(self):
         """Creates or retrieves a specialized secretary agent using proper Letta patterns."""
         
+        # Generate unique name with timestamp to avoid conflicts
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
         if self.mode == "formal":
             persona = (
                 "I am the Recording Secretary for Cyan Society. I maintain professional "
@@ -35,7 +55,7 @@ class SecretaryAgent:
                 "and action items. I store meeting information in my memory and can generate "
                 "comprehensive meeting minutes when requested."
             )
-            name = "Cyan Secretary"
+            name = f"Cyan Secretary {timestamp}"
         elif self.mode == "casual":
             persona = (
                 "I'm a friendly meeting facilitator who takes great notes! I capture "
@@ -43,7 +63,7 @@ class SecretaryAgent:
                 "approachable style. I help teams remember what they decided and what "
                 "comes next. I store conversation highlights in my memory."
             )
-            name = "Meeting Buddy"
+            name = f"Meeting Buddy {timestamp}"
         else:  # adaptive
             persona = (
                 "I am an adaptive meeting secretary who adjusts my documentation style "
@@ -52,18 +72,10 @@ class SecretaryAgent:
                 "I actively listen to conversations, store key information in my memory, "
                 "and generate appropriate meeting documentation when requested."
             )
-            name = "Adaptive Secretary"
+            name = f"Adaptive Secretary {timestamp}"
         
-        # First, try to find an existing secretary agent
-        try:
-            existing_agents = self.client.agents.list()
-            for agent in existing_agents:
-                if agent.name == name:
-                    self.agent = agent
-                    print(f"♻️ Reusing existing secretary agent: {name}")
-                    return
-        except Exception as e:
-            print(f"⚠️ Could not search for existing agents: {e}")
+        # Skip checking for existing agents - always create new to avoid problematic ones
+        # This ensures we don't reuse any broken secretary agents
         
         # Create new agent using proper Letta memory blocks pattern
         try:
@@ -126,8 +138,8 @@ class SecretaryAgent:
             f"Store the meeting information in your memory and prepare to document the conversation."
         )
         
-        try:
-            response = self.client.agents.messages.create(
+        def send_start_message():
+            return self.client.agents.messages.create(
                 agent_id=self.agent.id,
                 messages=[
                     MessageCreate(
@@ -136,9 +148,15 @@ class SecretaryAgent:
                     )
                 ]
             )
-            print(f"📋 Meeting started: {topic}")
-            print(f"👥 Participants: {', '.join(participants)}")
-            print(f"🤖 Secretary: {self._extract_agent_response(response)}")
+        
+        try:
+            response = retry_with_backoff(send_start_message)
+            if response:
+                print(f"📋 Meeting started: {topic}")
+                print(f"👥 Participants: {', '.join(participants)}")
+                print(f"🤖 Secretary: {self._extract_agent_response(response)}")
+            else:
+                print(f"⚠️ Secretary may not have received meeting start notification")
         except Exception as e:
             print(f"❌ Failed to notify secretary of meeting start: {e}")
             
@@ -160,8 +178,8 @@ class SecretaryAgent:
         formatted_message = f"{speaker}: {message}"
         
         # Send to secretary agent for processing and note-taking
-        try:
-            self.client.agents.messages.create(
+        def send_observation():
+            return self.client.agents.messages.create(
                 agent_id=self.agent.id,
                 messages=[
                     MessageCreate(
@@ -170,8 +188,12 @@ class SecretaryAgent:
                     )
                 ]
             )
+        
+        try:
+            retry_with_backoff(send_observation, max_retries=2, backoff_factor=0.5)
         except Exception as e:
-            print(f"⚠️ Secretary failed to process message from {speaker}: {e}")
+            # Don't print for every message - too noisy
+            pass
     
     # Removed old static implementations - now using AI agent for everything
     
@@ -277,8 +299,8 @@ class SecretaryAgent:
             f"Format the minutes appropriately for the meeting type."
         )
         
-        try:
-            response = self.client.agents.messages.create(
+        def request_minutes():
+            return self.client.agents.messages.create(
                 agent_id=self.agent.id,
                 messages=[
                     MessageCreate(
@@ -287,14 +309,19 @@ class SecretaryAgent:
                     )
                 ]
             )
-            
-            # Extract the agent's response
-            minutes = self._extract_agent_response(response)
-            if minutes and len(minutes) > 50:  # Ensure we got substantial content
-                return minutes
+        
+        try:
+            response = retry_with_backoff(request_minutes)
+            if response:
+                # Extract the agent's response
+                minutes = self._extract_agent_response(response)
+                if minutes and len(minutes) > 50:  # Ensure we got substantial content
+                    return minutes
+                else:
+                    return "Secretary is still processing the meeting notes. Please try again in a moment."
             else:
-                return "Secretary is still processing the meeting notes. Please try again in a moment."
+                return "Secretary is temporarily unavailable. Please try again."
                 
         except Exception as e:
             print(f"❌ Failed to generate minutes: {e}")
-            return f"Error generating minutes: {str(e)}"
+            return f"Error generating minutes: {str(e)[:100]}..."
