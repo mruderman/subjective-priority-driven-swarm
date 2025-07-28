@@ -306,7 +306,6 @@ IMPORTANCE_TO_GROUP: X
         recent_context = ""
         if topic:
             recent_context = f" The current topic is: '{topic}'."
-        
         if has_tools:
             # For agents with tools, be very explicit about using send_message
             if mode == "initial":

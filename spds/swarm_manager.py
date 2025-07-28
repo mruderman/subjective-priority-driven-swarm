@@ -364,6 +364,7 @@ class SwarmManager:
         
         for i, agent in enumerate(motivated_agents, 1):
             print(f"\n({i}/{len(motivated_agents)}) {agent.name} (priority: {agent.priority_score:.2f}) - Initial thoughts...")
+<<<<<<< HEAD
             
             # Try to get response with retry logic
             message_text = ""
@@ -395,6 +396,11 @@ class SwarmManager:
             
             # Use the response or a more specific fallback
             if message_text and len(message_text.strip()) > 10:
+=======
+            try:
+                response = agent.speak(mode="initial", topic=topic)
+                message_text = self._extract_agent_response(response)
+>>>>>>> f1404eb (Phase 1-2: Fix agent memory management - topic-only assessment and proper memory updates)
                 initial_responses.append((agent, message_text))
                 print(f"{agent.name}: {message_text}")
                 # Update all agents' memories with this response
@@ -454,7 +460,11 @@ class SwarmManager:
                 print(f"{agent.name}: {message_text}")
                 # Update all agents' memories with this response
                 self._update_agent_memories(message_text, agent.name)
+<<<<<<< HEAD
                 # Add each response to history for secretary
+=======
+                # Add each response to history so subsequent agents can see it
+>>>>>>> f1404eb (Phase 1-2: Fix agent memory management - topic-only assessment and proper memory updates)
                 self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
                 self._notify_secretary_agent_response(agent.name, message_text)
@@ -485,7 +495,7 @@ class SwarmManager:
         print(f"\n({speaker.name} is speaking...)")
 
         try:
-            response = speaker.speak(mode="initial")
+            response = speaker.speak(mode="initial", topic=topic)
             message_text = self._extract_agent_response(response)
             print(f"{speaker.name}: {message_text}")
             # Update all agents' memories with this response
@@ -508,7 +518,7 @@ class SwarmManager:
         print(f"\n({speaker.name} is speaking - highest priority: {speaker.priority_score:.2f})")
 
         try:
-            response = speaker.speak(mode="initial")
+            response = speaker.speak(mode="initial", topic=topic)
             message_text = self._extract_agent_response(response)
             print(f"{speaker.name}: {message_text}")
             # Update all agents' memories with this response
