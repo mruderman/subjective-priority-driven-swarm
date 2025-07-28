@@ -126,9 +126,6 @@ class SwarmManager:
                 
             self.conversation_history += f"You: {human_input}\n"
             
-            # Update all agent memories with the new user message
-            self._update_agent_memories(human_input, "You")
-            
             # Let secretary observe the human message
             if self.secretary:
                 self.secretary.observe_message("You", human_input)
@@ -164,9 +161,6 @@ class SwarmManager:
                 
             self.conversation_history += f"You: {human_input}\n"
             
-            # Update all agent memories with the new user message
-            self._update_agent_memories(human_input, "You")
-            
             # Let secretary observe the human message
             if self.secretary:
                 self.secretary.observe_message("You", human_input)
@@ -175,6 +169,7 @@ class SwarmManager:
         
         self._end_meeting()
 
+<<<<<<< HEAD
     def _update_agent_memories(self, message: str, speaker: str = "User", max_retries=3):
         """Send a message to all agents to update their internal memory with retry logic."""
         for agent in self.agents:
@@ -245,6 +240,8 @@ class SwarmManager:
         except Exception as e:
             print(f"[Debug: Agent warm-up failed for {agent.name}: {e}]")
             return False
+=======
+>>>>>>> f96d470 (Performance fix: Remove API overhead, restore natural context flow)
 
     def _agent_turn(self, topic: str):
         """Manages a single turn of agent responses based on conversation mode."""
@@ -266,11 +263,6 @@ class SwarmManager:
             return
 
         print(f"\n🎭 {len(motivated_agents)} agent(s) motivated to speak in {self.conversation_mode.upper()} mode")
-        
-        # Warm up motivated agents before they speak
-        print("\n🔥 Warming up motivated agents...")
-        for agent in motivated_agents:
-            self._warm_up_agent(agent, topic)
 
         # Dispatch to appropriate conversation mode
         if self.conversation_mode == "hybrid":
@@ -364,7 +356,6 @@ class SwarmManager:
         
         for i, agent in enumerate(motivated_agents, 1):
             print(f"\n({i}/{len(motivated_agents)}) {agent.name} (priority: {agent.priority_score:.2f}) - Initial thoughts...")
-<<<<<<< HEAD
             
             # Try to get response with retry logic
             message_text = ""
@@ -381,7 +372,7 @@ class SwarmManager:
                         break
                     elif attempt < max_attempts - 1:
                         # Poor response, retry once
-                        print(f"[Debug: Weak response detected, retrying...]")
+                        print(f"[Debug: Weak response detected, retrying...")
                         time.sleep(0.5)
                         # Send a more specific prompt
                         self.client.agents.messages.create(
@@ -396,15 +387,8 @@ class SwarmManager:
             
             # Use the response or a more specific fallback
             if message_text and len(message_text.strip()) > 10:
-=======
-            try:
-                response = agent.speak(mode="initial", topic=topic)
-                message_text = self._extract_agent_response(response)
->>>>>>> f1404eb (Phase 1-2: Fix agent memory management - topic-only assessment and proper memory updates)
                 initial_responses.append((agent, message_text))
                 print(f"{agent.name}: {message_text}")
-                # Update all agents' memories with this response
-                self._update_agent_memories(message_text, agent.name)
                 # Add to conversation history for secretary
                 self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
@@ -430,14 +414,16 @@ class SwarmManager:
             except Exception as e:
                 print(f"[Debug: Error sending response instruction to {agent.name}: {e}]")
         
+        # Build response prompt context from current conversation history
+        history_with_initials = self.conversation_history
+        response_prompt_addition = "\nNow that you've heard everyone's initial thoughts, please consider how you might respond."
+        
         for i, agent in enumerate(motivated_agents, 1):
             print(f"\n({i}/{len(motivated_agents)}) {agent.name} - Responding to the discussion...")
             try:
-                response = agent.speak(mode="response", topic=topic)
+                response = agent.speak(conversation_history=history_with_initials + response_prompt_addition)
                 message_text = self._extract_agent_response(response)
                 print(f"{agent.name}: {message_text}")
-                # Update all agents' memories with this response
-                self._update_agent_memories(message_text, agent.name)
                 # Add responses to conversation history
                 self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
@@ -455,16 +441,14 @@ class SwarmManager:
         for i, agent in enumerate(motivated_agents, 1):
             print(f"\n({i}/{len(motivated_agents)}) {agent.name} (priority: {agent.priority_score:.2f}) is speaking...")
             try:
-                response = agent.speak(mode="initial", topic=topic)
+                # Use the conversation so far as context for each agent
+                original_history = self.conversation_history
+                response = agent.speak(conversation_history=original_history)
                 message_text = self._extract_agent_response(response)
                 print(f"{agent.name}: {message_text}")
                 # Update all agents' memories with this response
                 self._update_agent_memories(message_text, agent.name)
-<<<<<<< HEAD
-                # Add each response to history for secretary
-=======
                 # Add each response to history so subsequent agents can see it
->>>>>>> f1404eb (Phase 1-2: Fix agent memory management - topic-only assessment and proper memory updates)
                 self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
                 self._notify_secretary_agent_response(agent.name, message_text)
@@ -495,11 +479,9 @@ class SwarmManager:
         print(f"\n({speaker.name} is speaking...)")
 
         try:
-            response = speaker.speak(mode="initial", topic=topic)
+            response = speaker.speak(conversation_history=self.conversation_history)
             message_text = self._extract_agent_response(response)
             print(f"{speaker.name}: {message_text}")
-            # Update all agents' memories with this response
-            self._update_agent_memories(message_text, speaker.name)
             self.conversation_history += f"{speaker.name}: {message_text}\n"
             # Notify secretary
             self._notify_secretary_agent_response(speaker.name, message_text)
@@ -518,11 +500,9 @@ class SwarmManager:
         print(f"\n({speaker.name} is speaking - highest priority: {speaker.priority_score:.2f})")
 
         try:
-            response = speaker.speak(mode="initial", topic=topic)
+            response = speaker.speak(conversation_history=self.conversation_history)
             message_text = self._extract_agent_response(response)
             print(f"{speaker.name}: {message_text}")
-            # Update all agents' memories with this response
-            self._update_agent_memories(message_text, speaker.name)
             self.conversation_history += f"{speaker.name}: {message_text}\n"
             # Notify secretary
             self._notify_secretary_agent_response(speaker.name, message_text)
@@ -538,8 +518,7 @@ class SwarmManager:
         """Initialize meeting with secretary if enabled."""
         self.conversation_history += f"System: The topic is '{topic}'.\n"
         
-        # Update all agent memories with the topic
-        self._update_agent_memories(f"The topic is '{topic}'.", "System")
+        # Topic is naturally included in conversation_history
         
         if self.secretary:
             # Get participant names

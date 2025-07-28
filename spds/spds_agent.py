@@ -297,6 +297,7 @@ IMPORTANCE_TO_GROUP: X
         else:
             self.priority_score = 0
 
+<<<<<<< HEAD
     def speak(self, mode="initial", topic=None):
         """Generates a response from the agent based on internal memory."""
         # Check if agent has tools (Letta default agents require using send_message tool)
@@ -320,6 +321,34 @@ IMPORTANCE_TO_GROUP: X
                 prompt = f"The user just asked a question or made a statement.{recent_context} Based on the conversation in your memory, here is my response:"
             else:
                 prompt = f"Other agents have shared their thoughts.{recent_context} Based on what everyone has said, here is my response:"
+=======
+    def speak(self, conversation_history: str = "", mode: str = "initial", topic: str = ""):
+        """Generates a response from the agent with conversation context."""
+        # Check if agent has tools (Letta default agents require using send_message tool)
+        has_tools = hasattr(self.agent, 'tools') and len(self.agent.tools) > 0
+        
+        # Use conversation history if provided, otherwise use topic-based prompting
+        if conversation_history:
+            # Original working pattern with conversation history
+            if has_tools:
+                prompt = f"""{conversation_history}
+
+Based on this conversation, I want to contribute. Please use the send_message tool to share your response. Remember to call the send_message function with your response as the message parameter."""
+            else:
+                prompt = f"{conversation_history}\nBased on my assessment, here is my contribution:"
+        else:
+            # Fallback to topic-based prompting
+            if has_tools:
+                if mode == "initial":
+                    prompt = f"""Based on my assessment of the topic '{topic}', I want to share my initial thoughts and perspective. Please use the send_message tool to contribute your viewpoint to this discussion. Remember to call the send_message function with your response as the message parameter."""
+                else:  # response mode
+                    prompt = f"""Based on what everyone has shared about '{topic}', I'd like to respond to the discussion. Please use the send_message tool to share your response, building on or reacting to what others have said. Remember to call the send_message function with your response as the message parameter."""
+            else:
+                if mode == "initial":
+                    prompt = f"Based on my assessment of '{topic}', here is my initial contribution:"
+                else:
+                    prompt = f"Based on the discussion about '{topic}', here is my response:"
+>>>>>>> f96d470 (Performance fix: Remove API overhead, restore natural context flow)
         
         try:
             return self.client.agents.messages.create(
