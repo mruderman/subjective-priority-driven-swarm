@@ -92,9 +92,6 @@ class WebSwarmManager:
         # Add to conversation history
         self.swarm.conversation_history += f"You: {message}\n"
         
-        # Update all agent memories with the new user message
-        self.swarm._update_agent_memories(message, "You")
-        
         # Let secretary observe
         if self.swarm.secretary:
             self.swarm.secretary.observe_message("You", message)
@@ -240,10 +237,6 @@ class WebSwarmManager:
         ]
         self.emit_message('agent_scores', {'scores': agent_scores})
         
-        # Warm up motivated agents before they speak (follow CLI pattern)
-        for agent in motivated_agents:
-            self.swarm._warm_up_agent(agent, topic)
-        
         # Process based on conversation mode
         if self.swarm.conversation_mode == "hybrid":
             self._web_hybrid_turn(motivated_agents)
@@ -271,7 +264,7 @@ class WebSwarmManager:
             
             try:
                 print(f"[DEBUG] Agent {agent.name} speaking with history length: {len(original_history)}")
-                response = agent.speak(mode="initial", topic=self.current_topic)
+                response = agent.speak(conversation_history=original_history)
                 print(f"[DEBUG] Agent {agent.name} response type: {type(response)}")
                 
                 message_text = self.swarm._extract_agent_response(response)
@@ -328,7 +321,7 @@ class WebSwarmManager:
             })
             
             try:
-                response = agent.speak(mode="response", topic=self.current_topic)
+                response = agent.speak(conversation_history=history_with_initials + response_prompt)
                 message_text = self.swarm._extract_agent_response(response)
                 
                 self.emit_message('agent_message', {
@@ -376,7 +369,7 @@ class WebSwarmManager:
             })
             
             try:
-                response = agent.speak(mode="initial", topic=self.current_topic)
+                response = agent.speak(conversation_history=original_history)
                 message_text = self.swarm._extract_agent_response(response)
                 
                 self.emit_message('agent_message', {
@@ -421,7 +414,7 @@ class WebSwarmManager:
         self.emit_message('agent_thinking', {'agent': speaker.name})
         
         try:
-            response = speaker.speak(mode="initial", topic=self.current_topic)
+            response = speaker.speak(conversation_history=self.swarm.conversation_history)
             message_text = self.swarm._extract_agent_response(response)
             
             self.emit_message('agent_message', {
@@ -457,7 +450,7 @@ class WebSwarmManager:
         self.emit_message('agent_thinking', {'agent': speaker.name})
         
         try:
-            response = speaker.speak(mode="initial", topic=self.current_topic)
+            response = speaker.speak(conversation_history=self.swarm.conversation_history)
             message_text = self.swarm._extract_agent_response(response)
             
             self.emit_message('agent_message', {
