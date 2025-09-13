@@ -18,6 +18,9 @@ env/
 *.swp
 *~
 
+# Local hive-mind data (do not commit runtime state or secrets)
+.hive-mind/
+
 # Testing
 .pytest_cache/
 .coverage
