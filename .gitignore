@@ -21,6 +21,10 @@ env/
 # Local hive-mind data (do not commit runtime state or secrets)
 .hive-mind/
 
+# Local exported docs / notes that shouldn't be committed
+CLAUDE.md
+AGENTS.md
+
 # Testing
 .pytest_cache/
 .coverage
