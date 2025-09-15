@@ -102,15 +102,18 @@ class SPDSAgent:
             # If attach flow fails in a mocked environment, continue gracefully
             pass
 
-    def _get_full_assessment(self, topic: str):
-        """Calls the agent's LLM to perform subjective assessment based on internal memory."""
+    def _get_full_assessment(self, conversation_history: str = "", topic: str = ""):
+        """Calls the agent's LLM to perform subjective assessment.
+        If conversation_history is provided, include it in the prompt to reduce reliance on server-side memory.
+        """
         
         # Check if agent has tools (need to use send_message for response)
         has_tools = hasattr(self.agent, 'tools') and len(self.agent.tools) > 0
         
         if has_tools:
+            assessment_context = f"Conversation so far:\n{conversation_history}\n\n" if conversation_history else ""
             assessment_prompt = f"""
-Based on our conversation about "{topic}", please assess your motivation to contribute using the send_message tool.
+{assessment_context}Based on our conversation about "{topic}", please assess your motivation to contribute using the send_message tool.
 
 You have access to our full conversation history in your memory. Please review what has been discussed and rate each dimension from 0-10, responding using send_message with this exact format:
 IMPORTANCE_TO_SELF: X
@@ -131,8 +134,9 @@ Where:
 7. IMPORTANCE_TO_GROUP: What's the potential impact on group understanding?
 """
         else:
+            assessment_context = f"Conversation so far:\n{conversation_history}\n\n" if conversation_history else ""
             assessment_prompt = f"""
-Based on our conversation about "{topic}", please assess your motivation to contribute. 
+{assessment_context}Based on our conversation about "{topic}", please assess your motivation to contribute. 
 
 You have access to our full conversation history in your memory. Please review what has been discussed and rate each dimension from 0-10:
 
@@ -292,31 +296,6 @@ IMPORTANCE_TO_GROUP: X
         else:
             self.priority_score = 0
 
-<<<<<<< HEAD
-    def speak(self, mode="initial", topic=None):
-        """Generates a response from the agent based on internal memory."""
-        # Check if agent has tools (Letta default agents require using send_message tool)
-        has_tools = hasattr(self.agent, 'tools') and len(self.agent.tools) > 0
-        
-        # Get the last user message from conversation for context
-        recent_context = ""
-        if topic:
-            recent_context = f" The current topic is: '{topic}'."
-        if has_tools:
-            # For agents with tools, be very explicit about using send_message
-            if mode == "initial":
-                # Initial independent thoughts
-                prompt = f"""The user just asked a question or made a statement.{recent_context} Based on your assessment and the full conversation history in your memory, please share your initial thoughts on this. Use the send_message tool to respond. Your response should directly address what was just discussed."""
-            else:
-                # Response phase - reacting to others
-                prompt = f"""Other agents have just shared their thoughts on the topic.{recent_context} Based on what everyone has shared in the conversation (which is in your memory), please share your response. You might agree, disagree, build on their ideas, or add new perspectives. Use the send_message tool to respond."""
-        else:
-            # For agents without tools, use simple prompt
-            if mode == "initial":
-                prompt = f"The user just asked a question or made a statement.{recent_context} Based on the conversation in your memory, here is my response:"
-            else:
-                prompt = f"Other agents have shared their thoughts.{recent_context} Based on what everyone has said, here is my response:"
-=======
     def speak(self, conversation_history: str = "", mode: str = "initial", topic: str = ""):
         """Generates a response from the agent with conversation context."""
         # Check if agent has tools (Letta default agents require using send_message tool)
@@ -343,7 +322,6 @@ Based on this conversation, I want to contribute. Please use the send_message to
                     prompt = f"Based on my assessment of '{topic}', here is my initial contribution:"
                 else:
                     prompt = f"Based on the discussion about '{topic}', here is my response:"
->>>>>>> f96d470 (Performance fix: Remove API overhead, restore natural context flow)
         
         try:
             return self.client.agents.messages.create(

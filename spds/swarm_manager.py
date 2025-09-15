@@ -169,7 +169,6 @@ class SwarmManager:
         
         self._end_meeting()
 
-<<<<<<< HEAD
     def _update_agent_memories(self, message: str, speaker: str = "User", max_retries=3):
         """Send a message to all agents to update their internal memory with retry logic."""
         for agent in self.agents:
@@ -290,8 +289,8 @@ class SwarmManager:
                                 import json
                                 args = json.loads(tool_call.function.arguments)
                                 candidate = args.get('message', '').strip()
-                                # Validate the extracted message
-                                if candidate and len(candidate) > 10:  # Minimum viable response
+                                # Accept any non-empty message from tool call
+                                if candidate:
                                     message_text = candidate
                                     extraction_successful = True
                                     break
@@ -367,11 +366,12 @@ class SwarmManager:
             
             # Try to get response with retry logic
             message_text = ""
-            max_attempts = 2
+            max_attempts = 1
             
             for attempt in range(max_attempts):
                 try:
-                    response = agent.speak(mode="initial", topic=topic)
+                    # Use current conversation history to avoid API overhead and align with agent interface
+                    response = agent.speak(conversation_history=self.conversation_history)
                     message_text = self._extract_agent_response(response)
                     
                     # Validate response quality
