@@ -11,7 +11,34 @@ import sys
 from spds.main import main
 from spds.swarm_manager import SwarmManager
 from letta_client import Letta
-from letta_client.types import AgentState, LettaResponse, Message, Tool
+from letta_client.types import AgentState, LlmConfig, EmbeddingConfig, Memory, Tool
+from types import SimpleNamespace
+
+
+def make_agent_state(id: str, name: str, system: str, model: str, tools=None):
+    """Build a minimally valid AgentState for current letta_client schema."""
+    llm = LlmConfig(model=model, model_endpoint_type="openai", context_window=128000)
+    emb = EmbeddingConfig(
+        embedding_endpoint_type="openai",
+        embedding_model="openai/text-embedding-ada-002",
+        embedding_dim=1536,
+    )
+    mem = Memory(blocks=[])
+    return AgentState(
+        id=id,
+        name=name,
+        system=system,
+        agent_type="react_agent",
+        llm_config=llm,
+        embedding_config=emb,
+        memory=mem,
+        tools=tools or [],
+        sources=[],
+        tags=[],
+        # Extra fields allowed by model_config.extra = 'allow'
+        model=model,
+        embedding="openai/text-embedding-ada-002",
+    )
 
 
 class TestE2EUserScenarios:
@@ -50,24 +77,18 @@ class TestE2EUserScenarios:
     def sample_e2e_agent_states(self):
         """Sample agent states for E2E testing."""
         return [
-            AgentState(
+            make_agent_state(
                 id="ag-e2e-001",
                 name="E2E Agent 1",
                 system="You are E2E Agent 1. Your persona is: A project manager focused on planning. Your expertise is in: project management, planning, coordination.",
                 model="openai/gpt-4",
-                embedding="openai/text-embedding-ada-002",
-                tools=[],
-                memory={}
             ),
-            AgentState(
-                id="ag-e2e-002", 
+            make_agent_state(
+                id="ag-e2e-002",
                 name="E2E Agent 2",
                 system="You are E2E Agent 2. Your persona is: A technical developer focused on implementation. Your expertise is in: software development, architecture, debugging.",
                 model="anthropic/claude-3-5-sonnet-20241022",
-                embedding="openai/text-embedding-ada-002",
-                tools=[],
-                memory={}
-            )
+            ),
         ]
     
     @patch('spds.main.Letta')
@@ -81,71 +102,51 @@ class TestE2EUserScenarios:
             "quit"  # Exit
         ]
         
-        # Mock Letta client
-        mock_client = Mock(spec=Letta)
+        # Mock Letta client (with nested attributes)
+        mock_client = Mock()
+        mock_client.agents = Mock()
+        mock_client.agents.create = Mock()
+        mock_client.agents.retrieve = Mock()
+        mock_client.agents.list = Mock()
+        mock_client.agents.messages = Mock()
+        mock_client.agents.messages.create = Mock()
+        mock_client.agents.tools = Mock()
+        mock_client.agents.tools.attach = Mock()
+        mock_client.tools = Mock()
+        mock_client.tools.create_from_function = Mock()
         mock_letta_class.return_value = mock_client
         
-        # Mock agent creation responses
+        # Mock agent creation responses (two agents)
         agent_states = [
-            AgentState(
+            make_agent_state(
                 id="ag-temp-001",
                 name="Alex",
                 system="You are Alex. Your persona is: A pragmatic project manager. Your expertise is in: risk management, scheduling, budgeting.",
                 model="openai/gpt-4",
-                embedding="openai/text-embedding-ada-002",
-                tools=[],
-                memory={}
             ),
-            AgentState(
+            make_agent_state(
                 id="ag-temp-002",
-                name="Jordan", 
+                name="Jordan",
                 system="You are Jordan. Your persona is: A creative designer. Your expertise is in: UX/UI design, user research, prototyping.",
                 model="anthropic/claude-3-5-sonnet-20241022",
-                embedding="openai/text-embedding-ada-002",
-                tools=[],
-                memory={}
-            )
+            ),
         ]
         
         mock_client.agents.create.side_effect = agent_states
         
         # Mock tool creation and attachment
-        mock_tool = Tool(
-            id="tool-assessment-001",
-            name="perform_subjective_assessment",
-            description="Assessment tool"
-        )
+        mock_tool = SimpleNamespace(id="tool-assessment-001", name="perform_subjective_assessment", description="Assessment tool")
         mock_client.tools.create_from_function.return_value = mock_tool
         mock_client.agents.tools.attach.side_effect = agent_states  # Return updated agents
         
         # Mock assessment tool responses (via agent messages)
         assessment_responses = [
-            LettaResponse(messages=[
-                Message(
-                    id="msg-assess-001",
-                    content=[],
-                    message_type="tool_return_message",
-                    tool_return='{"importance_to_self": 8, "perceived_gap": 7, "unique_perspective": 6, "emotional_investment": 5, "expertise_relevance": 9, "urgency": 7, "importance_to_group": 8}'
-                )
-            ]),
-            LettaResponse(messages=[
-                Message(
-                    id="msg-assess-002", 
-                    content=[],
-                    message_type="tool_return_message",
-                    tool_return='{"importance_to_self": 6, "perceived_gap": 5, "unique_perspective": 8, "emotional_investment": 4, "expertise_relevance": 6, "urgency": 5, "importance_to_group": 7}'
-                )
-            ])
+            SimpleNamespace(messages=[SimpleNamespace(id="msg-assess-001", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 8, "perceived_gap": 7, "unique_perspective": 6, "emotional_investment": 5, "expertise_relevance": 9, "urgency": 7, "importance_to_group": 8}'}])]),
+            SimpleNamespace(messages=[SimpleNamespace(id="msg-assess-002", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 6, "perceived_gap": 5, "unique_perspective": 8, "emotional_investment": 4, "expertise_relevance": 6, "urgency": 5, "importance_to_group": 7}'}])]),
         ]
         
         # Mock speaking responses
-        speak_response = LettaResponse(messages=[
-            Message(
-                id="msg-speak-001",
-                content=[{"type": "text", "text": "I think we should start with a thorough risk assessment and create a detailed project timeline."}],
-                message_type="assistant_message"
-            )
-        ])
+        speak_response = SimpleNamespace(messages=[SimpleNamespace(id="msg-speak-001", role="assistant", content=[{"type": "text", "text": "I think we should start with a thorough risk assessment and create a detailed project timeline."}])])
         
         # Set up mock responses in order
         mock_client.agents.messages.create.side_effect = [
@@ -158,8 +159,24 @@ class TestE2EUserScenarios:
         captured_output = StringIO()
         sys.stdout = captured_output
         
-        # Run main function with no arguments (ephemeral mode)
-        main([])
+        # Run main with patched default agent profiles (two agents only)
+        with patch('spds.config.AGENT_PROFILES', [
+            {
+                "name": "Alex",
+                "persona": "A pragmatic project manager",
+                "expertise": ["risk management", "scheduling", "budgeting"],
+                "model": "openai/gpt-4",
+                "embedding": "openai/text-embedding-ada-002",
+            },
+            {
+                "name": "Jordan",
+                "persona": "A creative designer",
+                "expertise": ["UX/UI design", "user research", "prototyping"],
+                "model": "anthropic/claude-3-5-sonnet-20241022",
+                "embedding": "openai/text-embedding-ada-002",
+            },
+        ]):
+            main([])
         
         sys.stdout = sys.__stdout__
         output = captured_output.getvalue()
@@ -190,58 +207,50 @@ class TestE2EUserScenarios:
         ]
         
         # Mock Letta client
-        mock_client = Mock(spec=Letta)
+        mock_client = Mock()
+        mock_client.agents = Mock()
+        mock_client.agents.create = Mock()
+        mock_client.agents.retrieve = Mock()
+        mock_client.agents.list = Mock()
+        mock_client.agents.messages = Mock()
+        mock_client.agents.messages.create = Mock()
+        mock_client.agents.tools = Mock()
+        mock_client.agents.tools.attach = Mock()
+        mock_client.tools = Mock()
+        mock_client.tools.create_from_function = Mock()
         mock_letta_class.return_value = mock_client
         
         # Mock retrieving existing agents
         mock_client.agents.retrieve.side_effect = sample_e2e_agent_states
         
         # Mock tool attachment for existing agents
-        mock_tool = Tool(
-            id="tool-existing-001",
-            name="perform_subjective_assessment", 
-            description="Assessment tool"
-        )
+        mock_tool = Tool(id="tool-existing-001", name="perform_subjective_assessment", description="Assessment tool")
         mock_client.tools.create_from_function.return_value = mock_tool
         
         # Update agent states to include the tool
         updated_states = []
         for state in sample_e2e_agent_states:
-            updated_state = AgentState(
+            updated_state = make_agent_state(
                 id=state.id,
                 name=state.name,
                 system=state.system,
                 model=state.model,
-                embedding=state.embedding,
                 tools=[mock_tool],
-                memory=state.memory
             )
             updated_states.append(updated_state)
         
         mock_client.agents.tools.attach.side_effect = updated_states
         
         # Mock assessment and speaking responses
-        assessment_response = LettaResponse(messages=[
-            Message(
-                id="msg-assess-tech",
-                content=[],
-                message_type="tool_return_message",
-                tool_return='{"importance_to_self": 9, "perceived_gap": 8, "unique_perspective": 7, "emotional_investment": 6, "expertise_relevance": 10, "urgency": 8, "importance_to_group": 9}'
-            )
-        ])
+        assessment_response_1 = SimpleNamespace(messages=[SimpleNamespace(id="msg-assess-tech-1", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 6, "perceived_gap": 5, "unique_perspective": 6, "emotional_investment": 4, "expertise_relevance": 6, "urgency": 5, "importance_to_group": 6}'}])])
+        assessment_response_2 = SimpleNamespace(messages=[SimpleNamespace(id="msg-assess-tech-2", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 9, "perceived_gap": 8, "unique_perspective": 7, "emotional_investment": 6, "expertise_relevance": 10, "urgency": 8, "importance_to_group": 9}'}])])
         
-        speak_response = LettaResponse(messages=[
-            Message(
-                id="msg-speak-tech",
-                content=[{"type": "text", "text": "For microservices architecture, I recommend starting with domain-driven design principles to identify service boundaries."}],
-                message_type="assistant_message"
-            )
-        ])
+        speak_response = SimpleNamespace(messages=[SimpleNamespace(id="msg-speak-tech", role="assistant", content=[{"type": "text", "text": "For microservices architecture, I recommend starting with domain-driven design principles to identify service boundaries."}])])
         
         mock_client.agents.messages.create.side_effect = [
-            assessment_response,  # Agent 1 assessment
-            assessment_response,  # Agent 2 assessment
-            speak_response        # Agent 2 speaking (higher priority)
+            assessment_response_1,  # Agent 1 assessment (lower)
+            assessment_response_2,  # Agent 2 assessment (higher)
+            speak_response          # Agent 2 speaking
         ]
         
         # Capture output
@@ -276,7 +285,17 @@ class TestE2EUserScenarios:
         ]
         
         # Mock Letta client
-        mock_client = Mock(spec=Letta)
+        mock_client = Mock()
+        mock_client.agents = Mock()
+        mock_client.agents.create = Mock()
+        mock_client.agents.retrieve = Mock()
+        mock_client.agents.list = Mock()
+        mock_client.agents.messages = Mock()
+        mock_client.agents.messages.create = Mock()
+        mock_client.agents.tools = Mock()
+        mock_client.agents.tools.attach = Mock()
+        mock_client.tools = Mock()
+        mock_client.tools.create_from_function = Mock()
         mock_letta_class.return_value = mock_client
         
         # Mock finding agents by name
@@ -286,48 +305,30 @@ class TestE2EUserScenarios:
         ]
         
         # Mock tool setup and responses (similar to previous test)
-        mock_tool = Tool(
-            id="tool-name-001",
-            name="perform_subjective_assessment",
-            description="Assessment tool"
-        )
+        mock_tool = Tool(id="tool-name-001", name="perform_subjective_assessment", description="Assessment tool")
         mock_client.tools.create_from_function.return_value = mock_tool
         
         updated_states = []
         for state in sample_e2e_agent_states:
-            updated_state = AgentState(
+            updated_state = make_agent_state(
                 id=state.id,
                 name=state.name,
                 system=state.system,
                 model=state.model,
-                embedding=state.embedding,
                 tools=[mock_tool],
-                memory=state.memory
             )
             updated_states.append(updated_state)
         
         mock_client.agents.tools.attach.side_effect = updated_states
         
         # Mock responses
-        assessment_response = LettaResponse(messages=[
-            Message(
-                id="msg-workflow",
-                content=[],
-                message_type="tool_return_message", 
-                tool_return='{"importance_to_self": 7, "perceived_gap": 6, "unique_perspective": 8, "emotional_investment": 5, "expertise_relevance": 8, "urgency": 6, "importance_to_group": 8}'
-            )
-        ])
+        assessment_response_1 = SimpleNamespace(messages=[SimpleNamespace(id="msg-workflow-1", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 6, "perceived_gap": 5, "unique_perspective": 6, "emotional_investment": 4, "expertise_relevance": 6, "urgency": 5, "importance_to_group": 6}'}])])
+        assessment_response_2 = SimpleNamespace(messages=[SimpleNamespace(id="msg-workflow-2", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 7, "perceived_gap": 6, "unique_perspective": 8, "emotional_investment": 5, "expertise_relevance": 8, "urgency": 6, "importance_to_group": 8}'}])])
         
-        speak_response = LettaResponse(messages=[
-            Message(
-                id="msg-workflow-speak",
-                content=[{"type": "text", "text": "I suggest we implement continuous integration and establish clear code review processes."}],
-                message_type="assistant_message"
-            )
-        ])
+        speak_response = SimpleNamespace(messages=[SimpleNamespace(id="msg-workflow-speak", role="assistant", content=[{"type": "text", "text": "I suggest we implement continuous integration and establish clear code review processes."}])])
         
         mock_client.agents.messages.create.side_effect = [
-            assessment_response, assessment_response, speak_response
+            assessment_response_1, assessment_response_2, speak_response
         ]
         
         # Capture output
@@ -361,30 +362,34 @@ class TestE2EUserScenarios:
             "quit"
         ]
         
-        # Mock Letta client
-        mock_client = Mock(spec=Letta)
+        # Mock Letta client (nested attributes)
+        mock_client = Mock()
+        mock_client.agents = Mock()
+        mock_client.agents.create = Mock()
+        mock_client.agents.retrieve = Mock()
+        mock_client.agents.list = Mock()
+        mock_client.agents.messages = Mock()
+        mock_client.agents.messages.create = Mock()
+        mock_client.agents.tools = Mock()
+        mock_client.agents.tools.attach = Mock()
+        mock_client.tools = Mock()
+        mock_client.tools.create_from_function = Mock()
         mock_letta_class.return_value = mock_client
         
         # Mock agent creation for creative swarm
         creative_agent_states = [
-            AgentState(
+            make_agent_state(
                 id="ag-creative-001",
                 name="Innovator Sam",
                 system="You are Innovator Sam. Your persona is: A creative thinker who challenges conventional approaches. Your expertise is in: innovation, brainstorming, lateral thinking, design thinking.",
                 model="anthropic/claude-3-5-sonnet-20241022",
-                embedding="openai/text-embedding-ada-002",
-                tools=[],
-                memory={}
             ),
-            AgentState(
+            make_agent_state(
                 id="ag-creative-002",
                 name="Analyst Riley",
                 system="You are Analyst Riley. Your persona is: A data-driven decision maker. Your expertise is in: data analysis, metrics, ROI calculation, statistical analysis.",
-                model="openai/gpt-4", 
-                embedding="openai/text-embedding-ada-002",
-                tools=[],
-                memory={}
-            )
+                model="openai/gpt-4",
+            ),
         ]
         
         mock_client.agents.create.side_effect = creative_agent_states
@@ -399,31 +404,11 @@ class TestE2EUserScenarios:
         mock_client.agents.tools.attach.side_effect = creative_agent_states
         
         # Mock creative responses
-        creative_assessment = LettaResponse(messages=[
-            Message(
-                id="msg-creative-assess",
-                content=[],
-                message_type="tool_return_message",
-                tool_return='{"importance_to_self": 9, "perceived_gap": 8, "unique_perspective": 10, "emotional_investment": 8, "expertise_relevance": 9, "urgency": 7, "importance_to_group": 8}'
-            )
-        ])
+        creative_assessment = SimpleNamespace(messages=[SimpleNamespace(id="msg-creative-assess", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 9, "perceived_gap": 8, "unique_perspective": 10, "emotional_investment": 8, "expertise_relevance": 9, "urgency": 7, "importance_to_group": 8}'}])])
         
-        analytical_assessment = LettaResponse(messages=[
-            Message(
-                id="msg-analytical-assess", 
-                content=[],
-                message_type="tool_return_message",
-                tool_return='{"importance_to_self": 6, "perceived_gap": 7, "unique_perspective": 5, "emotional_investment": 4, "expertise_relevance": 7, "urgency": 5, "importance_to_group": 7}'
-            )
-        ])
+        analytical_assessment = SimpleNamespace(messages=[SimpleNamespace(id="msg-analytical-assess", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 6, "perceived_gap": 7, "unique_perspective": 5, "emotional_investment": 4, "expertise_relevance": 7, "urgency": 5, "importance_to_group": 7}'}])])
         
-        creative_speak = LettaResponse(messages=[
-            Message(
-                id="msg-creative-speak",
-                content=[{"type": "text", "text": "What if we reimagined the entire user experience? I'm thinking about AI-powered personalization that adapts in real-time to user behavior patterns."}],
-                message_type="assistant_message"
-            )
-        ])
+        creative_speak = SimpleNamespace(messages=[SimpleNamespace(id="msg-creative-speak", role="assistant", content=[{"type": "text", "text": "What if we reimagined the entire user experience? I'm thinking about AI-powered personalization that adapts in real-time to user behavior patterns."}])])
         
         mock_client.agents.messages.create.side_effect = [
             creative_assessment, analytical_assessment, creative_speak
@@ -433,8 +418,25 @@ class TestE2EUserScenarios:
         captured_output = StringIO()
         sys.stdout = captured_output
         
-        # Run main with custom swarm config
-        main(['--swarm-config', 'creative_swarm.json'])
+        # Run main with custom swarm config (patch to only include two profiles)
+        two_profiles = [
+            {
+                "name": "Innovator Sam",
+                "persona": "A creative thinker who challenges conventional approaches.",
+                "expertise": ["innovation", "brainstorming", "lateral thinking", "design thinking"],
+                "model": "anthropic/claude-3-5-sonnet-20241022",
+                "embedding": "openai/text-embedding-ada-002",
+            },
+            {
+                "name": "Analyst Riley",
+                "persona": "A data-driven decision maker.",
+                "expertise": ["data analysis", "metrics", "ROI calculation", "statistical analysis"],
+                "model": "openai/gpt-4",
+                "embedding": "openai/text-embedding-ada-002",
+            },
+        ]
+        with patch('spds.main.load_swarm_from_file', return_value=two_profiles):
+            main(['--swarm-config', 'creative_swarm.json'])
         
         sys.stdout = sys.__stdout__
         output = captured_output.getvalue()
@@ -463,39 +465,35 @@ class TestE2EUserScenarios:
         ]
         
         # Mock Letta client with error conditions
-        mock_client = Mock(spec=Letta)
+        mock_client = Mock()
+        mock_client.agents = Mock()
+        mock_client.agents.create = Mock()
+        mock_client.agents.retrieve = Mock()
+        mock_client.agents.list = Mock()
+        mock_client.agents.messages = Mock()
+        mock_client.agents.messages.create = Mock()
+        mock_client.agents.tools = Mock()
+        mock_client.agents.tools.attach = Mock()
+        mock_client.tools = Mock()
+        mock_client.tools.create_from_function = Mock()
         mock_letta_class.return_value = mock_client
         
         # Mock successful agent creation
-        agent_state = AgentState(
+        agent_state = make_agent_state(
             id="ag-error-001",
             name="Error Test Agent",
             system="You are Error Test Agent. Your persona is: A test agent. Your expertise is in: testing.",
             model="openai/gpt-4",
-            embedding="openai/text-embedding-ada-002", 
-            tools=[],
-            memory={}
         )
         mock_client.agents.create.return_value = agent_state
         
         # Mock tool setup
-        mock_tool = Tool(
-            id="tool-error-001",
-            name="perform_subjective_assessment",
-            description="Assessment tool"
-        )
+        mock_tool = SimpleNamespace(id="tool-error-001", name="perform_subjective_assessment", description="Assessment tool")
         mock_client.tools.create_from_function.return_value = mock_tool
         mock_client.agents.tools.attach.return_value = agent_state
         
         # Mock assessment success but speaking failure
-        assessment_response = LettaResponse(messages=[
-            Message(
-                id="msg-error-assess",
-                content=[],
-                message_type="tool_return_message",
-                tool_return='{"importance_to_self": 8, "perceived_gap": 7, "unique_perspective": 6, "emotional_investment": 5, "expertise_relevance": 8, "urgency": 6, "importance_to_group": 7}'
-            )
-        ])
+        assessment_response = SimpleNamespace(messages=[SimpleNamespace(id="msg-error-assess", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 8, "perceived_gap": 7, "unique_perspective": 6, "emotional_investment": 5, "expertise_relevance": 8, "urgency": 6, "importance_to_group": 7}'}])])
         
         # First call succeeds (assessment), second call fails (speaking)
         mock_client.agents.messages.create.side_effect = [

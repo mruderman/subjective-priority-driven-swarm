@@ -1,16 +1,86 @@
 # spds/config.py
 
 import os
+import logging
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 # Letta ADE Server Configuration
+# Read sensitive values from environment. For local development we provide a
+# non-sensitive localhost fallback so the app works out of the box. Production
+# deployments should set real environment variables or use a secrets manager.
 LETTA_API_KEY = os.getenv("LETTA_API_KEY", "")
 LETTA_SERVER_PASSWORD = os.getenv("LETTA_PASSWORD", "")
+# Default to localhost for self-hosted development convenience
 LETTA_BASE_URL = os.getenv("LETTA_BASE_URL", "http://localhost:8283")
+# Environment: e.g. "SELF_HOSTED", "LETTA_CLOUD", "PRODUCTION" (fallback
+# is SELF_HOSTED for local dev). Keep the value explicit in production.
 LETTA_ENVIRONMENT = os.getenv("LETTA_ENVIRONMENT", "SELF_HOSTED")
+
+
+def validate_letta_config(check_connectivity: bool = False, timeout: int = 5) -> bool:
+    """Validate critical Letta configuration and optionally check connectivity.
+
+    - Ensures `LETTA_BASE_URL` is set (there's a localhost fallback for dev).
+    - If running against Letta Cloud (`LETTA_ENVIRONMENT == 'LETTA_CLOUD'`),
+      ensures `LETTA_API_KEY` is provided.
+    - If `check_connectivity` is True and the `requests` package is available,
+      performs a simple GET against `LETTA_BASE_URL` and raises a RuntimeError on
+      non-successful or unreachable responses.
+
+    Returns True if validation passes. Raises `ValueError` or `RuntimeError` on
+    configuration/connectivity problems.
+    """
+
+    # Read current environment values at call time (allows tests and runtime to
+    # change env vars without re-importing the module).
+    # Read from the live environment where possible. For API keys we intentionally
+    # check `os.environ` directly so that tests (which manipulate env vars) and
+    # runtime checks reflect the current environment rather than any module-level
+    # values that were populated at import time (for example by python-dotenv).
+    cur_base_url = os.environ.get("LETTA_BASE_URL", LETTA_BASE_URL)
+    cur_env = os.environ.get("LETTA_ENVIRONMENT", LETTA_ENVIRONMENT)
+    cur_api_key = os.environ.get("LETTA_API_KEY")
+
+    # Basic configuration checks
+    if not cur_base_url:
+        raise ValueError(
+            "LETTA_BASE_URL is not set. Set the LETTA_BASE_URL environment variable to your Letta server URL."
+        )
+
+    if cur_env.upper() == "LETTA_CLOUD" and not cur_api_key:
+        raise ValueError(
+            "LETTA_API_KEY is required when LETTA_ENVIRONMENT=LETTA_CLOUD. Please set LETTA_API_KEY in your environment or secrets manager."
+        )
+
+    # Optional connectivity check
+    if check_connectivity:
+        try:
+            import requests
+        except Exception:
+            logger.warning(
+                "requests package not available; skipping LETTA server connectivity check. Install 'requests' to enable connectivity checks."
+            )
+            return True
+
+        try:
+            resp = requests.get(cur_base_url, timeout=timeout)
+        except Exception as exc:
+            # Catch any exception from the requests call and surface a RuntimeError
+            raise RuntimeError(
+                f"Unable to reach LETTA server at {cur_base_url}: {exc}"
+            )
+
+        if not (200 <= getattr(resp, "status_code", 0) < 400):
+            raise RuntimeError(
+                f"LETTA server at {cur_base_url} returned status {resp.status_code}. Response: {resp.text[:200]!r}"
+            )
+
+    return True
 
 # Default Model Configuration (fallback values)
 DEFAULT_AGENT_MODEL = "openai/gpt-4"

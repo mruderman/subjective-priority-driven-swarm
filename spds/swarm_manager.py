@@ -4,6 +4,7 @@ import time
 from .spds_agent import SPDSAgent
 from .secretary_agent import SecretaryAgent
 from .export_manager import ExportManager
+from .memory_awareness import create_memory_awareness_for_agent
 from letta_client import Letta
 from letta_client.errors import NotFoundError
 
@@ -72,15 +73,13 @@ class SwarmManager:
         """Loads existing agents from the Letta server by their names."""
         print("Loading swarm from existing agent names...")
         for name in agent_names:
-            try:
-                print(f"  - Retrieving agent by name: {name}")
-                # The list method with a name filter returns a list. We'll take the first one.
-                found_agents = self.client.agents.list(name=name, limit=1)
-                if not found_agents:
-                    raise NotFoundError
-                self.agents.append(SPDSAgent(found_agents[0], self.client))
-            except NotFoundError:
+            print(f"  - Retrieving agent by name: {name}")
+            # The list method with a name filter returns a list. We'll take the first one.
+            found_agents = self.client.agents.list(name=name, limit=1)
+            if not found_agents:
                 print(f"  - WARNING: Agent with name '{name}' not found. Skipping.")
+                continue
+            self.agents.append(SPDSAgent(found_agents[0], self.client))
 
     def _create_agents_from_profiles(self, agent_profiles: list):
         """Creates new, temporary agents from a list of profiles."""
@@ -107,6 +106,7 @@ class SwarmManager:
             print("\nExiting.")
             return
 
+        print(f"\nSwarm chat started with topic: '{topic}' (Mode: {self.conversation_mode.upper()})")
         self._start_meeting(topic)
 
         while True:
@@ -240,8 +240,6 @@ class SwarmManager:
         except Exception as e:
             print(f"[Debug: Agent warm-up failed for {agent.name}: {e}]")
             return False
-=======
->>>>>>> f96d470 (Performance fix: Remove API overhead, restore natural context flow)
 
     def _agent_turn(self, topic: str):
         """Manages a single turn of agent responses based on conversation mode."""
@@ -310,28 +308,38 @@ class SwarmManager:
                 
                 # Check for tool return messages (when agent uses send_message)
                 if not message_text and hasattr(msg, 'tool_return') and msg.tool_return:
-                    # Tool returns often contain status messages we can ignore
+                    # Tool returns often contain status messages we can ignore in SwarmManager
                     continue
                 
-                # Check assistant messages (direct responses without tools)
-                if not message_text and hasattr(msg, 'message_type') and msg.message_type == 'assistant_message':
-                    if hasattr(msg, 'content') and msg.content:
-                        candidate = str(msg.content).strip()
-                        if candidate and len(candidate) > 10:
-                            message_text = candidate
-                            extraction_successful = True
+                # Accept either legacy message_type or modern role='assistant'
+                if not message_text and (
+                    (hasattr(msg, 'message_type') and getattr(msg, 'message_type') == 'assistant_message')
+                    or (hasattr(msg, 'role') and getattr(msg, 'role') == 'assistant')
+                ):
+                    if hasattr(msg, 'content') and getattr(msg, 'content'):
+                        content_val = getattr(msg, 'content')
+                        if isinstance(content_val, str):
+                            message_text = content_val
+                        elif isinstance(content_val, list) and content_val:
+                            item0 = content_val[0]
+                            if hasattr(item0, 'text'):
+                                message_text = item0.text
+                            elif isinstance(item0, dict) and 'text' in item0:
+                                message_text = item0['text']
+                            elif isinstance(item0, str):
+                                message_text = item0
                 
                 # If no tool call, try regular content extraction
                 if not message_text and hasattr(msg, 'content'):
-                    if isinstance(msg.content, str):
-                        candidate = msg.content.strip()
-                        if candidate and len(candidate) > 10:
-                            message_text = candidate
-                            extraction_successful = True
-                    elif isinstance(msg.content, list) and msg.content:
-                        content_item = msg.content[0]
+                    content_val = getattr(msg, 'content')
+                    if isinstance(content_val, str):
+                        message_text = content_val
+                    elif isinstance(content_val, list) and content_val:
+                        content_item = content_val[0]
                         if hasattr(content_item, 'text'):
                             message_text = content_item.text
+                        elif isinstance(content_item, dict) and 'text' in content_item:
+                            message_text = content_item['text']
                         elif isinstance(content_item, str):
                             message_text = content_item
                 
@@ -441,9 +449,7 @@ class SwarmManager:
         for i, agent in enumerate(motivated_agents, 1):
             print(f"\n({i}/{len(motivated_agents)}) {agent.name} (priority: {agent.priority_score:.2f}) is speaking...")
             try:
-                # Use the conversation so far as context for each agent
-                original_history = self.conversation_history
-                response = agent.speak(conversation_history=original_history)
+                response = agent.speak(conversation_history=self.conversation_history)
                 message_text = self._extract_agent_response(response)
                 print(f"{agent.name}: {message_text}")
                 # Update all agents' memories with this response
@@ -550,11 +556,37 @@ class SwarmManager:
         command = command_parts[0].lower()
         args = command_parts[1] if len(command_parts) > 1 else ""
         
+        # Handle memory awareness commands (available with or without secretary)
+        if command == "memory-status":
+            summary = self.get_memory_status_summary()
+            print("\n📊 **Agent Memory Status Summary**")
+            print(f"Total agents: {summary['total_agents']}")
+            print(f"Agents with >500 messages: {summary['agents_with_high_memory']}")
+            print(f"Total messages across all agents: {summary['total_messages_across_agents']}")
+            print("\nPer-agent status:")
+            for agent_status in summary['agents_status']:
+                if 'error' in agent_status:
+                    print(f"  - {agent_status['name']}: Error retrieving data")
+                else:
+                    print(f"  - {agent_status['name']}: {agent_status['recall_memory']} messages, {agent_status['archival_memory']} archived items")
+            print("\nNote: This information is provided for awareness only. Agents have autonomy over memory decisions.")
+            return True
+        
+        elif command == "memory-awareness":
+            print("\n📊 Checking memory awareness status for all agents...")
+            self.check_memory_awareness_status(silent=False)
+            return True
+        
+        # Secretary-specific commands
         if not self.secretary:
             if command in ['minutes', 'export', 'formal', 'casual', 'action-item']:
                 print("❌ Secretary is not enabled. Please restart with secretary mode.")
                 return True
-            return False
+            elif command in ['memory-status', 'memory-awareness', 'help', 'commands']:
+                # These commands are handled above or below
+                pass
+            else:
+                return False
         
         if command == "minutes":
             print("\n📋 Generating current meeting minutes...")
@@ -666,19 +698,95 @@ class SwarmManager:
         print("👋 Meeting complete!")
     
     def _show_secretary_help(self):
-        """Show available secretary commands."""
+        """Show available commands."""
         print("""
-📝 Secretary Commands:
-  /minutes       - Generate current meeting minutes
-  /export [type] - Export meeting (minutes/casual/transcript/actions/summary/all)
-  /formal        - Switch to formal board minutes mode
-  /casual        - Switch to casual meeting notes mode
-  /action-item   - Add an action item
-  /stats         - Show conversation statistics
-  /help          - Show this help message
+📝 Available Commands:
+
+Memory Awareness (Available Always):
+  /memory-status     - Show objective memory statistics for all agents
+  /memory-awareness  - Display neutral memory awareness information if criteria are met
+
+Secretary Commands (When Secretary Enabled):
+  /minutes           - Generate current meeting minutes
+  /export [type]     - Export meeting (minutes/casual/transcript/actions/summary/all)
+  /formal            - Switch to formal board minutes mode
+  /casual            - Switch to casual meeting notes mode
+  /action-item       - Add an action item
+  /stats             - Show conversation statistics
+  
+General:
+  /help              - Show this help message
+
+Note: Memory awareness information respects agent autonomy and provides neutral facts only.
         """)
     
     def _notify_secretary_agent_response(self, agent_name: str, message: str):
         """Notify secretary of an agent response."""
         if self.secretary:
             self.secretary.observe_message(agent_name, message)
+    
+    def check_memory_awareness_status(self, silent: bool = False) -> None:
+        """
+        Check if any agents might benefit from memory awareness information.
+        
+        This method respects agent autonomy by:
+        - Only providing information when objective criteria are met
+        - Presenting neutral facts without recommendations
+        - Allowing agents to make their own decisions
+        
+        Args:
+            silent: If True, don't print messages (for background checks)
+        """
+        for agent in self.agents:
+            try:
+                awareness_message = create_memory_awareness_for_agent(self.client, agent.agent)
+                if awareness_message and not silent:
+                    print(f"\n📊 Memory Awareness Information Available for {agent.name}")
+                    print("This information is provided for agent awareness only - agents may use or ignore as they choose.")
+                    print("-" * 80)
+                    print(awareness_message)
+                    print("-" * 80)
+                    print("Note: Agents have complete autonomy over memory management decisions.\n")
+            except Exception as e:
+                if not silent:
+                    print(f"⚠️ Could not generate memory awareness for {agent.name}: {e}")
+    
+    def get_memory_status_summary(self) -> dict:
+        """
+        Get a summary of memory status across all agents.
+        Returns objective information only.
+        """
+        summary = {
+            'total_agents': len(self.agents),
+            'agents_with_high_memory': 0,
+            'total_messages_across_agents': 0,
+            'agents_status': []
+        }
+        
+        for agent in self.agents:
+            try:
+                context_info = self.client.agents.context.retrieve(agent_id=agent.agent.id)
+                recall_count = context_info.get('num_recall_memory', 0)
+                archival_count = context_info.get('num_archival_memory', 0)
+                
+                summary['total_messages_across_agents'] += recall_count
+                
+                agent_status = {
+                    'name': agent.name,
+                    'recall_memory': recall_count,
+                    'archival_memory': archival_count,
+                    'high_memory': recall_count > 500
+                }
+                
+                if recall_count > 500:
+                    summary['agents_with_high_memory'] += 1
+                
+                summary['agents_status'].append(agent_status)
+                
+            except Exception as e:
+                summary['agents_status'].append({
+                    'name': agent.name,
+                    'error': str(e)
+                })
+        
+        return summary

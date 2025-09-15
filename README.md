@@ -87,9 +87,36 @@ This project implements a multi-agent group chat system based on the Subjective 
     ```bash
     LETTA_API_KEY=your-api-key-here
     LETTA_PASSWORD=your-server-password
-    LETTA_BASE_URL=http://localhost:8283  # For self-hosted
-    LETTA_ENVIRONMENT=SELF_HOSTED  # Or LETTA_CLOUD
+X        LETTA_BASE_URL=http://localhost:8283  # For self-hosted (fallback for local dev)
+        LETTA_ENVIRONMENT=SELF_HOSTED  # Or LETTA_CLOUD
     ```
+
+Notes:
+- The application provides a non-sensitive fallback of `http://localhost:8283` for
+    local development so it works out-of-the-box. For production, set `LETTA_BASE_URL`
+    and `LETTA_ENVIRONMENT` explicitly and use a secrets manager for API keys.
+- You can perform a startup validation with `spds.config.validate_letta_config()`
+    to ensure required env vars are present and (optionally) to check connectivity to
+    the Letta server. Example:
+
+```python
+from spds import config
+
+config.validate_letta_config(check_connectivity=True)
+```
+
+Startup connectivity option
+
+The web `run.py` script supports `LETTA_VALIDATE_CONNECTIVITY`. When set to a
+truthy value (1, true, yes) the script will perform a lightweight GET against
+`LETTA_BASE_URL` during startup and exit with an error if it fails. This is
+useful in CI or for deployment scripts that should fail fast when the Letta
+server is unreachable.
+
+```bash
+export LETTA_VALIDATE_CONNECTIVITY=1
+python swarms-web/run.py
+```
 
 4.  **Configure Docker (if using self-hosted Letta):**
     Ensure your `docker-compose.yml` or `docker run` command correctly mounts your project directory and sets the `TOOL_EXEC_DIR` and `TOOL_EXEC_VENV_NAME` environment variables as previously discussed.
@@ -103,12 +130,13 @@ Choose between the web interface (recommended for most users) or the command lin
 Launch the modern web GUI with real-time features:
 
 ```bash
-# Quick start
-cd swarms-web
-python run.py
+# Recommended in a separate virtualenv
+python -m venv .venv-web && . .venv-web/bin/activate
+pip install -r swarms-web/requirements.txt
+pip install git+https://github.com/letta-ai/letta-flask.git
 
-# Or manually
-python app.py
+# Quick start
+cd swarms-web && python run.py
 ```
 
 Then open your browser to **http://localhost:5002**
@@ -127,8 +155,25 @@ Then open your browser to **http://localhost:5002**
 Launch the interactive terminal interface for agent selection and conversation mode choice:
 
 ```bash
+# CLI in its own virtualenv
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
 python -m spds.main
 ```
+
+Notes:
+- Default runs an ephemeral swarm using profiles from `spds/config.py`.
+- Use `--interactive` to select agents, mode, and secretary via TUI.
+- Examples:
+  - `python -m spds.main --interactive`
+  - `python -m spds.main --agent-ids <ID1> <ID2>`
+  - `python -m spds.main --agent-names "Agent A" "Agent B"`
+  - `python -m spds.main --swarm-config openai_swarm.json`
+
+Makefile shortcuts:
+- `make venv-cli` / `make run-cli`
+- `make venv-web` / `make run-web`
+- `make test` / `make coverage`
 
 **What you'll see:**
 1. **🤖 Agent Discovery**: Automatically finds all agents on your Letta server

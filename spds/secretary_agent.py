@@ -135,7 +135,8 @@ class SecretaryAgent:
             f"Topic: {topic}\n"
             f"Participants: {', '.join(participants)}\n"
             f"Please begin taking notes in {self.mode} style. "
-            f"Store the meeting information in your memory and prepare to document the conversation."
+            f"Store the meeting information in your memory and prepare to document the conversation. "
+            f"Please use the send_message tool to acknowledge that you're ready to take notes."
         )
         
         def send_start_message():
@@ -161,13 +162,54 @@ class SecretaryAgent:
             print(f"❌ Failed to notify secretary of meeting start: {e}")
             
     def _extract_agent_response(self, response) -> str:
-        """Extract the main response from agent messages."""
-        for msg in response.messages:
-            if hasattr(msg, 'message_type') and msg.message_type == 'assistant_message':
-                if hasattr(msg, 'content') and msg.content:
-                    return msg.content
-        # Fallback
-        return "Secretary is ready to take notes."
+        """Extract the main response from agent messages, handling tool calls properly."""
+        message_text = ""
+        try:
+            for msg in response.messages:
+                # Check for tool calls first (send_message)
+                if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    for tool_call in msg.tool_calls:
+                        if hasattr(tool_call, 'function') and tool_call.function.name == 'send_message':
+                            try:
+                                import json
+                                args = json.loads(tool_call.function.arguments)
+                                message_text = args.get('message', '')
+                                break
+                            except:
+                                pass
+                
+                # Check for tool return messages (when agent uses send_message)
+                if not message_text and hasattr(msg, 'tool_return') and msg.tool_return:
+                    # Tool returns often contain status messages we can ignore
+                    continue
+                
+                # Check assistant messages (direct responses without tools)
+                if not message_text and hasattr(msg, 'message_type') and msg.message_type == 'assistant_message':
+                    if hasattr(msg, 'content') and msg.content:
+                        message_text = msg.content
+                
+                # If no tool call, try regular content extraction
+                if not message_text and hasattr(msg, 'content'):
+                    if isinstance(msg.content, str):
+                        message_text = msg.content
+                    elif isinstance(msg.content, list) and msg.content:
+                        content_item = msg.content[0]
+                        if hasattr(content_item, 'text'):
+                            message_text = content_item.text
+                        elif isinstance(content_item, str):
+                            message_text = content_item
+                
+                if message_text:
+                    break
+            
+            if not message_text:
+                message_text = "Secretary is ready to take notes."
+                
+        except Exception as e:
+            message_text = "Secretary is ready to take notes."
+            print(f"[Debug: Error extracting secretary response - {e}]")
+            
+        return message_text
     
     def observe_message(self, speaker: str, message: str, metadata: Optional[Dict] = None):
         """Send conversation message to the secretary agent for active processing."""
@@ -258,7 +300,7 @@ class SecretaryAgent:
                 messages=[
                     MessageCreate(
                         role="user",
-                        content="Please provide a summary of the meeting statistics - how many messages, participants, decisions, action items, etc."
+                        content="Please provide a summary of the meeting statistics - how many messages, participants, decisions, action items, etc. Please use the send_message tool to provide your response."
                     )
                 ]
             )
@@ -296,7 +338,8 @@ class SecretaryAgent:
             f"about '{self.meeting_metadata.get('topic', 'Unknown Topic')}'. "
             f"Use {self.mode} style documentation. "
             f"Include all the key points, decisions, and action items from the conversation you've been observing. "
-            f"Format the minutes appropriately for the meeting type."
+            f"Format the minutes appropriately for the meeting type. "
+            f"Please use the send_message tool to provide your response, with the formatted meeting minutes as the message parameter."
         )
         
         def request_minutes():

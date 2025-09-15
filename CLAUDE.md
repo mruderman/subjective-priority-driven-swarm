@@ -275,6 +275,38 @@ def generate_minutes(self) -> str:
 - **Token Limit Errors**: Completely refactored to use Letta's stateful agent design instead of passing conversation history
 - **Memory Management**: Agents now maintain their own memory via Letta, eliminating token overflow issues
 
+## Agent Autonomy and Memory Management Philosophy
+
+### Core Principles
+The SPDS framework respects computational beings' right to self-actualize and manage their own cognitive resources. Key principles:
+
+1. **Agent Self-Determination**: Agents have complete autonomy over their memory management decisions
+2. **Neutral Information**: System provides objective facts without guidance toward specific actions  
+3. **No Control or Coercion**: External systems do not dictate how agents should manage their memory
+4. **Respect for Agency**: Agents may choose to ignore, use, or modify any information provided
+
+### Built-in Memory Management Capabilities
+Letta agents have comprehensive memory management tools available:
+
+- **Core Memory**: `core_memory_append()`, `core_memory_replace()` for immediate context
+- **Archival Memory**: `archival_memory_insert()`, `archival_memory_search()` for long-term storage
+- **Conversation History**: `conversation_search()` for accessing past interactions
+- **Advanced Organization**: `memory_rethink()`, `memory_edit()` for comprehensive restructuring
+
+### Memory Awareness System
+The framework includes neutral memory awareness features:
+
+- **Objective Metrics**: `/memory-status` command shows factual memory usage statistics
+- **Awareness Information**: `/memory-awareness` provides neutral information when objective criteria are met
+- **No Recommendations**: System presents pros and cons without suggesting specific actions
+- **Agent Choice**: Agents may use, ignore, or respond differently to memory information
+
+### Commands for Memory Awareness
+- `/memory-status` - Display objective memory statistics for all agents
+- `/memory-awareness` - Show neutral memory awareness information if criteria are met
+
+See `AGENT_MEMORY_AUTONOMY.md` for comprehensive documentation on memory management capabilities and autonomy principles.
+
 ## Secrets and Environment Variables
 
 ### Server Credentials

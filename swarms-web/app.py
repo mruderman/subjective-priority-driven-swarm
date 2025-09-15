@@ -32,6 +32,15 @@ letta_flask = LettaFlask(config=LettaFlaskConfig(
 ))
 letta_flask.init_app(app)
 
+# Validate Letta configuration at startup. This does not perform a network
+# connectivity check by default (to avoid blocking imports), but it will raise
+# clear configuration errors (missing API key when required, etc.).
+try:
+    config.validate_letta_config(check_connectivity=False)
+except Exception as e:
+    # Raise here so app startup fails fast with a clear message
+    raise RuntimeError(f"Letta configuration invalid: {e}")
+
 # Global storage for active swarm sessions
 active_sessions = {}
 

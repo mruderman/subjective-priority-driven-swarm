@@ -155,10 +155,41 @@ swarms-web/
 
 ```bash
 # Letta Configuration
-LETTA_BASE_URL="http://localhost:8283"          # Letta server URL
+LETTA_BASE_URL="http://localhost:8283"          # Letta server URL (fallback for local dev)
 LETTA_API_KEY="your-api-key"                    # For Letta Cloud
 LETTA_PASSWORD="your-server-password"           # For self-hosted with auth
 LETTA_ENVIRONMENT="SELF_HOSTED"                 # SELF_HOSTED or LETTA_CLOUD
+```
+
+Notes:
+- The code provides a non-sensitive fallback of `http://localhost:8283` for
+   local development. In production, explicitly set `LETTA_BASE_URL` and
+   `LETTA_ENVIRONMENT` and provide `LETTA_API_KEY` when using Letta Cloud.
+- The project provides a helper `spds.config.validate_letta_config()` which
+   can be used at application startup to validate required env vars and (optionally)
+   check connectivity to the Letta server. Example:
+
+```python
+from spds import config
+
+# Validate configuration and connectivity (requires `requests`)
+config.validate_letta_config(check_connectivity=True)
+```
+
+Startup connectivity option
+
+The web `run.py` supports an environment variable `LETTA_VALIDATE_CONNECTIVITY`.
+If set to a truthy value (1, true, yes), the startup script will attempt a
+simple HTTP GET to `LETTA_BASE_URL` to verify the server is reachable and will
+fail startup with a helpful error if the check fails. Use this during local
+development or in CI when you want a hard failure on unreachable Letta servers.
+
+Example:
+
+```bash
+export LETTA_VALIDATE_CONNECTIVITY=1
+python run.py
+```
 
 # Export Configuration (optional)
 EXPORT_DIRECTORY="./exports"                    # Where to save exported files

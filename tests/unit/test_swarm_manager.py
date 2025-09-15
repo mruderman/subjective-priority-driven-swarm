@@ -6,7 +6,33 @@ from unittest.mock import Mock, patch, MagicMock, call
 from io import StringIO
 import sys
 
-from letta_client.types import AgentState, LettaResponse, Message
+from letta_client.types import AgentState, LettaResponse, Message, LlmConfig, EmbeddingConfig, Memory
+from types import SimpleNamespace
+
+
+def mk_agent_state(id: str, name: str, system: str = "Test", model: str = "openai/gpt-4"):
+    """Build a minimally valid AgentState for current letta_client schema."""
+    llm = LlmConfig(model=model, model_endpoint_type="openai", context_window=128000)
+    emb = EmbeddingConfig(
+        embedding_endpoint_type="openai",
+        embedding_model="openai/text-embedding-ada-002",
+        embedding_dim=1536,
+    )
+    mem = Memory(blocks=[])
+    return AgentState(
+        id=id,
+        name=name,
+        system=system,
+        agent_type="react_agent",
+        llm_config=llm,
+        embedding_config=emb,
+        memory=mem,
+        tools=[],
+        sources=[],
+        tags=[],
+        model=model,
+        embedding="openai/text-embedding-ada-002",
+    )
 from letta_client.errors import NotFoundError
 
 from spds.swarm_manager import SwarmManager
@@ -28,7 +54,8 @@ class TestSwarmManager:
             
             manager = SwarmManager(
                 client=mock_letta_client,
-                agent_profiles=sample_agent_profiles
+                agent_profiles=sample_agent_profiles,
+                conversation_mode="sequential",
             )
             
             assert len(manager.agents) == 2
@@ -62,14 +89,8 @@ class TestSwarmManager:
         agent_ids = ["ag-123", "ag-456"]
         
         # Mock agent states
-        mock_agent_state1 = AgentState(
-            id="ag-123", name="Agent 1", system="Test", model="gpt-4", 
-            embedding="ada", tools=[], memory={}
-        )
-        mock_agent_state2 = AgentState(
-            id="ag-456", name="Agent 2", system="Test", model="gpt-4",
-            embedding="ada", tools=[], memory={}
-        )
+        mock_agent_state1 = mk_agent_state(id="ag-123", name="Agent 1", system="Test", model="openai/gpt-4")
+        mock_agent_state2 = mk_agent_state(id="ag-456", name="Agent 2", system="Test", model="openai/gpt-4")
         
         mock_letta_client.agents.retrieve.side_effect = [mock_agent_state1, mock_agent_state2]
         
@@ -94,14 +115,8 @@ class TestSwarmManager:
         agent_names = ["Agent One", "Agent Two"]
         
         # Mock agent states
-        mock_agent_state1 = AgentState(
-            id="ag-123", name="Agent One", system="Test", model="gpt-4",
-            embedding="ada", tools=[], memory={}
-        )
-        mock_agent_state2 = AgentState(
-            id="ag-456", name="Agent Two", system="Test", model="gpt-4",
-            embedding="ada", tools=[], memory={}
-        )
+        mock_agent_state1 = mk_agent_state(id="ag-123", name="Agent One", system="Test", model="openai/gpt-4")
+        mock_agent_state2 = mk_agent_state(id="ag-456", name="Agent Two", system="Test", model="openai/gpt-4")
         
         mock_letta_client.agents.list.side_effect = [
             [mock_agent_state1],  # First call returns Agent One
@@ -134,14 +149,8 @@ class TestSwarmManager:
         agent_ids = ["ag-123", "ag-missing", "ag-456"]
         
         # Mock retrieval with one NotFoundError
-        mock_agent_state1 = AgentState(
-            id="ag-123", name="Agent 1", system="Test", model="gpt-4",
-            embedding="ada", tools=[], memory={}
-        )
-        mock_agent_state3 = AgentState(
-            id="ag-456", name="Agent 3", system="Test", model="gpt-4",
-            embedding="ada", tools=[], memory={}
-        )
+        mock_agent_state1 = mk_agent_state(id="ag-123", name="Agent 1", system="Test", model="openai/gpt-4")
+        mock_agent_state3 = mk_agent_state(id="ag-456", name="Agent 3", system="Test", model="openai/gpt-4")
         
         def mock_retrieve(agent_id):
             if agent_id == "ag-missing":
@@ -181,14 +190,8 @@ class TestSwarmManager:
         agent_names = ["Agent One", "Missing Agent", "Agent Three"]
         
         # Mock agent states
-        mock_agent_state1 = AgentState(
-            id="ag-123", name="Agent One", system="Test", model="gpt-4",
-            embedding="ada", tools=[], memory={}
-        )
-        mock_agent_state3 = AgentState(
-            id="ag-456", name="Agent Three", system="Test", model="gpt-4",
-            embedding="ada", tools=[], memory={}
-        )
+        mock_agent_state1 = mk_agent_state(id="ag-123", name="Agent One", system="Test", model="openai/gpt-4")
+        mock_agent_state3 = mk_agent_state(id="ag-456", name="Agent Three", system="Test", model="openai/gpt-4")
         
         def mock_list(name, limit):
             if name == "Missing Agent":
@@ -290,19 +293,15 @@ class TestSwarmManager:
             mock_agent2.assess_motivation_and_priority = Mock()
             
             # Mock speak response
-            mock_message = Message(
-                id="msg-123",
-                content="This is my response",
-                role="assistant"
-            )
-            mock_response = LettaResponse(messages=[mock_message])
+            mock_response = SimpleNamespace(messages=[SimpleNamespace(id="msg-123", role="assistant", content=[{"type": "text", "text": "This is my response"}])])
             mock_agent2.speak.return_value = mock_response
             
             mock_create.side_effect = [mock_agent1, mock_agent2]
             
             manager = SwarmManager(
                 client=mock_letta_client,
-                agent_profiles=sample_agent_profiles
+                agent_profiles=sample_agent_profiles,
+                conversation_mode="sequential",
             )
             
             # Capture output
@@ -382,7 +381,8 @@ class TestSwarmManager:
             
             manager = SwarmManager(
                 client=mock_letta_client,
-                agent_profiles=[sample_agent_profiles[0]]  # Just one agent
+                agent_profiles=[sample_agent_profiles[0]],  # Just one agent
+                conversation_mode="sequential",
             )
             
             # Capture output
@@ -396,7 +396,8 @@ class TestSwarmManager:
             
             # Should handle the error gracefully
             assert "Error Agent: I have some thoughts but I'm having trouble phrasing them." in output
-            assert "[Debug: Error during speak() - API Error]" in output
+            assert ("[Debug: Error during speak() - API Error]" in output or
+                    "[Debug: Error in sequential response - API Error]" in output)
     
     @patch('builtins.input')
     def test_start_chat_basic_flow(self, mock_input, mock_letta_client, sample_agent_profiles):
@@ -412,12 +413,7 @@ class TestSwarmManager:
             mock_agent.assess_motivation_and_priority = Mock()
             
             # Mock successful speak
-            mock_message = Message(
-                id="msg-123",
-                content="Great point about testing!",
-                role="assistant"
-            )
-            mock_response = LettaResponse(messages=[mock_message])
+            mock_response = SimpleNamespace(messages=[SimpleNamespace(id="msg-123", role="assistant", content=[{"type": "text", "text": "Great point about testing!"}])])
             mock_agent.speak.return_value = mock_response
             
             mock_create.return_value = mock_agent

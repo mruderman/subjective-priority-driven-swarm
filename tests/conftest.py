@@ -3,8 +3,9 @@ Shared pytest fixtures and configuration for SPDS tests.
 """
 import pytest
 from unittest.mock import Mock, MagicMock
-from letta_client.types import AgentState, Tool, LettaResponse, Message, ToolReturnMessage
+from letta_client.types import AgentState, Tool, LettaResponse, Message, ToolReturnMessage, LlmConfig, EmbeddingConfig, Memory
 from spds.tools import SubjectiveAssessment
+from types import SimpleNamespace
 
 @pytest.fixture
 def mock_letta_client():
@@ -27,17 +28,40 @@ def mock_letta_client():
     
     return client
 
+def _mk_agent_state(id: str, name: str, system: str, model: str = "openai/gpt-4"):
+    llm = LlmConfig(model=model, model_endpoint_type="openai", context_window=128000)
+    emb = EmbeddingConfig(
+        embedding_endpoint_type="openai",
+        embedding_model="openai/text-embedding-ada-002",
+        embedding_dim=1536,
+    )
+    mem = Memory(blocks=[])
+    return AgentState(
+        id=id,
+        name=name,
+        system=system,
+        agent_type="react_agent",
+        llm_config=llm,
+        embedding_config=emb,
+        memory=mem,
+        tools=[],
+        sources=[],
+        tags=[],
+        model=model,
+        embedding="openai/text-embedding-ada-002",
+    )
+
 @pytest.fixture
 def sample_agent_state():
     """Sample AgentState for testing."""
-    return AgentState(
+    return _mk_agent_state(
         id="ag-test-123",
         name="Test Agent",
-        system="You are Test Agent. Your persona is: A test agent for unit testing. Your expertise is in: testing, validation.",
+        system=(
+            "You are Test Agent. Your persona is: A test agent for unit testing. "
+            "Your expertise is in: testing, validation."
+        ),
         model="openai/gpt-4",
-        embedding="openai/text-embedding-ada-002",
-        tools=[],
-        memory={}
     )
 
 @pytest.fixture
@@ -92,10 +116,5 @@ def mock_tool_state():
 
 @pytest.fixture
 def mock_message_response():
-    """Mock LettaResponse for testing."""
-    message = Message(
-        id="msg-test-123",
-        content="Test response",
-        role="assistant"
-    )
-    return LettaResponse(messages=[message])
+    """Mock response with assistant text message."""
+    return SimpleNamespace(messages=[SimpleNamespace(id="msg-test-123", role="assistant", content=[{"type": "text", "text": "Test response"}])])
