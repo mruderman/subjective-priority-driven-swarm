@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block title %}SWARMS - Multi-Agent Group Chat{% endblock %}
+
+{% block content %}
+<div class="hero-section py-5 mb-5 rounded">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h1 class="display-4 fw-bold mb-3">
+                    <i class="bi bi-robot"></i> SWARMS
+                </h1>
+                <p class="lead mb-4">
+                    Subjective Priority-Driven Swarm framework for intelligent multi-agent conversations
+                </p>
+                <p class="mb-4">
+                    Experience dynamic group discussions where AI agents autonomously decide when to contribute 
+                    based on their subjective assessment of conversation relevance and personal expertise.
+                </p>
+                <div class="d-flex gap-3">
+                    <a href="{{ url_for('setup') }}" class="btn btn-light btn-lg">
+                        <i class="bi bi-play-circle"></i> Start New Chat
+                    </a>
+                    <a href="#features" class="btn btn-outline-light btn-lg">
+                        <i class="bi bi-info-circle"></i> Learn More
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-6 text-center">
+                <div class="p-4">
+                    <i class="bi bi-chat-dots display-1 opacity-75"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<section id="features" class="mb-5">
+    <div class="container">
+        <h2 class="text-center mb-5">Key Features</h2>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="bi bi-robot text-primary display-4 mb-3"></i>
+                        <h5 class="card-title">Real Agent Intelligence</h5>
+                        <p class="card-text">
+                            Agents use their own LLM models for authentic subjective assessment 
+                            across 7 dimensions of conversation relevance.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="bi bi-chat-square-dots text-primary display-4 mb-3"></i>
+                        <h5 class="card-title">Multiple Conversation Modes</h5>
+                        <p class="card-text">
+                            Four distinct modes: Hybrid (two-phase), All-Speak, Sequential, 
+                            and Pure Priority for different discussion dynamics.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="bi bi-file-earmark-text text-primary display-4 mb-3"></i>
+                        <h5 class="card-title">Secretary Agent</h5>
+                        <p class="card-text">
+                            Optional neutral observer for meeting documentation with formal 
+                            board minutes and casual discussion notes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="bi bi-download text-primary display-4 mb-3"></i>
+                        <h5 class="card-title">Multi-Format Export</h5>
+                        <p class="card-text">
+                            Export conversations as meeting minutes, transcripts, action items, 
+                            summaries, or complete packages in markdown format.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="bi bi-lightning text-primary display-4 mb-3"></i>
+                        <h5 class="card-title">Real-Time Interaction</h5>
+                        <p class="card-text">
+                            Live WebSocket communication for instant updates, agent responses, 
+                            and secretary commands during conversations.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="bi bi-cpu text-primary display-4 mb-3"></i>
+                        <h5 class="card-title">Model Diversity</h5>
+                        <p class="card-text">
+                            Support for agents powered by different LLM providers: 
+                            OpenAI, Anthropic, Meta, Google, and more via Letta.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Conversation Modes Section -->
+<section class="bg-marigold py-5 mb-5">
+    <div class="container">
+        <h2 class="text-center mb-5">Conversation Modes</h2>
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="card border-primary h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-arrow-repeat"></i> Hybrid Mode (Recommended)</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            Two-phase conversations for rich, multi-layered discussions:
+                        </p>
+                        <ul class="list-unstyled">
+                            <li><i class="bi bi-check-circle text-success"></i> <strong>Phase 1:</strong> Independent thoughts</li>
+                            <li><i class="bi bi-check-circle text-success"></i> <strong>Phase 2:</strong> Response round with rebuttals and agreements</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6">
+                <div class="card border-info h-100">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-people"></i> All-Speak Mode</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            Fast-paced group discussions where all motivated agents contribute:
+                        </p>
+                        <ul class="list-unstyled">
+                            <li><i class="bi bi-check-circle text-success"></i> Priority-ordered responses</li>
+                            <li><i class="bi bi-check-circle text-success"></i> Context building between agents</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6">
+                <div class="card border-warning h-100">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="bi bi-shuffle"></i> Sequential Mode</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            Traditional turn-taking with fairness rotation:
+                        </p>
+                        <ul class="list-unstyled">
+                            <li><i class="bi bi-check-circle text-success"></i> One speaker per turn</li>
+                            <li><i class="bi bi-check-circle text-success"></i> Prevents agent monopolization</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6">
+                <div class="card border-success h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-bullseye"></i> Pure Priority Mode</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">
+                            Meritocratic discussions where motivation drives participation:
+                        </p>
+                        <ul class="list-unstyled">
+                            <li><i class="bi bi-check-circle text-success"></i> Highest motivated agent speaks</li>
+                            <li><i class="bi bi-check-circle text-success"></i> Natural leader-follower dynamics</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Getting Started Section -->
+<section class="mb-5">
+    <div class="container">
+        <h2 class="text-center mb-5">Getting Started</h2>
+        <div class="row g-4 align-items-center">
+            <div class="col-lg-8">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="d-flex align-items-start">
+                            <div class="badge bg-primary rounded-circle p-2 me-3 mt-1">1</div>
+                            <div>
+                                <h5>Select Your Agents</h5>
+                                <p class="text-muted mb-0">
+                                    Choose from available computational beings on your Letta server. 
+                                    Each agent has unique expertise and personality.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12">
+                        <div class="d-flex align-items-start">
+                            <div class="badge bg-primary rounded-circle p-2 me-3 mt-1">2</div>
+                            <div>
+                                <h5>Choose Conversation Mode</h5>
+                                <p class="text-muted mb-0">
+                                    Pick a discussion style that fits your needs: collaborative, 
+                                    fast-paced, structured, or merit-based.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12">
+                        <div class="d-flex align-items-start">
+                            <div class="badge bg-primary rounded-circle p-2 me-3 mt-1">3</div>
+                            <div>
+                                <h5>Configure Secretary (Optional)</h5>
+                                <p class="text-muted mb-0">
+                                    Enable meeting documentation with formal board minutes 
+                                    or casual discussion notes.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12">
+                        <div class="d-flex align-items-start">
+                            <div class="badge bg-primary rounded-circle p-2 me-3 mt-1">4</div>
+                            <div>
+                                <h5>Start the Conversation</h5>
+                                <p class="text-muted mb-0">
+                                    Enter your topic and watch as agents autonomously engage 
+                                    in meaningful, dynamic discussions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4 text-center">
+                <div class="p-4">
+                    <a href="{{ url_for('setup') }}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-play-circle"></i> Start Your First Chat
+                    </a>
+                </div>
+                <p class="text-muted small">
+                    No registration required. Connect to your Letta server and begin immediately.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Technology Section -->
+<section class="bg-amber py-5">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h2 class="mb-4">Powered by Advanced Technology</h2>
+                <p class="lead">
+                    Built on the Letta platform for stateful AI agents with persistent memory and tool capabilities.
+                </p>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        Real LLM-based subjective assessment
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        WebSocket real-time communication
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        Responsive Bootstrap 5 interface
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success me-2"></i>
+                        Multi-provider model support
+                    </li>
+                </ul>
+                <div class="mt-4">
+                    <a href="https://docs.letta.com/" class="btn btn-outline-primary me-3" target="_blank">
+                        <i class="bi bi-book"></i> Letta Documentation
+                    </a>
+                    <a href="https://github.com/letta-ai/letta" class="btn btn-outline-secondary" target="_blank">
+                        <i class="bi bi-github"></i> View on GitHub
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <i class="bi bi-cpu-fill text-primary display-6"></i>
+                                <h6 class="mt-2">Letta Platform</h6>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <i class="bi bi-lightning-fill text-warning display-6"></i>
+                                <h6 class="mt-2">Flask + SocketIO</h6>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <i class="bi bi-bootstrap-fill text-purple display-6"></i>
+                                <h6 class="mt-2">Bootstrap 5</h6>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <i class="bi bi-cloud-fill text-info display-6"></i>
+                                <h6 class="mt-2">Multi-Model AI</h6>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Toast container for notifications -->
+<div id="toast-container" class="toast-container"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.body.setAttribute('data-page', 'index');
+</script>
+{% endblock %}

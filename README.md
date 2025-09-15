@@ -1,6 +1,6 @@
 # Subjective Priority-Driven Swarm (SPDS)
 
-This project implements a multi-agent group chat system based on the Subjective Priority-Driven Swarm (SPDS) framework, using real computational beings from a Letta ADE server. The interactive terminal application features an intuitive agent selection interface and multiple conversation modes for rich, dynamic discussions.
+This project implements a multi-agent group chat system based on the Subjective Priority-Driven Swarm (SPDS) framework, using real computational beings from a Letta ADE server. Available as both a CLI application and a modern web interface, it features intuitive agent selection and multiple conversation modes for rich, dynamic discussions.
 
 **Key Innovation**: Agents use their own LLM models to perform real subjective assessment of conversations, creating authentic computational personalities that naturally respond, agree, disagree, and build on each other's ideas.
 
@@ -24,26 +24,35 @@ This project implements a multi-agent group chat system based on the Subjective 
 
 ## ✨ Features
 
+### Core Functionality
 - **🤖 Interactive Agent Selection**: Checkbox-based UI to select computational beings from your Letta server
 - **🎭 Multiple Conversation Modes**: Four distinct modes for different discussion dynamics
-- **📝 Secretary Agent**: Optional neutral observer for meeting documentation
+- **📝 Secretary Agent**: AI-powered meeting documentation using real Letta agent intelligence
 - **📋 Meeting Minutes**: Both formal board minutes and casual discussion notes
 - **🧠 Real Agent Intelligence**: Agents use their own LLM models for authentic conversation assessment
 - **🔄 Natural Group Dynamics**: Agents respond, agree, disagree, and build on each other's ideas
 - **⚡ Priority-Based Responses**: Dynamic turn-taking based on agent motivation and expertise
 - **💾 Multi-Format Export**: Export conversations, minutes, transcripts, and summaries
+
+### Interface Options
+- **🖥️ Command Line Interface**: Interactive terminal application with checkbox selection
+- **🌐 Web Interface**: Modern Bootstrap 5 web GUI with real-time WebSocket communication
+- **📱 Responsive Design**: Web interface works seamlessly on desktop and mobile devices
+
+### Technical Features
 - **🌐 Model Diversity**: Supports agents with different LLM providers (OpenAI, Anthropic, Meta, etc.)
 - **🔐 Secure Authentication**: Proper self-hosted Letta server integration with password authentication
 - **📊 Real-Time Assessment**: Agents evaluate conversation relevance across 7 dimensions
 - **💬 Human-in-the-Loop**: Seamless interaction between user and computational beings
 - **⌨️ Live Commands**: Real-time meeting management with slash commands
+- **🚀 WebSocket Communication**: Real-time updates and live agent responses in web interface
 
 ## Setup
 
 1.  **Project Structure:** Ensure your files are arranged correctly in a Python package.
     ```
     spds_project/
-    |-- spds/
+    |-- spds/                 # Core CLI application
     |   |-- __init__.py
     |   |-- config.py
     |   |-- tools.py
@@ -53,14 +62,24 @@ This project implements a multi-agent group chat system based on the Subjective 
     |   |-- meeting_templates.py
     |   |-- export_manager.py
     |   |-- main.py
+    |-- swarms-web/          # Web GUI application
+    |   |-- app.py           # Flask web server
+    |   |-- run.py           # Quick start script
+    |   |-- templates/       # HTML templates
+    |   |-- static/          # CSS, JS, assets
+    |   |-- requirements.txt # Web-specific dependencies
     |-- exports/              # Generated meeting minutes and exports
-    |-- requirements.txt
+    |-- requirements.txt      # Core dependencies
     |-- creative_swarm.json
     ```
 
 2.  **Install Dependencies:**
     ```bash
+    # Core CLI dependencies
     pip install -r requirements.txt
+    
+    # Additional web interface dependencies
+    pip install -r swarms-web/requirements.txt
     ```
 
 3.  **Configure Environment Variables:**
@@ -68,22 +87,93 @@ This project implements a multi-agent group chat system based on the Subjective 
     ```bash
     LETTA_API_KEY=your-api-key-here
     LETTA_PASSWORD=your-server-password
-    LETTA_BASE_URL=http://localhost:8283  # For self-hosted
-    LETTA_ENVIRONMENT=SELF_HOSTED  # Or LETTA_CLOUD
+X        LETTA_BASE_URL=http://localhost:8283  # For self-hosted (fallback for local dev)
+        LETTA_ENVIRONMENT=SELF_HOSTED  # Or LETTA_CLOUD
     ```
+
+Notes:
+- The application provides a non-sensitive fallback of `http://localhost:8283` for
+    local development so it works out-of-the-box. For production, set `LETTA_BASE_URL`
+    and `LETTA_ENVIRONMENT` explicitly and use a secrets manager for API keys.
+- You can perform a startup validation with `spds.config.validate_letta_config()`
+    to ensure required env vars are present and (optionally) to check connectivity to
+    the Letta server. Example:
+
+```python
+from spds import config
+
+config.validate_letta_config(check_connectivity=True)
+```
+
+Startup connectivity option
+
+The web `run.py` script supports `LETTA_VALIDATE_CONNECTIVITY`. When set to a
+truthy value (1, true, yes) the script will perform a lightweight GET against
+`LETTA_BASE_URL` during startup and exit with an error if it fails. This is
+useful in CI or for deployment scripts that should fail fast when the Letta
+server is unreachable.
+
+```bash
+export LETTA_VALIDATE_CONNECTIVITY=1
+python swarms-web/run.py
+```
 
 4.  **Configure Docker (if using self-hosted Letta):**
     Ensure your `docker-compose.yml` or `docker run` command correctly mounts your project directory and sets the `TOOL_EXEC_DIR` and `TOOL_EXEC_VENV_NAME` environment variables as previously discussed.
 
 ## 🚀 Running the Application
 
-### Interactive Mode (Recommended)
+Choose between the web interface (recommended for most users) or the command line interface:
 
-Launch the intuitive interface for agent selection and conversation mode choice:
+### 🌐 Web Interface (Recommended)
+
+Launch the modern web GUI with real-time features:
 
 ```bash
+# Recommended in a separate virtualenv
+python -m venv .venv-web && . .venv-web/bin/activate
+pip install -r swarms-web/requirements.txt
+pip install git+https://github.com/letta-ai/letta-flask.git
+
+# Quick start
+cd swarms-web && python run.py
+```
+
+Then open your browser to **http://localhost:5002**
+
+**Web Interface Features:**
+- 🖱️ **Point-and-click agent selection** with visual cards
+- 🎨 **Modern Bootstrap 5 interface** with responsive design
+- ⚡ **Real-time WebSocket communication** for live updates
+- 📊 **Live agent scores and phase indicators** during conversations
+- 📝 **Interactive secretary panel** with live minutes and commands
+- 💾 **One-click export** with download buttons for all formats
+- 📱 **Mobile-friendly design** that works on any device
+
+### 🖥️ Command Line Interface
+
+Launch the interactive terminal interface for agent selection and conversation mode choice:
+
+```bash
+# CLI in its own virtualenv
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
 python -m spds.main
 ```
+
+Notes:
+- Default runs an ephemeral swarm using profiles from `spds/config.py`.
+- Use `--interactive` to select agents, mode, and secretary via TUI.
+- Examples:
+  - `python -m spds.main --interactive`
+  - `python -m spds.main --agent-ids <ID1> <ID2>`
+  - `python -m spds.main --agent-names "Agent A" "Agent B"`
+  - `python -m spds.main --swarm-config openai_swarm.json`
+
+Makefile shortcuts:
+- `make venv-cli` / `make run-cli`
+- `make venv-web` / `make run-web`
+- `make test` / `make coverage`
 
 **What you'll see:**
 1. **🤖 Agent Discovery**: Automatically finds all agents on your Letta server
@@ -152,7 +242,7 @@ Diana: "Building on both perspectives, what if we considered..."
 
 ## 📝 Secretary Agent & Meeting Minutes
 
-The secretary agent acts as a neutral observer, documenting conversations without participating. It offers two distinct documentation styles:
+The secretary agent uses AI-powered note-taking to actively document conversations through real agent communication. Built with proper Letta API patterns using memory blocks and active message processing, it provides intelligent meeting documentation that goes beyond simple transcription:
 
 ### Meeting Types
 
@@ -323,16 +413,19 @@ Morgan: As the product owner, I believe we should prioritize mobile development.
 ### Core Components
 - **SPDSAgent**: Individual agent with subjective assessment capabilities
 - **SwarmManager**: Orchestrates multi-agent conversations with secretary integration
-- **SecretaryAgent**: Neutral observer for meeting documentation
+- **SecretaryAgent**: AI-powered meeting documentation using real Letta agent communication
 - **MeetingTemplates**: Formal and casual minute formatting engines
 - **ExportManager**: Multi-format export system for all conversation data
 - **SubjectiveAssessment**: Tool for agents to evaluate their motivation
 - **Letta Integration**: Leverages Letta's stateful agent framework
 
 ### Key Features
-- **Real-time Documentation**: Secretary observes without interfering
+- **Real-time AI Processing**: Secretary actively processes conversations using Letta agent intelligence
+- **Memory Block Architecture**: Uses proper Letta memory blocks for meeting context, notes style, and ongoing documentation
+- **Active Agent Communication**: Secretary receives and processes messages through `client.agents.messages.create()` for real AI-powered analysis
+- **AI-Generated Minutes**: Meeting minutes are generated by the secretary's AI model, not static templates
 - **Dual Personality**: Formal board secretary vs. casual note-taker
-- **Auto-detection**: Identifies decisions and action items automatically
+- **Auto-detection**: Identifies decisions and action items automatically using AI analysis
 - **Live Commands**: Manage meetings in real-time with slash commands
 - **Flexible Export**: Multiple formats for different audiences
 

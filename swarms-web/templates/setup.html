@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+
+{% block title %}Setup - SWARMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-gear"></i> Setup Your SWARMS Session
+                    </h4>
+                    <p class="mb-0 mt-2 opacity-75">
+                        Configure agents, conversation mode, and secretary settings
+                    </p>
+                </div>
+                
+                <div class="card-body">
+                    <form id="setup-form">
+                        <!-- Agent Selection -->
+                        <div class="mb-5">
+                            <h5 class="mb-3">
+                                <i class="bi bi-robot"></i> Select Agents
+                                <span class="badge bg-secondary ms-2" id="agent-count">Loading...</span>
+                            </h5>
+                            <p class="text-muted mb-3">
+                                Choose computational beings from your Letta server to participate in the conversation.
+                            </p>
+                            
+                            <div id="agents-loading" class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading agents...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Discovering available agents...</p>
+                            </div>
+                            
+                            <div id="agent-cards" class="row" style="display: none;">
+                                <!-- Agent cards will be dynamically populated -->
+                            </div>
+                            
+                            <div id="no-agents" class="alert alert-warning" style="display: none;">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <strong>No agents found!</strong> 
+                                Please create some agents first using the 
+                                <a href="https://app.letta.com" target="_blank" class="alert-link">Letta ADE</a> 
+                                or agent creation scripts.
+                            </div>
+                        </div>
+
+                        <!-- Conversation Mode -->
+                        <div class="mb-5">
+                            <h5 class="mb-3">
+                                <i class="bi bi-chat-square-dots"></i> Conversation Mode
+                            </h5>
+                            <p class="text-muted mb-3">
+                                Choose how agents will interact during the discussion.
+                            </p>
+                            
+                            <input type="hidden" id="conversation_mode" name="conversation_mode" value="">
+                            
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="card mode-card" data-mode="hybrid">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="bi bi-arrow-repeat text-primary me-2"></i>
+                                                <h6 class="mb-0">Hybrid Mode</h6>
+                                                <span class="badge bg-success ms-auto">Recommended</span>
+                                            </div>
+                                            <p class="card-text small">
+                                                Two-phase conversations: independent thoughts then response round 
+                                                with rebuttals, agreements, and new insights.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card mode-card" data-mode="all_speak">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="bi bi-people text-info me-2"></i>
+                                                <h6 class="mb-0">All-Speak Mode</h6>
+                                            </div>
+                                            <p class="card-text small">
+                                                Fast-paced discussions where all motivated agents contribute 
+                                                in priority order, seeing previous responses.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card mode-card" data-mode="sequential">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="bi bi-shuffle text-warning me-2"></i>
+                                                <h6 class="mb-0">Sequential Mode</h6>
+                                            </div>
+                                            <p class="card-text small">
+                                                Traditional turn-taking with fairness rotation. 
+                                                One agent speaks per turn to prevent monopolization.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card mode-card" data-mode="pure_priority">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="bi bi-bullseye text-success me-2"></i>
+                                                <h6 class="mb-0">Pure Priority Mode</h6>
+                                            </div>
+                                            <p class="card-text small">
+                                                Meritocratic discussions where the most motivated 
+                                                agent always speaks. Natural leader-follower dynamics.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Secretary Configuration -->
+                        <div class="mb-5">
+                            <h5 class="mb-3">
+                                <i class="bi bi-file-earmark-text"></i> Secretary Agent
+                            </h5>
+                            <p class="text-muted mb-3">
+                                Enable a neutral observer to document the conversation and provide meeting minutes.
+                            </p>
+                            
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="enable_secretary">
+                                <label class="form-check-label" for="enable_secretary">
+                                    <strong>Enable Meeting Secretary</strong>
+                                    <small class="text-muted d-block">Records minutes and allows export (reuses existing secretary or creates if needed)</small>
+                                </label>
+                            </div>
+                            
+                            <div id="secretary-options" class="ms-4" style="display: none;">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="secretary_mode" class="form-label">Secretary Mode</label>
+                                        <select class="form-select" id="secretary_mode" name="secretary_mode">
+                                            <option value="adaptive" selected>Adaptive (Auto-detect)</option>
+                                            <option value="formal">Formal Board Minutes</option>
+                                            <option value="casual">Casual Discussion Notes</option>
+                                        </select>
+                                        <small class="text-muted">
+                                            Adaptive mode automatically chooses based on conversation tone
+                                        </small>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <label for="meeting_type" class="form-label">Meeting Type</label>
+                                        <select class="form-select" id="meeting_type" name="meeting_type">
+                                            <option value="discussion" selected>General Discussion</option>
+                                            <option value="board_meeting">Board Meeting</option>
+                                            <option value="working_session">Working Session</option>
+                                        </select>
+                                        <small class="text-muted">
+                                            Influences documentation style and structure
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Topic Input -->
+                        <div class="mb-4">
+                            <h5 class="mb-3">
+                                <i class="bi bi-chat-text"></i> Conversation Topic
+                            </h5>
+                            <p class="text-muted mb-3">
+                                Enter the topic or agenda for your discussion.
+                            </p>
+                            
+                            <div class="form-floating">
+                                <textarea class="form-control" id="topic" name="topic" 
+                                          placeholder="What would you like to discuss?" 
+                                          style="height: 100px" required></textarea>
+                                <label for="topic">Topic or agenda</label>
+                            </div>
+                            <div class="form-text">
+                                Examples: "The future of AI in creative industries", 
+                                "Q1 marketing strategy planning", "Technical architecture review"
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary me-md-2" 
+                                    onclick="window.location.href='{{ url_for('index') }}'">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </button>
+                            <button type="submit" class="btn btn-primary btn-lg" id="start-chat-btn">
+                                <i class="bi bi-play-circle"></i> Start Chat Session
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container for notifications -->
+<div id="toast-container" class="toast-container"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.body.setAttribute('data-page', 'setup');
+
+// Simplified agent loading and setup
+let agents = [];
+
+async function loadAgents() {
+    try {
+        console.log('Loading agents...');
+        const response = await fetch('/api/agents');
+        const data = await response.json();
+        
+        if (data.error) {
+            showToast('Error loading agents: ' + data.error, 'error');
+            return;
+        }
+        
+        agents = data.agents;
+        console.log('Loaded agents:', agents);
+        renderAgentCards();
+        updateAgentCount();
+        
+    } catch (error) {
+        console.error('Error loading agents:', error);
+        showToast('Failed to load agents from server', 'error');
+        updateAgentCount(0);
+    }
+}
+
+function renderAgentCards() {
+    const container = document.getElementById('agent-cards');
+    const loadingDiv = document.getElementById('agents-loading');
+    const noAgentsDiv = document.getElementById('no-agents');
+    
+    if (!container) return;
+    
+    // Hide loading
+    if (loadingDiv) loadingDiv.style.display = 'none';
+    
+    if (agents.length === 0) {
+        if (noAgentsDiv) noAgentsDiv.style.display = 'block';
+        return;
+    }
+    
+    // Show agents container
+    container.style.display = 'block';
+    container.innerHTML = '';
+    
+    agents.forEach(agent => {
+        const card = document.createElement('div');
+        card.className = 'col-md-6 col-lg-4 mb-3';
+        card.innerHTML = `
+            <div class="card agent-card h-100" data-agent-id="${agent.id}">
+                <div class="card-body">
+                    <div class="form-check">
+                        <input class="form-check-input agent-checkbox" type="checkbox" 
+                               value="${agent.id}" id="agent-${agent.id}">
+                        <label class="form-check-label" for="agent-${agent.id}">
+                            <h6 class="card-title mb-1">${agent.name}</h6>
+                        </label>
+                    </div>
+                    <p class="card-text small text-muted mb-2">
+                        <i class="bi bi-cpu"></i> ${agent.model}
+                    </p>
+                    <p class="card-text small text-muted">
+                        <i class="bi bi-calendar"></i> Created: ${agent.created_at}
+                    </p>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+    
+    // Add click handlers
+    setupAgentCardClicks();
+}
+
+function setupAgentCardClicks() {
+    document.querySelectorAll('.agent-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (e.target.type !== 'checkbox') {
+                const checkbox = card.querySelector('input[type="checkbox"]');
+                checkbox.checked = !checkbox.checked;
+                updateAgentCardState(card, checkbox.checked);
+            }
+        });
+    });
+    
+    document.querySelectorAll('.agent-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const card = e.target.closest('.agent-card');
+            updateAgentCardState(card, e.target.checked);
+        });
+    });
+}
+
+function updateAgentCardState(card, isSelected) {
+    if (isSelected) {
+        card.classList.add('selected');
+    } else {
+        card.classList.remove('selected');
+    }
+}
+
+function updateAgentCount(count = null) {
+    const actualCount = count !== null ? count : agents.length;
+    const countBadge = document.getElementById('agent-count');
+    if (countBadge) {
+        countBadge.textContent = actualCount > 0 ? `${actualCount} Available` : 'None Available';
+        countBadge.className = actualCount > 0 ? 'badge bg-success ms-2' : 'badge bg-warning ms-2';
+    }
+}
+
+function setupModeSelection() {
+    document.querySelectorAll('.mode-card').forEach(card => {
+        card.addEventListener('click', () => {
+            // Remove selected class from all cards
+            document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
+            // Add selected class to clicked card
+            card.classList.add('selected');
+            // Update hidden input
+            const modeInput = document.getElementById('conversation_mode');
+            if (modeInput) {
+                modeInput.value = card.dataset.mode;
+            }
+        });
+    });
+}
+
+function setupSecretaryOptions() {
+    const secretaryToggle = document.getElementById('enable_secretary');
+    const secretaryOptions = document.getElementById('secretary-options');
+    
+    if (secretaryToggle && secretaryOptions) {
+        secretaryToggle.addEventListener('change', () => {
+            if (secretaryToggle.checked) {
+                secretaryOptions.style.display = 'block';
+            } else {
+                secretaryOptions.style.display = 'none';
+            }
+        });
+    }
+}
+
+function setupFormSubmission() {
+    const form = document.getElementById('setup-form');
+    if (!form) return;
+    
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const selectedAgents = Array.from(document.querySelectorAll('.agent-checkbox:checked'))
+            .map(checkbox => checkbox.value);
+        
+        if (selectedAgents.length === 0) {
+            showToast('Please select at least one agent', 'warning');
+            return;
+        }
+        
+        const conversationMode = document.getElementById('conversation_mode').value;
+        if (!conversationMode) {
+            showToast('Please select a conversation mode', 'warning');
+            return;
+        }
+        
+        const topic = document.getElementById('topic').value.trim();
+        if (!topic) {
+            showToast('Please enter a conversation topic', 'warning');
+            return;
+        }
+        
+        const formData = {
+            agent_ids: selectedAgents,
+            conversation_mode: conversationMode,
+            enable_secretary: document.getElementById('enable_secretary').checked,
+            secretary_mode: document.getElementById('secretary_mode').value,
+            meeting_type: document.getElementById('meeting_type').value,
+            topic: topic
+        };
+        
+        await startSession(formData);
+    });
+}
+
+async function startSession(formData) {
+    try {
+        const response = await fetch('/api/start_session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            showToast('Error starting session: ' + data.error, 'error');
+            return;
+        }
+        
+        // Store session data
+        sessionStorage.setItem('sessionId', data.session_id);
+        sessionStorage.setItem('topic', formData.topic);
+        
+        // Redirect to chat
+        window.location.href = '/chat';
+        
+    } catch (error) {
+        console.error('Error starting session:', error);
+        showToast('Failed to start session', 'error');
+    }
+}
+
+function showToast(message, type = 'info') {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container';
+        toastContainer.style.position = 'fixed';
+        toastContainer.style.top = '80px';
+        toastContainer.style.right = '1rem';
+        toastContainer.style.zIndex = '1050';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Map type to Bootstrap color
+    const colorMap = {
+        'success': 'success',
+        'error': 'danger',
+        'warning': 'warning',
+        'info': 'primary'
+    };
+    const bgColor = colorMap[type] || 'primary';
+    
+    // Create toast
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${bgColor} border-0`;
+    toast.setAttribute('role', 'alert');
+    
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" 
+                    data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    // Initialize and show toast
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    // Remove toast element after it's hidden
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
+}
+
+// Initialize everything when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Set default conversation mode
+    const hybridCard = document.querySelector('[data-mode="hybrid"]');
+    if (hybridCard) {
+        hybridCard.classList.add('selected');
+        document.getElementById('conversation_mode').value = 'hybrid';
+    }
+    
+    // Setup all functionality
+    setupModeSelection();
+    setupSecretaryOptions();
+    setupFormSubmission();
+    
+    // Load agents
+    loadAgents();
+});
+</script>
+{% endblock %}

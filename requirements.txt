@@ -12,6 +12,9 @@ openai
 # For environment variable management
 python-dotenv
 
+# HTTP utilities used by config connectivity checks
+requests>=2.31.0
+
 # For interactive CLI interfaces
 questionary
 

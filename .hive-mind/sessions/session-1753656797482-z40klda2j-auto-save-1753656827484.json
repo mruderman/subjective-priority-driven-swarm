@@ -1,0 +1,81 @@
+{
+  "sessionId": "session-1753656797482-z40klda2j",
+  "checkpointId": "checkpoint-1753656827485-nehdwwadn",
+  "checkpointName": "auto-save-1753656827484",
+  "timestamp": "2025-07-27T22:53:47.485Z",
+  "data": {
+    "timestamp": "2025-07-27T22:53:47.484Z",
+    "changeCount": 5,
+    "changesByType": {
+      "swarm_created": [
+        {
+          "type": "swarm_created",
+          "data": {
+            "swarmId": "swarm-1753656797481-g2bdeyf9q",
+            "swarmName": "hive-1753656797475",
+            "objective": "Troubleshoot and resolve Lettta agents and secretary not showing up in new group chat once set up. Make sure to refer to the @/root/Compose-Main/SWARMS/References/Letta-Primer.md and context7 or other MCP servers related to documentation for propper usage of the Letta Python SDK to utilize Letta's API",
+            "workerCount": 8
+          },
+          "timestamp": "2025-07-27T22:53:17.483Z"
+        }
+      ],
+      "agent_activity": [
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753656797481-g2bdeyf9q-0",
+            "activity": "spawned",
+            "data": {
+              "type": "researcher",
+              "name": "Researcher Worker 1"
+            }
+          },
+          "timestamp": "2025-07-27T22:53:17.484Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753656797481-g2bdeyf9q-1",
+            "activity": "spawned",
+            "data": {
+              "type": "coder",
+              "name": "Coder Worker 2"
+            }
+          },
+          "timestamp": "2025-07-27T22:53:17.484Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753656797481-g2bdeyf9q-2",
+            "activity": "spawned",
+            "data": {
+              "type": "analyst",
+              "name": "Analyst Worker 3"
+            }
+          },
+          "timestamp": "2025-07-27T22:53:17.484Z"
+        },
+        {
+          "type": "agent_activity",
+          "data": {
+            "agentId": "worker-swarm-1753656797481-g2bdeyf9q-3",
+            "activity": "spawned",
+            "data": {
+              "type": "tester",
+              "name": "Tester Worker 4"
+            }
+          },
+          "timestamp": "2025-07-27T22:53:17.484Z"
+        }
+      ]
+    },
+    "statistics": {
+      "tasksProcessed": 0,
+      "tasksCompleted": 0,
+      "memoryUpdates": 0,
+      "agentActivities": 4,
+      "consensusDecisions": 0
+    }
+  }
+}

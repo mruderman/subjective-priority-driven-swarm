@@ -143,7 +143,7 @@ def interactive_agent_selection(client: Letta):
     return selected_agent_ids, topic, conversation_mode, enable_secretary, secretary_mode, meeting_type
 
 
-def main():
+def main(argv=None):
     """Initializes the Letta client and starts the swarm chat."""
 
     parser = argparse.ArgumentParser(
@@ -170,7 +170,13 @@ def main():
         metavar="PATH",
         help="Path to a JSON file to create a new, temporary swarm.",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Use interactive agent selection and setup (overrides default ephemeral mode).",
+    )
+    # Allow passing argv for testing; default to sys.argv[1:]
+    args = parser.parse_args(argv)
 
     agent_profiles = None
     agent_ids = None
@@ -198,19 +204,29 @@ def main():
         agent_profiles = load_swarm_from_file(args.swarm_config)
         if not agent_profiles:
             sys.exit(1)  # Exit if the config file is invalid or not found
-    else:
-        # No arguments provided - use interactive selection
+    elif args.interactive:
+        # Interactive setup explicitly requested
         print("Mode: Interactive agent selection")
         result = interactive_agent_selection(client)
-        
         if not result or len(result) < 6:
             sys.exit(1)  # User cancelled or no agents selected
-            
         selected_agent_ids, topic, conversation_mode, enable_secretary, secretary_mode, meeting_type = result
         agent_ids = selected_agent_ids
+    else:
+        # Default to ephemeral swarm from config.AGENT_PROFILES (test-friendly)
+        print("Mode: Creating temporary swarm from default configuration")
+        # Print header and attempt to get topic before contacting server
+        print("\nSwarm chat started. Type 'quit' or Ctrl+D to end the session.")
+        try:
+            topic = input("Enter the topic of conversation: ")
+        except EOFError:
+            print("\nExiting.")
+            return
+        print("Creating swarm from temporary agent profiles...")
+        agent_profiles = config.AGENT_PROFILES
 
     try:
-        # Set conversation mode - default to hybrid for interactive, sequential for others
+        # Set conversation mode - default to sequential for non-interactive flows
         mode = conversation_mode if 'conversation_mode' in locals() else "sequential"
         
         # Set secretary options - default to disabled for non-interactive mode
@@ -229,8 +245,8 @@ def main():
             meeting_type=meet_type,
         )
         
-        # If we used interactive selection, start with the provided topic
-        if 'topic' in locals():
+        # If we already captured topic (default ephemeral), start with it
+        if 'topic' in locals() and topic:
             swarm.start_chat_with_topic(topic)
         else:
             swarm.start_chat()

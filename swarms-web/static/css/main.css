@@ -1,0 +1,483 @@
+/* SWARMS Web GUI Custom Styles */
+
+:root {
+    --primary-color: #6366f1;
+    --secondary-color: #8b5cf6;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --dark-color: #1f2937;
+    --light-color: #f8fafc;
+    --border-color: #e5e7eb;
+    --cyan-pure: #00FFFF;
+    --marigold: #FFC700;
+    --amber: #fc4f05;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--light-color);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Agent Selection Cards */
+.agent-card {
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    cursor: pointer;
+}
+
+.agent-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.agent-card.selected {
+    border-color: var(--primary-color);
+    background-color: rgba(99, 102, 241, 0.05);
+}
+
+.agent-checkbox {
+    transform: scale(1.2);
+}
+
+/* Conversation Mode Cards */
+.mode-card {
+    transition: all 0.3s ease;
+    border: 2px solid var(--border-color);
+    cursor: pointer;
+}
+
+.mode-card:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+}
+
+.mode-card.selected {
+    border-color: var(--primary-color);
+    background-color: rgba(99, 102, 241, 0.05);
+}
+
+/* Chat Interface */
+.chat-container {
+    height: calc(100vh - 200px);
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.message {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    max-width: 85%;
+    word-wrap: break-word;
+}
+
+.message.user {
+    background-color: var(--primary-color);
+    color: white;
+    margin-left: auto;
+    margin-right: 0;
+    border-bottom-right-radius: 0.25rem;
+}
+
+.message.agent {
+    background-color: #f1f5f9;
+    border: 1px solid var(--border-color);
+    margin-right: auto;
+    margin-left: 0;
+    border-bottom-left-radius: 0.25rem;
+}
+
+.message.system {
+    background-color: #fef3c7;
+    border: 1px solid #fbbf24;
+    margin: 0 auto;
+    text-align: center;
+    max-width: 70%;
+    font-style: italic;
+}
+
+.message.secretary {
+    background-color: #ecfdf5;
+    border: 1px solid #10b981;
+    margin-right: auto;
+    margin-left: 0;
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.message-speaker {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.message-timestamp {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.message-content {
+    line-height: 1.5;
+}
+
+/* Agent thinking indicator */
+.thinking-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    margin-bottom: 0.5rem;
+    background-color: #f0f9ff;
+    border: 1px solid #0ea5e9;
+    border-radius: 0.5rem;
+    color: #0369a1;
+    font-style: italic;
+}
+
+.thinking-dots {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
+.thinking-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #0ea5e9;
+    border-radius: 50%;
+    animation: thinking 1.4s ease-in-out infinite both;
+}
+
+.thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+.thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes thinking {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
+    }
+}
+
+/* Chat input */
+.chat-input-container {
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+.chat-input {
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    resize: none;
+}
+
+.chat-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+}
+
+/* Secretary Panel */
+.secretary-panel {
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+.secretary-header {
+    background-color: #f8fafc;
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.secretary-content {
+    padding: 1rem;
+}
+
+/* Progress indicators */
+.progress-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.phase-indicator {
+    background-color: #dbeafe;
+    color: #1e40af;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* Agent score display */
+.agent-scores {
+    background-color: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.agent-score-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.agent-score-item:last-child {
+    border-bottom: none;
+}
+
+.agent-name {
+    font-weight: 500;
+}
+
+.score-badges {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.score-badge {
+    background-color: #dbeafe;
+    color: #1e40af;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* Export buttons */
+.export-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.export-btn {
+    background-color: var(--success-color);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    transition: background-color 0.3s ease;
+}
+
+.export-btn:hover {
+    background-color: #059669;
+}
+
+/* Status indicators */
+.status-online {
+    color: var(--success-color);
+}
+
+.status-thinking {
+    color: var(--warning-color);
+}
+
+.status-error {
+    color: var(--danger-color);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .chat-container {
+        height: calc(100vh - 150px);
+    }
+    
+    .message {
+        max-width: 95%;
+    }
+    
+    .agent-card {
+        margin-bottom: 1rem;
+    }
+    
+    .secretary-panel {
+        height: auto;
+        margin-top: 1rem;
+    }
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #f3f4f6;
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Utility classes */
+.text-primary { color: var(--primary-color) !important; }
+.text-secondary { color: var(--secondary-color) !important; }
+.bg-primary { background-color: var(--primary-color) !important; }
+.bg-secondary { background-color: var(--secondary-color) !important; }
+.border-primary { border-color: var(--primary-color) !important; }
+
+/* Focus styles for accessibility */
+.btn:focus,
+.form-control:focus,
+.form-select:focus {
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+    border-color: var(--primary-color);
+}
+
+/* Toast notifications */
+.toast-container {
+    position: fixed;
+    top: 80px;
+    right: 1rem;
+    z-index: 1050;
+}
+
+.toast {
+    min-width: 300px;
+}
+
+/* Hero Section with Pure Cyan */
+.hero-section {
+    background-color: var(--cyan-pure);
+    color: black;
+}
+
+.hero-section .btn-light {
+    background-color: black;
+    border-color: black;
+    color: var(--cyan-pure);
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.hero-section .btn-light:hover {
+    background-color: #333;
+    border-color: #333;
+    color: var(--cyan-pure);
+    transform: translateY(-2px);
+}
+
+.hero-section .btn-outline-light {
+    border-color: black;
+    color: black;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.hero-section .btn-outline-light:hover {
+    background-color: rgba(0,0,0,0.1);
+    border-color: black;
+    color: black;
+    transform: translateY(-2px);
+}
+
+/* Smooth gradient transitions to header and footer */
+.navbar-dark {
+    background: linear-gradient(180deg, var(--dark-color) 0%, #374151 100%) !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+footer.bg-light {
+    background: linear-gradient(0deg, var(--light-color) 0%, #f1f5f9 100%) !important;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Enhanced card styles with cyan accents */
+.card {
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 20px rgba(6, 182, 212, 0.15);
+}
+
+.card-header.bg-primary {
+    background: linear-gradient(135deg, var(--cyan-primary), var(--cyan-secondary)) !important;
+}
+
+.card-header.bg-info {
+    background: linear-gradient(135deg, var(--cyan-light), var(--cyan-primary)) !important;
+    color: var(--dark-color) !important;
+}
+
+.card-header.bg-warning {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+}
+
+.card-header.bg-success {
+    background: linear-gradient(135deg, var(--success-color), #059669) !important;
+}
+
+/* Section Background Colors */
+.bg-marigold {
+    background-color: var(--marigold) !important;
+    color: white;
+}
+
+.bg-amber {
+    background-color: var(--amber) !important;
+    color: black;
+}
+
+/* Technology section enhancements */
+.text-purple {
+    color: var(--secondary-color) !important;
+}
