@@ -14,11 +14,14 @@ class DummyMessagesAPI:
         self.responses = []
 
     def create(self, agent_id, messages):
+        if not agent_id:
+            raise ValueError("agent_id is required")
+        if not messages:
+            raise ValueError("messages list is required")
         self.calls.append({"agent_id": agent_id, "messages": messages})
         if self.responses:
             return self.responses.pop(0)
         return SimpleNamespace(messages=[])
-
 
 class DummyAgentsAPI:
     def __init__(self):
