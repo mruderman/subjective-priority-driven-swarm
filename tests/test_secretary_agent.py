@@ -98,7 +98,12 @@ def test_secretary_agent_initialization_formal_builds_expected_blocks(fixed_date
 def test_secretary_agent_initialization_defaults_to_adaptive_mode(monkeypatch):
     class FixedDateTime(real_datetime):
         @classmethod
-        def now(cls):
+        def now(cls, tz=None):
+            dt = cls(2024, 2, 2, 10, 30, 0)
+            return dt if tz is None else dt.replace(tzinfo=tz)
+
+        @classmethod
+        def utcnow(cls):
             return cls(2024, 2, 2, 10, 30, 0)
 
     monkeypatch.setattr(secretary_module, "datetime", FixedDateTime)
