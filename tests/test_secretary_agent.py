@@ -118,13 +118,13 @@ def test_set_mode_updates_mode_value(fixed_datetime):
     assert secretary.mode == "casual"
 
 
-def test_set_mode_rejects_invalid_mode(fixed_datetime):
+@pytest.mark.parametrize("invalid_mode", ["improvised", "", None, "FORMAL", 123])
+def test_set_mode_rejects_invalid_mode(fixed_datetime, invalid_mode):
     client = DummyClient()
     secretary = SecretaryAgent(client)
 
     with pytest.raises(ValueError):
-        secretary.set_mode("improvised")
-
+        secretary.set_mode(invalid_mode)
 
 def test_start_meeting_records_metadata_and_notifies_agent(fixed_datetime):
     client = DummyClient()
