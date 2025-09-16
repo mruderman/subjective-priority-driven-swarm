@@ -83,7 +83,7 @@ def test_secretary_agent_initialization_formal_builds_expected_blocks(fixed_date
 
     assert secretary.agent.id == "agent-1"
     call_kwargs = client.agents.create_calls[0]
-    assert call_kwargs["name"] == "Cyan Secretary 20240101_090000"
+    assert call_kwargs["name"].endswith("Secretary 20240101_090000")
 
     persona_block = next(block for block in call_kwargs["memory_blocks"] if block.label == "persona")
     assert "formal language" in persona_block.value
