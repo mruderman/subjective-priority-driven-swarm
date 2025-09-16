@@ -40,9 +40,9 @@ class DummyClient:
         self.agents = DummyAgentsAPI()
 
 
-def make_tool_message(text):
+def make_tool_message(text, function_name="send_message"):
     tool_call = SimpleNamespace(
-        function=SimpleNamespace(name="send_message", arguments=json.dumps({"message": text}))
+        function=SimpleNamespace(name=function_name, arguments=json.dumps({"message": text}))
     )
     return SimpleNamespace(
         tool_calls=[tool_call],
