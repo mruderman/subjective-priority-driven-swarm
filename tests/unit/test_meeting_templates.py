@@ -13,8 +13,9 @@ def fixed_datetime(monkeypatch):
 
     class FixedDateTime(real_datetime):
         @classmethod
-        def now(cls):
-            return cls(2024, 5, 20, 15, 30)
+        def now(cls, tz=None):
+            dt = cls(2024, 5, 20, 15, 30)
+            return dt if tz is None else dt.replace(tzinfo=tz)
 
     monkeypatch.setattr("spds.meeting_templates.datetime", FixedDateTime)
     return FixedDateTime
