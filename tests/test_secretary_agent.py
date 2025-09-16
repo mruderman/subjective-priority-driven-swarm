@@ -65,12 +65,16 @@ def make_assistant_message(text):
 def fixed_datetime(monkeypatch):
     class FixedDateTime(real_datetime):
         @classmethod
-        def now(cls):
+        def now(cls, tz=None):
+            dt = cls(2024, 1, 1, 9, 0, 0)
+            return dt if tz is None else dt.replace(tzinfo=tz)
+
+        @classmethod
+        def utcnow(cls):
             return cls(2024, 1, 1, 9, 0, 0)
 
     monkeypatch.setattr(secretary_module, "datetime", FixedDateTime)
     return FixedDateTime
-
 
 def test_secretary_agent_initialization_formal_builds_expected_blocks(fixed_datetime):
     client = DummyClient()
