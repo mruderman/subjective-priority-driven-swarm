@@ -43,7 +43,7 @@ def make_tool_message(text):
     return SimpleNamespace(
         tool_calls=[tool_call],
         tool_return=None,
-        message_type=None,
+        message_type="tool_message",
         content=None,
     )
 
