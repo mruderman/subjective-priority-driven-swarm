@@ -87,6 +87,9 @@ def test_secretary_agent_initialization_formal_builds_expected_blocks(fixed_date
     notes_style_block = next(block for block in call_kwargs["memory_blocks"] if block.label == "notes_style")
     assert "formal" in notes_style_block.value
 
+    # Verify all expected memory blocks are present
+    block_labels = {block.label for block in call_kwargs["memory_blocks"]}
+    assert block_labels == {"human", "persona", "meeting_context", "notes_style"}
 
 def test_secretary_agent_initialization_defaults_to_adaptive_mode(monkeypatch):
     class FixedDateTime(real_datetime):
