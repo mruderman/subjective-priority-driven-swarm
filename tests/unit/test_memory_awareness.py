@@ -71,8 +71,9 @@ def test_get_objective_memory_metrics_includes_block_statistics(agent):
     blocks = memory_metrics["core_memory_blocks"]
     assert blocks["persona"]["size_chars"] == 150
     assert blocks["persona"]["content_preview"].endswith("...")
+    expected_preview = "x" * 100 + "..."
+    assert blocks["persona"]["content_preview"] == expected_preview
     assert blocks["facts"]["content_preview"] == "short"
-
 
 def test_get_objective_memory_metrics_returns_error_when_client_fails(agent):
     context_info = {"num_archival_memory": 0, "num_recall_memory": 0}
