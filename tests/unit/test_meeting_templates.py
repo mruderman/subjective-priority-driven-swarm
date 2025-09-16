@@ -189,7 +189,7 @@ def test_generate_discussion_summary_and_key_perspectives_sections(sample_meetin
         "- **Alex Rivera**: Detailed strategy discussion message that easily exceeds twenty"
         in minutes
     )
-
+    assert "- **Jordan Lee**: Implementation considerations were raised" in minutes
 
 def test_generate_formal_summary_handles_empty_conversation_log():
     template = BoardMinutesTemplate()
