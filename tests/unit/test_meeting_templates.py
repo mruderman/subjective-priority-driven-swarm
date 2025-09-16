@@ -14,6 +14,13 @@ def fixed_datetime(monkeypatch):
     class FixedDateTime(real_datetime):
         @classmethod
         def now(cls):
+            """
+            Return a fixed datetime representing 2024-05-20 15:30.
+            
+            Used to freeze current time in tests so code that calls `datetime.now()` receives a deterministic timestamp.
+            Returns:
+                datetime: A `datetime` instance for 2024-05-20 15:30 (UTC/naive as constructed).
+            """
             return cls(2024, 5, 20, 15, 30)
 
     monkeypatch.setattr("spds.meeting_templates.datetime", FixedDateTime)
@@ -22,9 +29,32 @@ def fixed_datetime(monkeypatch):
 
 @pytest.fixture
 def sample_meeting_data(fixed_datetime):
-    """Return a callable that builds representative meeting data."""
+    """
+    Return a callable that builds a representative, deterministic meeting data dictionary for tests.
+    
+    The returned zero-argument callable produces a dictionary with these top-level keys:
+    - metadata: dict containing
+      - start_time: datetime fixed to 2024-05-19 09:00 (created via the provided fixed datetime helper)
+      - meeting_type: "strategy session"
+      - topic: "Q3 Roadmap"
+      - participants: list where entries may be either a simple name string or a dict with keys "name", "model", and "expertise"
+    - conversation_log: list of { "speaker": str, "message": str } entries (each message is long enough for perspective extraction)
+    - action_items: list of { "description": str, "assignee": str, "due_date": str } entries
+    - decisions: list of { "decision": str, "context": str } entries
+    - topics_covered: list of topic strings
+    - stats: summary counts (total_messages, per-participant message counts, decisions, action_items)
+    
+    Intended for deterministic unit tests of BoardMinutesTemplate; the start_time is created using the supplied fixed datetime helper so generated outputs are reproducible.
+    """
 
     def _create():
+        """
+        Create a representative meeting data payload for tests.
+        
+        Returns:
+            dict: A sample meeting record containing deterministic metadata (start_time, meeting_type, topic, participants),
+            a conversation_log with two speakers, one action item, one decision, topics_covered, and aggregated stats.
+        """
         start = fixed_datetime(2024, 5, 19, 9, 0)
         return {
             "metadata": {
