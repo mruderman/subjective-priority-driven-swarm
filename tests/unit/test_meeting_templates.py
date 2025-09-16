@@ -199,6 +199,11 @@ def test_generate_formal_summary_handles_empty_conversation_log():
     assert summary == "No detailed discussion recorded."
 
 
+def test_generate_omits_discussion_sections_when_no_conversation(sample_meeting_data):
+    meeting_data = sample_meeting_data({"conversation_log": []})
+    minutes = BoardMinutesTemplate().generate(meeting_data)
+    assert "**Discussion Summary**" not in minutes
+    assert "**Key Perspectives Shared**" not in minutes
 def test_generate_formal_summary_highlights_substantive_keywords():
     template = BoardMinutesTemplate()
     conversation_log = [
