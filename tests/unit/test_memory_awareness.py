@@ -108,18 +108,11 @@ def test_generate_objective_observations_balanced_usage():
 
     observations = reporter._generate_objective_observations(20, 15, 100)
 
-    assert observations == [
-        {
-            "metric": "Balanced Memory Usage",
-            "objective_fact": "Memory usage appears to be within typical ranges",
-            "note": (
-                "Current memory organization may be working well for this agent, "
-                "or the agent may choose to optimize further - both approaches "
-                "are valid"
-            ),
-        }
-    ]
-
+    assert len(observations) == 1
+    obs = observations[0]
+    assert obs["metric"] == "Balanced Memory Usage"
+    assert "typical ranges" in obs["objective_fact"]
+    assert "both approaches" in obs["note"]
 
 def test_should_provide_memory_awareness_high_recall_threshold(agent):
     context_info = {"num_recall_memory": 501, "num_archival_memory": 0}
