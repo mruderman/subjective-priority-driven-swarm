@@ -25,9 +25,9 @@ def fixed_datetime(monkeypatch):
 def sample_meeting_data(fixed_datetime):
     """Return a callable that builds representative meeting data."""
 
-    def _create():
+    def _create(overrides: dict | None = None):
         start = fixed_datetime(2024, 5, 19, 9, 0)
-        return {
+        base = {
             "metadata": {
                 "start_time": start,
                 "meeting_type": "strategy session",
@@ -71,7 +71,13 @@ def sample_meeting_data(fixed_datetime):
                 "action_items": 1,
             },
         }
-
+        if overrides:
+            for k, v in overrides.items():
+                if isinstance(v, dict) and isinstance(base.get(k), dict):
+                    base[k].update(v)
+                else:
+                    base[k] = v
+        return base
     return _create
 
 
