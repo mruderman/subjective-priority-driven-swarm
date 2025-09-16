@@ -174,6 +174,11 @@ def test_generate_includes_decisions_and_context(sample_meeting_data):
     assert "**Context**: Unanimous vote" in minutes
 
 
+def test_generate_decisions_uses_content_fallback(sample_meeting_data):
+    meeting_data = sample_meeting_data({"decisions": [{"content": "Renew vendor contract"}]})
+    minutes = BoardMinutesTemplate().generate(meeting_data)
+    assert "1. **Motion**: Renew vendor contract" in minutes
+
 def test_generate_includes_action_items_with_assignment_details(sample_meeting_data):
     meeting_data = sample_meeting_data()
 
