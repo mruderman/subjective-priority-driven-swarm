@@ -70,6 +70,15 @@ def sample_meeting_data(fixed_datetime):
                 "decisions": 1,
                 "action_items": 1,
             },
+
+def test_generate_includes_meeting_statistics(sample_meeting_data):
+    meeting_data = sample_meeting_data()
+    minutes = BoardMinutesTemplate().generate(meeting_data)
+    assert "### MEETING STATISTICS" in minutes
+    assert "- **Total Messages**: 4" in minutes
+    assert "- **Active Participants**: 2" in minutes
+    assert "- **Decisions Made**: 1" in minutes
+    assert "- **Action Items Created**: 1" in minutes
         }
         if overrides:
             for k, v in overrides.items():
