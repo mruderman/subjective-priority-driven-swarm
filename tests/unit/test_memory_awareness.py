@@ -186,7 +186,7 @@ def test_create_memory_awareness_for_agent_returns_message_when_triggered(agent)
     assert isinstance(message, str)
     assert "Memory Status Information" in message
     assert "High Recall Memory Count" in message
-
+    assert "Recall Memory: 600 messages" in message
 
 def test_create_memory_awareness_for_agent_returns_none_without_trigger(agent):
     core_memory = SimpleNamespace(memory={"summary": "short"})
