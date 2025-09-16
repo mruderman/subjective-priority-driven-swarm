@@ -165,7 +165,9 @@ def test_format_neutral_awareness_message_with_metrics():
     assert "Recall Memory: 123 messages" in message
     assert "Alternative approaches available" in message
     assert "You may choose to take action" in message
-
+    assert "Maintaining current approach" in message
+    assert "Preserves history" in message
+    assert "Archive older details" in message
 
 def test_format_neutral_awareness_message_handles_error():
     reporter = make_reporter()
