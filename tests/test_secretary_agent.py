@@ -13,12 +13,11 @@ class DummyMessagesAPI:
         self.calls = []
         self.responses = []
 
-    def create(self, agent_id, messages):
-        self.calls.append({"agent_id": agent_id, "messages": messages})
+    def create(self, agent_id=None, messages=None, **kwargs):
+        self.calls.append({"agent_id": agent_id, "messages": messages, "kwargs": kwargs})
         if self.responses:
             return self.responses.pop(0)
         return SimpleNamespace(messages=[])
-
 
 class DummyAgentsAPI:
     def __init__(self):
