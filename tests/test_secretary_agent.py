@@ -201,6 +201,23 @@ def test_observe_message_sends_formatted_prompt(fixed_datetime):
     )
 
 
+def test_observe_message_handles_retry_failure(fixed_datetime, monkeypatch):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+
+    def raising_retry(func, max_retries=2, backoff_factor=0.5):
+        func()
+        raise RuntimeError("retry failed")
+
+    monkeypatch.setattr(secretary_module, "retry_with_backoff", raising_retry)
+
+    secretary.observe_message("Bob", "Status update", metadata={"importance": "high"})
+
+    message_call = client.agents.messages.calls[-1]
+    sent_message = message_call["messages"][0].content
+    assert sent_message.endswith("Bob: Status update")
+
+
 def test_add_action_item_includes_optional_fields(fixed_datetime):
     client = DummyClient()
     secretary = SecretaryAgent(client)
@@ -423,6 +440,17 @@ def test_get_conversation_stats_without_meeting_metadata_returns_summary_only(
     stats = secretary.get_conversation_stats()
 
     assert stats == {"summary": "Only summary provided"}
+
+
+def test_get_conversation_stats_requires_agent(fixed_datetime):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+    secretary.agent = None
+
+    stats = secretary.get_conversation_stats()
+
+    assert stats == {}
+    assert client.agents.messages.calls == []
 
 
 def test_get_conversation_stats_handles_exception(fixed_datetime):

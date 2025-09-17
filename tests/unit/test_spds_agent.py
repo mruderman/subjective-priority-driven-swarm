@@ -2,6 +2,7 @@
 Unit tests for spds.spds_agent module.
 """
 
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
@@ -45,7 +46,7 @@ def mk_agent_state(
 
 from letta_client.errors import NotFoundError
 
-from spds import config
+from spds import tools
 from spds.spds_agent import SPDSAgent
 from spds.tools import SubjectiveAssessment
 
@@ -237,6 +238,38 @@ class TestSPDSAgent:
         assert agent.assessment_tool == mock_tool
         assert agent.agent == updated_agent_state
 
+    def test_ensure_assessment_tool_attach_failure(self, mock_letta_client):
+        """Ensure attach errors do not prevent tool availability."""
+        agent_state = mk_agent_state(
+            id="ag-test-999",
+            name="Test Agent",
+            system="Test system prompt",
+            model="openai/gpt-4",
+        )
+
+        mock_tool = Tool(
+            id="tool-assessment-999",
+            name="perform_subjective_assessment",
+            description="Assessment tool",
+        )
+        mock_letta_client.tools.create_from_function.return_value = mock_tool
+        mock_letta_client.agents.tools.attach.side_effect = RuntimeError("attach failed")
+
+        agent = SPDSAgent(agent_state, mock_letta_client)
+
+        mock_letta_client.tools.create_from_function.assert_called_once_with(
+            function=tools.perform_subjective_assessment,
+            return_model=tools.SubjectiveAssessment,
+            name="perform_subjective_assessment",
+            description="Perform a holistic subjective assessment of the conversation",
+        )
+        mock_letta_client.agents.tools.attach.assert_called_once_with(
+            agent_id="ag-test-999", tool_id="tool-assessment-999"
+        )
+        assert agent.assessment_tool == mock_tool
+        # Agent should remain the original state since attach failed
+        assert agent.agent == agent_state
+
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
     def test_get_full_assessment_with_tool_return(
         self,
@@ -272,6 +305,43 @@ class TestSPDSAgent:
         assert agent.last_assessment.expertise_relevance == 9
 
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
+    def test_get_full_assessment_parses_tool_call_arguments(
+        self,
+        mock_assessment_func,
+        mock_letta_client,
+        mock_tool_state,
+    ):
+        """Tool call arguments should yield a structured assessment."""
+        agent_state = mk_agent_state(
+            id="ag-tool-parse",
+            name="Tool Agent",
+            system="Test system prompt",
+            model="openai/gpt-4",
+            tools=[mock_tool_state],
+        )
+
+        agent = SPDSAgent(agent_state, mock_letta_client)
+        tool_call = SimpleNamespace(
+            function=SimpleNamespace(
+                name="send_message",
+                arguments=json.dumps(
+                    {
+                        "message": "IMPORTANCE_TO_SELF: 9\nPERCEIVED_GAP: 7\nUNIQUE_PERSPECTIVE: 6\nEMOTIONAL_INVESTMENT: 5\nEXPERTISE_RELEVANCE: 8\nURGENCY: 4\nIMPORTANCE_TO_GROUP: 7"
+                    }
+                ),
+            )
+        )
+        response = SimpleNamespace(messages=[SimpleNamespace(tool_calls=[tool_call], tool_return=None, content=None)])
+        mock_letta_client.agents.messages.create.return_value = response
+
+        agent._get_full_assessment("conversation", "topic")
+
+        mock_assessment_func.assert_not_called()
+        assert agent.last_assessment.importance_to_self == 9
+        assert agent.last_assessment.urgency == 4
+        assert agent.last_assessment.importance_to_group == 7
+
+    @patch("spds.spds_agent.tools.perform_subjective_assessment")
     def test_get_full_assessment_fallback(
         self,
         mock_assessment_func,
@@ -300,6 +370,46 @@ class TestSPDSAgent:
         # Should fall back to direct function call
         mock_assessment_func.assert_called_once_with(
             "test topic", "test conversation", agent.persona, agent.expertise
+        )
+        assert agent.last_assessment == sample_assessment
+
+    @patch("spds.spds_agent.tools.perform_subjective_assessment")
+    def test_get_full_assessment_tool_call_without_scores_uses_local_fallback(
+        self,
+        mock_assessment_func,
+        mock_letta_client,
+        mock_tool_state,
+        sample_assessment,
+    ):
+        """Blank tool-call messages trigger local subjective assessment."""
+        agent_state = mk_agent_state(
+            id="ag-tool-fallback",
+            name="Tool Agent",
+            system="Test system prompt",
+            model="openai/gpt-4",
+            tools=[mock_tool_state],
+        )
+        agent = SPDSAgent(agent_state, mock_letta_client)
+
+        empty_tool_call = SimpleNamespace(
+            function=SimpleNamespace(name="send_message", arguments=json.dumps({"message": ""}))
+        )
+        response = SimpleNamespace(
+            messages=[
+                SimpleNamespace(
+                    tool_calls=[empty_tool_call],
+                    tool_return=None,
+                    content=None,
+                )
+            ]
+        )
+        mock_letta_client.agents.messages.create.return_value = response
+        mock_assessment_func.return_value = sample_assessment
+
+        agent._get_full_assessment("conversation", "topic")
+
+        mock_assessment_func.assert_called_once_with(
+            "topic", "conversation", agent.persona, agent.expertise
         )
         assert agent.last_assessment == sample_assessment
 
@@ -377,6 +487,105 @@ class TestSPDSAgent:
             ],
         )
         assert response == mock_message_response
+
+    def test_speak_with_tools_history_prompt(
+        self, mock_letta_client, mock_tool_state
+    ):
+        """History prompts should mention send_message when tools are present."""
+        agent_state = mk_agent_state(
+            id="ag-history",
+            name="History Agent",
+            system="You are History Agent. Your persona is: Recorder. Your expertise is in: testing.",
+            model="openai/gpt-4",
+            tools=[mock_tool_state],
+        )
+
+        agent = SPDSAgent(agent_state, mock_letta_client)
+        mock_letta_client.agents.messages.create.return_value = SimpleNamespace(messages=[])
+
+        history = "Line 1\nLine 2"
+        agent.speak(history, mode="initial", topic="Topic")
+
+        sent_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][0][
+            "content"
+        ]
+        expected_prompt = f"""{history}
+
+Based on this conversation, I want to contribute. Please use the send_message tool to share your response. Remember to call the send_message function with your response as the message parameter."""
+        assert sent_prompt == expected_prompt
+
+    def test_speak_with_tools_topic_prompts(
+        self, mock_letta_client, mock_tool_state
+    ):
+        """Initial and response prompts should change with mode when tools are attached."""
+        agent_state = mk_agent_state(
+            id="ag-topic",
+            name="Topic Agent",
+            system="You are Topic Agent. Your persona is: Analyst. Your expertise is in: testing.",
+            model="openai/gpt-4",
+            tools=[mock_tool_state],
+        )
+
+        agent = SPDSAgent(agent_state, mock_letta_client)
+        mock_letta_client.agents.messages.create.return_value = SimpleNamespace(messages=[])
+
+        agent.speak("", mode="initial", topic="Topic")
+        initial_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
+            0
+        ]["content"]
+        expected_initial = (
+            "Based on my assessment of the topic 'Topic', I want to share my initial thoughts and "
+            "perspective. Please use the send_message tool to contribute your viewpoint to this "
+            "discussion. Remember to call the send_message function with your response as the "
+            "message parameter."
+        )
+        assert initial_prompt == expected_initial
+
+        mock_letta_client.agents.messages.create.reset_mock()
+
+        agent.speak("", mode="response", topic="Topic")
+        response_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
+            0
+        ]["content"]
+        expected_response = (
+            "Based on what everyone has shared about 'Topic', I'd like to respond to the discussion. "
+            "Please use the send_message tool to share your response, building on or reacting to what "
+            "others have said. Remember to call the send_message function with your response as the "
+            "message parameter."
+        )
+        assert response_prompt == expected_response
+
+    def test_speak_without_tools_topic_prompts(self, mock_letta_client):
+        """Without tools, prompts should omit tool instructions."""
+        agent_state = mk_agent_state(
+            id="ag-no-tools",
+            name="Topic Agent",
+            system="You are Topic Agent. Your persona is: Analyst. Your expertise is in: testing.",
+            model="openai/gpt-4",
+        )
+
+        agent = SPDSAgent(agent_state, mock_letta_client)
+        mock_letta_client.agents.messages.create.return_value = SimpleNamespace(messages=[])
+
+        agent.speak("", mode="initial", topic="Topic")
+        initial_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
+            0
+        ]["content"]
+        assert (
+            initial_prompt
+            == "Based on my assessment of 'Topic', here is my initial contribution:"
+        )
+
+        mock_letta_client.agents.messages.create.reset_mock()
+
+        agent.speak("", mode="response", topic="Topic")
+        response_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
+            0
+        ]["content"]
+        assert (
+            response_prompt
+            == "Based on the discussion about 'Topic', here is my response:"
+        )
 
     def test_agent_string_representation(self, mock_letta_client, sample_agent_state):
         """Test that agent can be represented as string."""
