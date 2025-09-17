@@ -14,8 +14,11 @@ def test_creative_swarm_profiles_have_expected_structure():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)  # Execute module for coverage
 
-    profiles = ast.literal_eval(module_path.read_text())
-
+    text = module_path.read_text(encoding="utf-8")
+    tree = ast.parse(text, filename=str(module_path))
+    expr_node = next((n.value for n in tree.body if isinstance(n, ast.Expr)), None)
+    assert expr_node is not None, "creative-swarm.py must contain a top-level literal"
+    profiles = ast.literal_eval(expr_node)
     assert isinstance(profiles, list)
     assert {profile["name"] for profile in profiles} == {"Lyra", "Orion", "Scribe"}
 
