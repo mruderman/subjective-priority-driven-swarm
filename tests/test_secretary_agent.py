@@ -1,9 +1,14 @@
 import json
-from datetime import datetime as real_datetime, timedelta
+import pytest
+from datetime import datetime as real_datetime
+from datetime import timedelta
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+# Mark this module as unit tests so it is included when running `-m unit`
+pytestmark = pytest.mark.unit
 
 import pytest
-from unittest.mock import Mock, patch
 
 import spds.secretary_agent as secretary_module
 from spds.secretary_agent import SecretaryAgent
@@ -15,10 +20,13 @@ class DummyMessagesAPI:
         self.responses = []
 
     def create(self, agent_id=None, messages=None, **kwargs):
-        self.calls.append({"agent_id": agent_id, "messages": messages, "kwargs": kwargs})
+        self.calls.append(
+            {"agent_id": agent_id, "messages": messages, "kwargs": kwargs}
+        )
         if self.responses:
             return self.responses.pop(0)
         return SimpleNamespace(messages=[])
+
 
 class DummyAgentsAPI:
     def __init__(self):
@@ -39,7 +47,9 @@ class DummyClient:
 
 def make_tool_message(text):
     tool_call = SimpleNamespace(
-        function=SimpleNamespace(name="send_message", arguments=json.dumps({"message": text}))
+        function=SimpleNamespace(
+            name="send_message", arguments=json.dumps({"message": text})
+        )
     )
     return SimpleNamespace(
         tool_calls=[tool_call],
@@ -73,6 +83,7 @@ def fixed_datetime(monkeypatch):
     monkeypatch.setattr(secretary_module, "datetime", FixedDateTime)
     return FixedDateTime
 
+
 def test_secretary_agent_initialization_formal_builds_expected_blocks(fixed_datetime):
     client = DummyClient()
 
@@ -82,10 +93,14 @@ def test_secretary_agent_initialization_formal_builds_expected_blocks(fixed_date
     call_kwargs = client.agents.create_calls[0]
     assert call_kwargs["name"].endswith("Secretary 20240101_090000")
 
-    persona_block = next(block for block in call_kwargs["memory_blocks"] if block.label == "persona")
+    persona_block = next(
+        block for block in call_kwargs["memory_blocks"] if block.label == "persona"
+    )
     assert "formal language" in persona_block.value
 
-    notes_style_block = next(block for block in call_kwargs["memory_blocks"] if block.label == "notes_style")
+    notes_style_block = next(
+        block for block in call_kwargs["memory_blocks"] if block.label == "notes_style"
+    )
     assert "formal" in notes_style_block.value
 
 
@@ -108,7 +123,9 @@ def test_secretary_agent_initialization_defaults_to_adaptive_mode(monkeypatch):
     assert secretary.mode == "adaptive"
     call_kwargs = client.agents.create_calls[0]
     assert call_kwargs["name"].startswith("Adaptive Secretary ")
-    persona_block = next(block for block in call_kwargs["memory_blocks"] if block.label == "persona")
+    persona_block = next(
+        block for block in call_kwargs["memory_blocks"] if block.label == "persona"
+    )
     assert "adaptive meeting secretary" in persona_block.value
 
 
@@ -135,7 +152,9 @@ def test_start_meeting_records_metadata_and_notifies_agent(fixed_datetime):
     client.agents.messages.responses.append(response)
     secretary = SecretaryAgent(client)
 
-    secretary.start_meeting("Quarterly Review", ["Alice", "Bob"], meeting_type="planning")
+    secretary.start_meeting(
+        "Quarterly Review", ["Alice", "Bob"], meeting_type="planning"
+    )
 
     metadata = secretary.meeting_metadata
     assert metadata["topic"] == "Quarterly Review"
@@ -176,14 +195,19 @@ def test_observe_message_sends_formatted_prompt(fixed_datetime):
 
     message_call = client.agents.messages.calls[-1]
     sent_message = message_call["messages"][0].content
-    assert sent_message == "Please note this in the meeting: Alice: We should revisit the budget"
+    assert (
+        sent_message
+        == "Please note this in the meeting: Alice: We should revisit the budget"
+    )
 
 
 def test_add_action_item_includes_optional_fields(fixed_datetime):
     client = DummyClient()
     secretary = SecretaryAgent(client)
 
-    secretary.add_action_item("Prepare the project report", assignee="Bob", due_date="Friday")
+    secretary.add_action_item(
+        "Prepare the project report", assignee="Bob", due_date="Friday"
+    )
 
     message_call = client.agents.messages.calls[-1]
     sent_message = message_call["messages"][0].content
@@ -212,7 +236,9 @@ def test_get_conversation_stats_combines_agent_summary(fixed_datetime):
     secretary = SecretaryAgent(client)
 
     secretary.start_meeting("Product Sync", ["Ada", "Lin"], meeting_type="sync")
-    secretary.meeting_metadata["start_time"] = secretary_module.datetime.now() - timedelta(minutes=5)
+    secretary.meeting_metadata["start_time"] = (
+        secretary_module.datetime.now() - timedelta(minutes=5)
+    )
 
     stats = secretary.get_conversation_stats()
 
@@ -225,10 +251,16 @@ def test_get_conversation_stats_combines_agent_summary(fixed_datetime):
 
 def test_generate_minutes_returns_full_minutes(fixed_datetime):
     client = DummyClient()
-    minutes_response = SimpleNamespace(messages=[make_tool_message("""
+    minutes_response = SimpleNamespace(
+        messages=[
+            make_tool_message(
+                """
     These are the detailed meeting minutes capturing every agenda item,
     discussion point, and the follow-up actions that we agreed to pursue as a team.
-    """.strip())])
+    """.strip()
+            )
+        ]
+    )
     client.agents.messages.responses.append(minutes_response)
     secretary = SecretaryAgent(client)
     secretary.meeting_metadata = {
@@ -260,11 +292,16 @@ def test_generate_minutes_reports_processing_when_content_short(fixed_datetime):
 
     result = secretary.generate_minutes()
 
-    assert result == "Secretary is still processing the meeting notes. Please try again in a moment."
+    assert (
+        result
+        == "Secretary is still processing the meeting notes. Please try again in a moment."
+    )
 
 
 def test_retry_with_backoff_retries_on_server_error():
-    failing_then_success = Mock(side_effect=[Exception("500 Internal Server Error"), "success"])
+    failing_then_success = Mock(
+        side_effect=[Exception("500 Internal Server Error"), "success"]
+    )
 
     with patch.object(secretary_module.time, "sleep") as sleep_mock:
         result = secretary_module.retry_with_backoff(
@@ -294,9 +331,9 @@ def test_start_meeting_handles_missing_response(fixed_datetime, capsys, monkeypa
     def fake_retry(func, max_retries=3, backoff_factor=1):
         """
         Test helper that invokes the provided callable exactly once and returns None.
-        
+
         This fake replacement for a retry-with-backoff utility ignores retry semantics and backoff parameters. It calls `func()` a single time and always returns None. Useful in tests to simulate a retry helper that does not retry or return a value.
-        
+
         Parameters:
             func (callable): Function to execute once.
             max_retries (int): Ignored. Present to match the real helper's signature.
@@ -319,7 +356,11 @@ def test_extract_agent_response_handles_invalid_tool_json(fixed_datetime):
     secretary = SecretaryAgent(client)
 
     broken_tool_message = SimpleNamespace(
-        tool_calls=[SimpleNamespace(function=SimpleNamespace(name="send_message", arguments="{"))],
+        tool_calls=[
+            SimpleNamespace(
+                function=SimpleNamespace(name="send_message", arguments="{")
+            )
+        ],
         tool_return=None,
         message_type="tool_message",
         content=None,
@@ -342,7 +383,10 @@ def test_extract_agent_response_defaults_when_no_content(fixed_datetime):
     )
     response = SimpleNamespace(messages=[empty_message])
 
-    assert secretary._extract_agent_response(response) == "Secretary is ready to take notes."
+    assert (
+        secretary._extract_agent_response(response)
+        == "Secretary is ready to take notes."
+    )
 
 
 def test_observe_message_skips_when_agent_missing(fixed_datetime):
@@ -365,9 +409,13 @@ def test_add_action_item_without_agent_does_not_send_message(fixed_datetime):
     assert client.agents.messages.calls == []
 
 
-def test_get_conversation_stats_without_meeting_metadata_returns_summary_only(fixed_datetime):
+def test_get_conversation_stats_without_meeting_metadata_returns_summary_only(
+    fixed_datetime,
+):
     client = DummyClient()
-    stats_response = SimpleNamespace(messages=[make_tool_message("Only summary provided")])
+    stats_response = SimpleNamespace(
+        messages=[make_tool_message("Only summary provided")]
+    )
     client.agents.messages.responses.append(stats_response)
     secretary = SecretaryAgent(client)
     secretary.meeting_metadata = {}
@@ -412,9 +460,9 @@ def test_generate_minutes_handles_missing_response(fixed_datetime, monkeypatch):
     def fake_retry(func, max_retries=3, backoff_factor=1):
         """
         Test helper that invokes the provided callable exactly once and returns None.
-        
+
         This fake replacement for a retry-with-backoff utility ignores retry semantics and backoff parameters. It calls `func()` a single time and always returns None. Useful in tests to simulate a retry helper that does not retry or return a value.
-        
+
         Parameters:
             func (callable): Function to execute once.
             max_retries (int): Ignored. Present to match the real helper's signature.
@@ -441,15 +489,15 @@ def test_generate_minutes_handles_exception(fixed_datetime, monkeypatch):
     def fake_retry(func, max_retries=3, backoff_factor=1):
         """
         Test helper that simulates a failing retry function.
-        
+
         This replacement for a retry helper always raises RuntimeError("boom"), regardless of the provided
         callable or retry parameters. Use in tests to simulate an unrecoverable error from retry logic.
-        
+
         Parameters:
             func: Ignored. The callable that would be retried.
             max_retries (int): Ignored. Retry limit placeholder.
             backoff_factor (int|float): Ignored. Backoff multiplier placeholder.
-        
+
         Raises:
             RuntimeError: Always raised with message "boom".
         """

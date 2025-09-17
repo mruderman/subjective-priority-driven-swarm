@@ -4,11 +4,15 @@ Fix script to resolve agent issues in the SWARMS group chat system.
 """
 
 import sys
-sys.path.append('.')
+
+sys.path.append(".")
+
+import time
 
 from letta_client import Letta
+
 from spds import config
-import time
+
 
 def get_client():
     """Get Letta client with proper authentication."""
@@ -19,14 +23,15 @@ def get_client():
     else:
         return Letta(base_url=config.LETTA_BASE_URL)
 
+
 def test_agent_health(client, agent_id, agent_name):
     """Test if an agent is healthy by sending a simple message."""
     print(f"Testing {agent_name}...")
     try:
         from letta_client import MessageCreate
+
         response = client.agents.messages.create(
-            agent_id=agent_id,
-            messages=[MessageCreate(role="user", content="ping")]
+            agent_id=agent_id, messages=[MessageCreate(role="user", content="ping")]
         )
         print(f"  ✅ {agent_name} is healthy")
         return True
@@ -34,13 +39,14 @@ def test_agent_health(client, agent_id, agent_name):
         print(f"  ❌ {agent_name} has issues: {str(e)[:100]}")
         return False
 
+
 def delete_problematic_agents(client):
     """Delete agents that are causing issues."""
     print("\n=== Cleaning Up Problematic Agents ===")
-    
+
     problematic_names = ["Adaptive Secretary", "scratch-agent-agent-1753217733834"]
     agents = client.agents.list()
-    
+
     for agent in agents:
         if agent.name in problematic_names:
             healthy = test_agent_health(client, agent.id, agent.name)
@@ -53,49 +59,51 @@ def delete_problematic_agents(client):
                 except Exception as e:
                     print(f"  ⚠️ Could not delete {agent.name}: {e}")
 
+
 def create_fresh_agents(client):
     """Create fresh agents for the swarm."""
     print("\n=== Creating Fresh Agents ===")
-    
+
     agent_profiles = [
         {
             "name": "Alex - Project Manager",
             "persona": "A pragmatic and analytical project manager who values clarity and efficiency.",
-            "expertise": ["risk management", "scheduling", "budgeting"]
+            "expertise": ["risk management", "scheduling", "budgeting"],
         },
         {
             "name": "Jordan - Designer",
             "persona": "A creative and user-focused designer with a passion for intuitive interfaces.",
-            "expertise": ["UX/UI design", "user research", "prototyping"]
+            "expertise": ["UX/UI design", "user research", "prototyping"],
         },
         {
             "name": "Casey - Engineer",
             "persona": "A detail-oriented engineer who prioritizes code quality and stability.",
-            "expertise": ["backend systems", "database architecture", "API development"]
-        }
+            "expertise": [
+                "backend systems",
+                "database architecture",
+                "API development",
+            ],
+        },
     ]
-    
+
     created_agents = []
     for profile in agent_profiles:
         try:
             from letta_client import CreateBlock
-            
+
             agent = client.agents.create(
                 name=profile["name"],
                 memory_blocks=[
                     CreateBlock(
                         label="human",
-                        value="I am participating in a group discussion with other AI agents."
+                        value="I am participating in a group discussion with other AI agents.",
                     ),
-                    CreateBlock(
-                        label="persona",
-                        value=profile["persona"]
-                    ),
+                    CreateBlock(label="persona", value=profile["persona"]),
                     CreateBlock(
                         label="expertise",
                         value=", ".join(profile["expertise"]),
-                        description="My areas of expertise"
-                    )
+                        description="My areas of expertise",
+                    ),
                 ],
                 model=config.DEFAULT_AGENT_MODEL,
                 embedding=config.DEFAULT_EMBEDDING_MODEL,
@@ -103,28 +111,29 @@ def create_fresh_agents(client):
             )
             print(f"  ✅ Created {agent.name}")
             created_agents.append(agent)
-            
+
             # Test the agent
             test_agent_health(client, agent.id, agent.name)
-            
+
         except Exception as e:
             print(f"  ❌ Failed to create {profile['name']}: {e}")
-    
+
     return created_agents
+
 
 def patch_error_handling():
     """Patch the error handling in secretary and swarm manager."""
     print("\n=== Patching Error Handling ===")
-    
+
     # Read secretary agent file
     secretary_path = "/home/claude/SWARMS/spds/secretary_agent.py"
-    with open(secretary_path, 'r') as f:
+    with open(secretary_path, "r") as f:
         secretary_code = f.read()
-    
+
     # Check if we already have retry logic
     if "retry_count" not in secretary_code:
         print("  Adding retry logic to secretary_agent.py...")
-        
+
         # Insert retry logic after imports
         import_end = secretary_code.find("class SecretaryAgent:")
         retry_function = '''
@@ -144,32 +153,34 @@ def retry_with_backoff(func, max_retries=3, backoff_factor=1):
     return None
 
 '''
-        secretary_code = secretary_code[:import_end] + retry_function + secretary_code[import_end:]
-        
+        secretary_code = (
+            secretary_code[:import_end] + retry_function + secretary_code[import_end:]
+        )
+
         # Add time import
         if "import time" not in secretary_code:
             secretary_code = "import time\n" + secretary_code
-        
+
         # Save patched file
-        with open(secretary_path, 'w') as f:
+        with open(secretary_path, "w") as f:
             f.write(secretary_code)
         print("  ✅ Patched secretary_agent.py")
     else:
         print("  ℹ️ secretary_agent.py already has retry logic")
-    
+
     # Similarly patch swarm_manager.py
     swarm_path = "/home/claude/SWARMS/spds/swarm_manager.py"
-    with open(swarm_path, 'r') as f:
+    with open(swarm_path, "r") as f:
         swarm_code = f.read()
-    
+
     # Add better error handling to _update_agent_memories
     if "max_retries=3" not in swarm_code:
         print("  Adding enhanced error handling to swarm_manager.py...")
-        
+
         # Find the _update_agent_memories method
         method_start = swarm_code.find("def _update_agent_memories(")
         method_end = swarm_code.find("\n    def ", method_start + 1)
-        
+
         # Replace with enhanced version
         enhanced_method = '''def _update_agent_memories(self, message: str, speaker: str = "User", max_retries=3):
         """Send a message to all agents to update their internal memory with retry logic."""
@@ -208,40 +219,49 @@ def retry_with_backoff(func, max_retries=3, backoff_factor=1):
             
             if not success:
                 print(f"[Debug: Failed to update {agent.name} after {max_retries} attempts]")'''
-        
+
         # Find the exact end of the method
-        method_body = swarm_code[method_start:method_end] if method_end != -1 else swarm_code[method_start:]
+        method_body = (
+            swarm_code[method_start:method_end]
+            if method_end != -1
+            else swarm_code[method_start:]
+        )
         indent_count = method_body.find("def _reset_agent_messages")
         if indent_count == -1:
             # Find next method
             next_method = swarm_code.find("\n    def ", method_start + 10)
             method_body = swarm_code[method_start:next_method]
-        
+
         # Replace the method
-        swarm_code = swarm_code[:method_start] + enhanced_method + swarm_code[method_start + len(method_body):]
-        
+        swarm_code = (
+            swarm_code[:method_start]
+            + enhanced_method
+            + swarm_code[method_start + len(method_body) :]
+        )
+
         # Save patched file
-        with open(swarm_path, 'w') as f:
+        with open(swarm_path, "w") as f:
             f.write(swarm_code)
         print("  ✅ Patched swarm_manager.py")
     else:
         print("  ℹ️ swarm_manager.py already has enhanced error handling")
 
+
 def main():
     """Run the fix script."""
     print("🔧 SWARMS Fix Script - Resolving Agent Issues\n")
-    
+
     client = get_client()
-    
+
     # Step 1: Clean up problematic agents
     delete_problematic_agents(client)
-    
+
     # Step 2: Create fresh agents
     agents = create_fresh_agents(client)
-    
+
     # Step 3: Patch error handling
     patch_error_handling()
-    
+
     # Summary
     print("\n=== Fix Summary ===")
     print(f"✓ Cleaned up problematic agents")
@@ -251,6 +271,7 @@ def main():
     print("\nNext steps:")
     print("1. Run 'python3 -m spds.main' to start a new group chat")
     print("2. Or run 'python3 swarms-web/app.py' for the web interface")
+
 
 if __name__ == "__main__":
     main()

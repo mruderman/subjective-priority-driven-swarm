@@ -1,6 +1,7 @@
-import pytest
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+
+import pytest
 
 from spds.memory_awareness import (
     MemoryAwarenessReporter,
@@ -54,10 +55,12 @@ def make_reporter(context=None, core=None):
 
 def test_get_objective_memory_metrics_includes_block_statistics(agent):
     long_block = "x" * 150
-    core_memory = SimpleNamespace(memory={
-        "persona": long_block,
-        "facts": "short",
-    })
+    core_memory = SimpleNamespace(
+        memory={
+            "persona": long_block,
+            "facts": "short",
+        }
+    )
     context_info = {"num_archival_memory": 3, "num_recall_memory": 550}
     reporter = make_reporter(context_info, core_memory)
 
@@ -74,6 +77,7 @@ def test_get_objective_memory_metrics_includes_block_statistics(agent):
     expected_preview = "x" * 100 + "..."
     assert blocks["persona"]["content_preview"] == expected_preview
     assert blocks["facts"]["content_preview"] == "short"
+
 
 def test_get_objective_memory_metrics_returns_error_when_client_fails(agent):
     context_info = {"num_archival_memory": 0, "num_recall_memory": 0}
@@ -114,6 +118,7 @@ def test_generate_objective_observations_balanced_usage():
     assert "typical ranges" in obs["objective_fact"]
     assert "both approaches" in obs["note"]
 
+
 def test_should_provide_memory_awareness_high_recall_threshold(agent):
     context_info = {"num_recall_memory": 501, "num_archival_memory": 0}
     reporter = make_reporter(context_info)
@@ -127,7 +132,9 @@ def test_should_provide_memory_awareness_time_based_trigger(agent):
 
     last_check = datetime.now() - timedelta(days=8)
 
-    assert reporter.should_provide_memory_awareness(agent, last_check=last_check) is True
+    assert (
+        reporter.should_provide_memory_awareness(agent, last_check=last_check) is True
+    )
 
 
 def test_should_provide_memory_awareness_handles_exception(agent):
@@ -169,10 +176,13 @@ def test_format_neutral_awareness_message_with_metrics():
     assert "Preserves history" in message
     assert "Archive older details" in message
 
+
 def test_format_neutral_awareness_message_handles_error():
     reporter = make_reporter()
 
-    message = reporter.format_neutral_awareness_message({"error": "metrics unavailable"})
+    message = reporter.format_neutral_awareness_message(
+        {"error": "metrics unavailable"}
+    )
 
     assert message == "Memory metrics unavailable: metrics unavailable"
 
@@ -189,6 +199,7 @@ def test_create_memory_awareness_for_agent_returns_message_when_triggered(agent)
     assert "Memory Status Information" in message
     assert "High Recall Memory Count" in message
     assert "Recall Memory: 600 messages" in message
+
 
 def test_create_memory_awareness_for_agent_returns_none_without_trigger(agent):
     core_memory = SimpleNamespace(memory={"summary": "short"})

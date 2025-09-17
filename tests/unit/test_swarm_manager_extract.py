@@ -1,7 +1,7 @@
-from types import SimpleNamespace
-from io import StringIO
 import sys
-from unittest.mock import patch, Mock
+from io import StringIO
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -18,7 +18,14 @@ class DummyAgent:
         pass
 
     def speak(self, conversation_history=""):
-        return SimpleNamespace(messages=[SimpleNamespace(role="assistant", content=[{"type": "text", "text": f"Hello from {self.name}"}])])
+        return SimpleNamespace(
+            messages=[
+                SimpleNamespace(
+                    role="assistant",
+                    content=[{"type": "text", "text": f"Hello from {self.name}"}],
+                )
+            ]
+        )
 
 
 def test_extract_agent_response_variants():
@@ -27,14 +34,42 @@ def test_extract_agent_response_variants():
     with patch("spds.swarm_manager.SPDSAgent.create_new") as create_new:
         da = DummyAgent("A1")
         create_new.return_value = da
-        mgr = SwarmManager(client=client, agent_profiles=[{"name": "A1", "persona": "p", "expertise": ["x"], "model": "openai/gpt-4", "embedding": "openai/text-embedding-ada-002"}], conversation_mode="sequential")
+        mgr = SwarmManager(
+            client=client,
+            agent_profiles=[
+                {
+                    "name": "A1",
+                    "persona": "p",
+                    "expertise": ["x"],
+                    "model": "openai/gpt-4",
+                    "embedding": "openai/text-embedding-ada-002",
+                }
+            ],
+            conversation_mode="sequential",
+        )
 
     # tool_calls path
-    response = SimpleNamespace(messages=[SimpleNamespace(tool_calls=[SimpleNamespace(function=SimpleNamespace(name="send_message", arguments='{"message": "tc"}'))])])
+    response = SimpleNamespace(
+        messages=[
+            SimpleNamespace(
+                tool_calls=[
+                    SimpleNamespace(
+                        function=SimpleNamespace(
+                            name="send_message", arguments='{"message": "tc"}'
+                        )
+                    )
+                ]
+            )
+        ]
+    )
     assert mgr._extract_agent_response(response) == "tc"
 
     # assistant role list-dict text
-    response = SimpleNamespace(messages=[SimpleNamespace(role="assistant", content=[{"type": "text", "text": "hi"}])])
+    response = SimpleNamespace(
+        messages=[
+            SimpleNamespace(role="assistant", content=[{"type": "text", "text": "hi"}])
+        ]
+    )
     assert mgr._extract_agent_response(response) == "hi"
 
     # fallback default
@@ -50,7 +85,26 @@ def test_sequential_fairness_prints():
         a.priority_score = 10
         b.priority_score = 20
         create_new.side_effect = [a, b]
-        mgr = SwarmManager(client=client, agent_profiles=[{"name": "A", "persona": "p", "expertise": ["x"], "model": "openai/gpt-4", "embedding": "openai/text-embedding-ada-002"}, {"name": "B", "persona": "p", "expertise": ["x"], "model": "openai/gpt-4", "embedding": "openai/text-embedding-ada-002"}], conversation_mode="sequential")
+        mgr = SwarmManager(
+            client=client,
+            agent_profiles=[
+                {
+                    "name": "A",
+                    "persona": "p",
+                    "expertise": ["x"],
+                    "model": "openai/gpt-4",
+                    "embedding": "openai/text-embedding-ada-002",
+                },
+                {
+                    "name": "B",
+                    "persona": "p",
+                    "expertise": ["x"],
+                    "model": "openai/gpt-4",
+                    "embedding": "openai/text-embedding-ada-002",
+                },
+            ],
+            conversation_mode="sequential",
+        )
     mgr.last_speaker = "B"
     captured = StringIO()
     sys.stdout = captured
@@ -68,11 +122,29 @@ def test_pure_priority_mode():
         a.priority_score = 10
         b.priority_score = 20
         create_new.side_effect = [a, b]
-        mgr = SwarmManager(client=client, agent_profiles=[{"name": "A", "persona": "p", "expertise": ["x"], "model": "openai/gpt-4", "embedding": "openai/text-embedding-ada-002"}, {"name": "B", "persona": "p", "expertise": ["x"], "model": "openai/gpt-4", "embedding": "openai/text-embedding-ada-002"}], conversation_mode="pure_priority")
+        mgr = SwarmManager(
+            client=client,
+            agent_profiles=[
+                {
+                    "name": "A",
+                    "persona": "p",
+                    "expertise": ["x"],
+                    "model": "openai/gpt-4",
+                    "embedding": "openai/text-embedding-ada-002",
+                },
+                {
+                    "name": "B",
+                    "persona": "p",
+                    "expertise": ["x"],
+                    "model": "openai/gpt-4",
+                    "embedding": "openai/text-embedding-ada-002",
+                },
+            ],
+            conversation_mode="pure_priority",
+        )
     captured = StringIO()
     sys.stdout = captured
     mgr._agent_turn("T")
     sys.stdout = sys.__stdout__
     out = captured.getvalue()
     assert "PURE PRIORITY MODE" in out
-

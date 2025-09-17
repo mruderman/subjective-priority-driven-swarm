@@ -1,8 +1,12 @@
 import json
 from types import SimpleNamespace
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
-from spds.main import load_swarm_from_file, list_available_agents, interactive_agent_selection
+from spds.main import (
+    interactive_agent_selection,
+    list_available_agents,
+    load_swarm_from_file,
+)
 
 
 def test_load_swarm_from_file_success(tmp_path):
@@ -31,17 +35,36 @@ def test_list_available_agents_success():
 def test_interactive_agent_selection_flow(monkeypatch):
     # Build fake agents
     agents = [
-        SimpleNamespace(id="a1", name="Alpha", model="openai/gpt-4", created_at="2025-01-01"),
+        SimpleNamespace(
+            id="a1", name="Alpha", model="openai/gpt-4", created_at="2025-01-01"
+        ),
         SimpleNamespace(id="b2", name="Beta", model=None, created_at=None),
     ]
     client = Mock()
     with patch("spds.main.list_available_agents", return_value=agents):
         # Patch questionary interactions
         import spds.main as m
-        monkeypatch.setattr(m.questionary, "checkbox", lambda *a, **k: SimpleNamespace(ask=lambda: ["a1"]))
-        monkeypatch.setattr(m.questionary, "select", lambda *a, **k: SimpleNamespace(ask=lambda: "🔄 Hybrid (independent thoughts + response round) [RECOMMENDED]"))
-        monkeypatch.setattr(m.questionary, "confirm", lambda *a, **k: SimpleNamespace(ask=lambda: True))
-        monkeypatch.setattr(m.questionary, "text", lambda *a, **k: SimpleNamespace(ask=lambda: "My Topic"))
+
+        monkeypatch.setattr(
+            m.questionary,
+            "checkbox",
+            lambda *a, **k: SimpleNamespace(ask=lambda: ["a1"]),
+        )
+        monkeypatch.setattr(
+            m.questionary,
+            "select",
+            lambda *a, **k: SimpleNamespace(
+                ask=lambda: "🔄 Hybrid (independent thoughts + response round) [RECOMMENDED]"
+            ),
+        )
+        monkeypatch.setattr(
+            m.questionary, "confirm", lambda *a, **k: SimpleNamespace(ask=lambda: True)
+        )
+        monkeypatch.setattr(
+            m.questionary,
+            "text",
+            lambda *a, **k: SimpleNamespace(ask=lambda: "My Topic"),
+        )
 
         selected = interactive_agent_selection(client)
         assert selected[0] == ["a1"]
@@ -56,4 +79,3 @@ def test_interactive_agent_selection_no_agents():
     client = Mock()
     with patch("spds.main.list_available_agents", return_value=[]):
         assert interactive_agent_selection(client) == (None, None)
-

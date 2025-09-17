@@ -9,6 +9,7 @@ import pytest
 def test_main_ephemeral_default(monkeypatch):
     # Patch config profiles to small list
     from spds import config as real_config
+
     profiles = [
         {
             "name": "A",
@@ -28,13 +29,13 @@ def test_main_ephemeral_default(monkeypatch):
         def start_chat_with_topic(self, topic):
             calls["start_with_topic"] = topic
 
-    with patch("spds.main.config.AGENT_PROFILES", profiles), \
-         patch("spds.main.SwarmManager", DummySwarm), \
-         patch("spds.main.Letta"):
+    with patch("spds.main.config.AGENT_PROFILES", profiles), patch(
+        "spds.main.SwarmManager", DummySwarm
+    ), patch("spds.main.Letta"):
         from spds.main import main
 
         # Provide topic input first
-        monkeypatch.setattr("builtins.input", lambda prompt='': "My Topic")
+        monkeypatch.setattr("builtins.input", lambda prompt="": "My Topic")
         captured = StringIO()
         sys.stdout = captured
         main([])
@@ -61,10 +62,11 @@ def test_main_interactive_flag(monkeypatch):
         def start_chat_with_topic(self, topic):
             container["topic"] = topic
 
-    with patch("spds.main.interactive_agent_selection", return_value=selection), \
-         patch("spds.main.SwarmManager", DummySwarm), \
-         patch("spds.main.Letta"):
+    with patch("spds.main.interactive_agent_selection", return_value=selection), patch(
+        "spds.main.SwarmManager", DummySwarm
+    ), patch("spds.main.Letta"):
         from spds.main import main
+
         captured = StringIO()
         sys.stdout = captured
         main(["--interactive"])
@@ -86,6 +88,7 @@ def test_main_agent_ids(monkeypatch):
 
     with patch("spds.main.SwarmManager", DummySwarm), patch("spds.main.Letta"):
         from spds.main import main
+
         captured = StringIO()
         sys.stdout = captured
         main(["--agent-ids", "foo", "bar"])
@@ -97,19 +100,24 @@ def test_main_agent_ids(monkeypatch):
 
 def test_main_swarm_config_invalid_path():
     from spds.main import main
+
     with pytest.raises(SystemExit) as ei:
         main(["--swarm-config", "does-not-exist.json"])
     assert ei.value.code == 1
 
 
 def test_main_auth_selection_self_hosted_password():
-    with patch("spds.main.config.LETTA_ENVIRONMENT", "SELF_HOSTED"), \
-         patch("spds.main.config.LETTA_SERVER_PASSWORD", "pw"), \
-         patch("spds.main.config.LETTA_API_KEY", ""), \
-         patch("spds.main.config.LETTA_BASE_URL", "http://x"), \
-         patch("spds.main.SwarmManager") as SM, \
-         patch("spds.main.Letta") as L:
+    with patch("spds.main.config.LETTA_ENVIRONMENT", "SELF_HOSTED"), patch(
+        "spds.main.config.LETTA_SERVER_PASSWORD", "pw"
+    ), patch("spds.main.config.LETTA_API_KEY", ""), patch(
+        "spds.main.config.LETTA_BASE_URL", "http://x"
+    ), patch(
+        "spds.main.SwarmManager"
+    ) as SM, patch(
+        "spds.main.Letta"
+    ) as L:
         from spds.main import main
+
         # Minimal run: ephemeral topic
         with patch("builtins.input", return_value="T"):
             main([])

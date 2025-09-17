@@ -1,7 +1,7 @@
-from io import StringIO
 import sys
+from io import StringIO
 from types import SimpleNamespace
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 from spds.swarm_manager import SwarmManager
 
@@ -11,10 +11,19 @@ class DummyAgent:
         self.name = name
         self.priority_score = prio
         self.motivation_score = 40
+
     def assess_motivation_and_priority(self, topic):
         pass
+
     def speak(self, conversation_history=""):
-        return SimpleNamespace(messages=[SimpleNamespace(role="assistant", content=[{"type": "text", "text": f"msg {self.name}"}])])
+        return SimpleNamespace(
+            messages=[
+                SimpleNamespace(
+                    role="assistant",
+                    content=[{"type": "text", "text": f"msg {self.name}"}],
+                )
+            ]
+        )
 
 
 def build_manager_with_agents(mode, agents):
@@ -22,10 +31,18 @@ def build_manager_with_agents(mode, agents):
     with patch("spds.swarm_manager.SPDSAgent.create_new") as create_new:
         create_new.side_effect = agents
         profiles = [
-            {"name": a.name, "persona": "p", "expertise": ["x"], "model": "openai/gpt-4", "embedding": "openai/text-embedding-ada-002"}
+            {
+                "name": a.name,
+                "persona": "p",
+                "expertise": ["x"],
+                "model": "openai/gpt-4",
+                "embedding": "openai/text-embedding-ada-002",
+            }
             for a in agents
         ]
-        return SwarmManager(client=client, agent_profiles=profiles, conversation_mode=mode)
+        return SwarmManager(
+            client=client, agent_profiles=profiles, conversation_mode=mode
+        )
 
 
 def test_all_speak_mode_two_agents():
@@ -47,6 +64,7 @@ def test_hybrid_turn_error_in_response():
         def __init__(self, name, prio):
             super().__init__(name, prio)
             self._calls = 0
+
         def speak(self, conversation_history=""):
             self._calls += 1
             if self._calls == 2:
@@ -86,4 +104,3 @@ def test_export_command_without_secretary():
     sys.stdout = sys.__stdout__
     out = captured.getvalue()
     assert "Secretary not available" in out
-

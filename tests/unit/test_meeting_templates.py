@@ -16,7 +16,7 @@ def fixed_datetime(monkeypatch):
         def now(cls, tz=None):
             """
             Return a fixed datetime representing 2024-05-20 15:30.
-            
+
             Used to freeze current time in tests so code that calls `datetime.now()` receives a deterministic timestamp.
             Args:
                 tz: Optional timezone information
@@ -34,7 +34,7 @@ def fixed_datetime(monkeypatch):
 def sample_meeting_data(fixed_datetime):
     """
     Return a callable that builds a representative, deterministic meeting data dictionary for tests.
-    
+
     The returned zero-argument callable produces a dictionary with these top-level keys:
     - metadata: dict containing
       - start_time: datetime fixed to 2024-05-19 09:00 (created via the provided fixed datetime helper)
@@ -46,17 +46,17 @@ def sample_meeting_data(fixed_datetime):
     - decisions: list of { "decision": str, "context": str } entries
     - topics_covered: list of topic strings
     - stats: summary counts (total_messages, per-participant message counts, decisions, action_items)
-    
+
     Intended for deterministic unit tests of BoardMinutesTemplate; the start_time is created using the supplied fixed datetime helper so generated outputs are reproducible.
     """
 
     def _create(overrides: dict | None = None):
         """
         Create a representative meeting data payload for tests.
-        
+
         Args:
             overrides: Optional dictionary to override specific fields in the meeting data
-            
+
         Returns:
             dict: A sample meeting record containing deterministic metadata (start_time, meeting_type, topic, participants),
             a conversation_log with two speakers, one action item, one decision, topics_covered, and aggregated stats.
@@ -95,9 +95,7 @@ def sample_meeting_data(fixed_datetime):
                     "due_date": "2024-06-01",
                 }
             ],
-            "decisions": [
-                {"decision": "Approve roadmap", "context": "Unanimous vote"}
-            ],
+            "decisions": [{"decision": "Approve roadmap", "context": "Unanimous vote"}],
             "topics_covered": ["Budget review", "Roadmap approval"],
             "stats": {
                 "total_messages": 4,
@@ -105,7 +103,6 @@ def sample_meeting_data(fixed_datetime):
                 "decisions": 1,
                 "action_items": 1,
             },
-
         }
         if overrides:
             for k, v in overrides.items():
@@ -114,6 +111,7 @@ def sample_meeting_data(fixed_datetime):
                 else:
                     base[k] = v
         return base
+
     return _create
 
 
@@ -202,9 +200,12 @@ def test_generate_includes_decisions_and_context(sample_meeting_data):
 
 
 def test_generate_decisions_uses_content_fallback(sample_meeting_data):
-    meeting_data = sample_meeting_data({"decisions": [{"content": "Renew vendor contract"}]})
+    meeting_data = sample_meeting_data(
+        {"decisions": [{"content": "Renew vendor contract"}]}
+    )
     minutes = BoardMinutesTemplate().generate(meeting_data)
     assert "1. **Motion**: Renew vendor contract" in minutes
+
 
 def test_generate_includes_action_items_with_assignment_details(sample_meeting_data):
     meeting_data = sample_meeting_data()
@@ -232,6 +233,7 @@ def test_generate_discussion_summary_and_key_perspectives_sections(sample_meetin
     )
     assert "- **Jordan Lee**: Implementation considerations were raised" in minutes
 
+
 def test_generate_formal_summary_handles_empty_conversation_log():
     template = BoardMinutesTemplate()
 
@@ -245,6 +247,8 @@ def test_generate_omits_discussion_sections_when_no_conversation(sample_meeting_
     minutes = BoardMinutesTemplate().generate(meeting_data)
     assert "**Discussion Summary**" not in minutes
     assert "**Key Perspectives Shared**" not in minutes
+
+
 def test_generate_formal_summary_highlights_substantive_keywords():
     template = BoardMinutesTemplate()
     conversation_log = [

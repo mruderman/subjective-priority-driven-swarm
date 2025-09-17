@@ -1,17 +1,30 @@
 """
 Shared pytest fixtures and configuration for SPDS tests.
 """
-import pytest
-from unittest.mock import Mock, MagicMock
-from letta_client.types import AgentState, Tool, LettaResponse, Message, ToolReturnMessage, LlmConfig, EmbeddingConfig, Memory
-from spds.tools import SubjectiveAssessment
+
 from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock
+
+import pytest
+from letta_client.types import (
+    AgentState,
+    EmbeddingConfig,
+    LettaResponse,
+    LlmConfig,
+    Memory,
+    Message,
+    Tool,
+    ToolReturnMessage,
+)
+
+from spds.tools import SubjectiveAssessment
+
 
 @pytest.fixture
 def mock_letta_client():
     """Mock Letta client for testing without server dependency."""
     client = Mock()
-    
+
     # Mock agent operations
     client.agents = Mock()
     client.agents.create = Mock()
@@ -21,12 +34,13 @@ def mock_letta_client():
     client.agents.messages.create = Mock()
     client.agents.tools = Mock()
     client.agents.tools.attach = Mock()
-    
+
     # Mock tool operations
     client.tools = Mock()
     client.tools.create_from_function = Mock()
-    
+
     return client
+
 
 def _mk_agent_state(id: str, name: str, system: str, model: str = "openai/gpt-4"):
     llm = LlmConfig(model=model, model_endpoint_type="openai", context_window=128000)
@@ -51,6 +65,7 @@ def _mk_agent_state(id: str, name: str, system: str, model: str = "openai/gpt-4"
         embedding="openai/text-embedding-ada-002",
     )
 
+
 @pytest.fixture
 def sample_agent_state():
     """Sample AgentState for testing."""
@@ -64,6 +79,7 @@ def sample_agent_state():
         model="openai/gpt-4",
     )
 
+
 @pytest.fixture
 def sample_agent_profiles():
     """Sample agent profiles for testing."""
@@ -73,16 +89,17 @@ def sample_agent_profiles():
             "persona": "A test agent for validation",
             "expertise": ["testing", "validation"],
             "model": "openai/gpt-4",
-            "embedding": "openai/text-embedding-ada-002"
+            "embedding": "openai/text-embedding-ada-002",
         },
         {
-            "name": "Test Agent 2", 
+            "name": "Test Agent 2",
             "persona": "Another test agent",
             "expertise": ["analysis", "reporting"],
             "model": "anthropic/claude-3-5-sonnet-20241022",
-            "embedding": "openai/text-embedding-ada-002"
-        }
+            "embedding": "openai/text-embedding-ada-002",
+        },
     ]
+
 
 @pytest.fixture
 def sample_conversation_history():
@@ -91,6 +108,7 @@ def sample_conversation_history():
 You: What should our testing approach be?
 Agent1: I think we need comprehensive unit tests.
 Agent2: We should also consider integration testing."""
+
 
 @pytest.fixture
 def sample_assessment():
@@ -102,8 +120,9 @@ def sample_assessment():
         emotional_investment=5,
         expertise_relevance=9,
         urgency=7,
-        importance_to_group=8
+        importance_to_group=8,
     )
+
 
 @pytest.fixture
 def mock_tool_state():
@@ -111,10 +130,19 @@ def mock_tool_state():
     return Tool(
         id="tool-test-123",
         name="perform_subjective_assessment",
-        description="Test tool"
+        description="Test tool",
     )
+
 
 @pytest.fixture
 def mock_message_response():
     """Mock response with assistant text message."""
-    return SimpleNamespace(messages=[SimpleNamespace(id="msg-test-123", role="assistant", content=[{"type": "text", "text": "Test response"}])])
+    return SimpleNamespace(
+        messages=[
+            SimpleNamespace(
+                id="msg-test-123",
+                role="assistant",
+                content=[{"type": "text", "text": "Test response"}],
+            )
+        ]
+    )

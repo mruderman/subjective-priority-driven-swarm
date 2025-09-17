@@ -9,11 +9,14 @@ Based on the error: max_tokens is too large: 62286. This model supports at most 
 """
 
 import sys
-sys.path.append('.')
+
+sys.path.append(".")
+
+import time
 
 from letta_client import Letta
+
 from spds import config
-import time
 
 
 def get_client():
@@ -29,8 +32,7 @@ def get_client():
 def get_safe_token_limit(model_name: str) -> int:
     """Get safe token limit for a model."""
     return config.MODEL_TOKEN_LIMITS.get(
-        model_name,
-        {"safe_max": config.DEFAULT_MAX_TOKENS}
+        model_name, {"safe_max": config.DEFAULT_MAX_TOKENS}
     )["safe_max"]
 
 
@@ -40,9 +42,15 @@ def list_all_agents(client):
         agents = client.agents.list()
         print(f"Found {len(agents)} agents on the server:")
         for i, agent in enumerate(agents, 1):
-            model = getattr(agent, 'model', 'Unknown')
-            created = str(getattr(agent, 'created_at', 'Unknown'))[:10] if hasattr(agent, 'created_at') else 'Unknown'
-            print(f"  {i}. {agent.name} (ID: {agent.id[:8]}...) - Model: {model} - Created: {created}")
+            model = getattr(agent, "model", "Unknown")
+            created = (
+                str(getattr(agent, "created_at", "Unknown"))[:10]
+                if hasattr(agent, "created_at")
+                else "Unknown"
+            )
+            print(
+                f"  {i}. {agent.name} (ID: {agent.id[:8]}...) - Model: {model} - Created: {created}"
+            )
         return agents
     except Exception as e:
         print(f"❌ Error listing agents: {e}")
@@ -52,46 +60,54 @@ def list_all_agents(client):
 def fix_agent_token_limits(client, agent_id: str, agent_name: str, model: str) -> bool:
     """
     Fix token limits for a specific agent.
-    
+
     Note: The Letta API doesn't currently support updating max_tokens on existing agents,
     so this function focuses on verification and recommendations.
     """
     try:
         # Get safe token limit for this model
         safe_limit = get_safe_token_limit(model)
-        
+
         print(f"\n🔧 Processing agent: {agent_name}")
         print(f"   Model: {model}")
         print(f"   Recommended max_tokens: {safe_limit}")
-        
+
         # Try to retrieve current agent configuration
         try:
             agent_details = client.agents.retrieve(agent_id=agent_id)
             print(f"   ✅ Agent accessible and functioning")
-            
+
             # Test if agent can respond (this will reveal token limit issues)
             test_response = client.agents.messages.create(
                 agent_id=agent_id,
-                messages=[{"role": "user", "content": "Hello, please respond briefly."}]
+                messages=[
+                    {"role": "user", "content": "Hello, please respond briefly."}
+                ],
             )
-            
-            if test_response and hasattr(test_response, 'messages') and test_response.messages:
+
+            if (
+                test_response
+                and hasattr(test_response, "messages")
+                and test_response.messages
+            ):
                 print(f"   ✅ Agent can respond normally - token limits appear OK")
                 return True
             else:
                 print(f"   ⚠️  Agent response test failed - may have token limit issues")
                 return False
-                
+
         except Exception as e:
             error_str = str(e).lower()
             if "max_tokens" in error_str or "token" in error_str:
                 print(f"   ❌ TOKEN LIMIT ERROR: {e}")
-                print(f"   💡 This agent needs to be recreated with max_tokens={safe_limit}")
+                print(
+                    f"   💡 This agent needs to be recreated with max_tokens={safe_limit}"
+                )
                 return False
             else:
                 print(f"   ❌ Other error: {e}")
                 return False
-                
+
     except Exception as e:
         print(f"   ❌ Failed to process agent {agent_name}: {e}")
         return False
@@ -131,10 +147,10 @@ def main():
     
     # Agents to recreate (with token limit issues):
 '''
-    
+
     for agent_id, agent_name, model in problematic_agents:
         safe_limit = get_safe_token_limit(model)
-        script_content += f'''
+        script_content += f"""
     print("\\n🔄 Recreating agent: {agent_name}")
     try:
         # Delete old agent with token issues (CAUTION: This removes all conversation history)
@@ -154,19 +170,19 @@ def main():
         
     except Exception as e:
         print(f"   ❌ Failed to recreate {agent_name}: {{e}}")
-'''
-    
-    script_content += '''
+"""
+
+    script_content += """
     print("\\n✅ Agent recreation completed!")
     print("💡 Remember to update any scripts/configs that reference the old agent IDs")
 
 if __name__ == "__main__":
     main()
-'''
-    
+"""
+
     with open("recreate_agents.py", "w") as f:
         f.write(script_content)
-    
+
     print(f"\n📝 Created recreation script: recreate_agents.py")
     print("   Review and customize it before running!")
 
@@ -176,9 +192,11 @@ def main():
     print("🔧 Letta Agent Token Limit Fix")
     print("=" * 50)
     print("This script identifies and helps fix agents with token limit issues.")
-    print("The error: 'max_tokens is too large: 62286. This model supports at most 32768'")
+    print(
+        "The error: 'max_tokens is too large: 62286. This model supports at most 32768'"
+    )
     print()
-    
+
     # Get client
     try:
         client = get_client()
@@ -186,57 +204,57 @@ def main():
     except Exception as e:
         print(f"❌ Failed to connect to Letta server: {e}")
         return
-    
+
     # List all agents
     agents = list_all_agents(client)
     if not agents:
         print("No agents found. Exiting.")
         return
-    
+
     print(f"\n🔍 Testing agents for token limit issues...")
     print("=" * 50)
-    
+
     working_agents = []
     problematic_agents = []
-    
+
     for agent in agents:
         # Small delay to avoid overwhelming the server
         time.sleep(0.5)
-        
-        model = getattr(agent, 'model', 'openai/gpt-4')  # Default if not found
+
+        model = getattr(agent, "model", "openai/gpt-4")  # Default if not found
         success = fix_agent_token_limits(client, agent.id, agent.name, model)
-        
+
         if success:
             working_agents.append((agent.id, agent.name, model))
         else:
             problematic_agents.append((agent.id, agent.name, model))
-    
+
     # Summary
     print(f"\n📊 SUMMARY")
     print("=" * 50)
     print(f"✅ Working agents: {len(working_agents)}")
     print(f"❌ Problematic agents: {len(problematic_agents)}")
-    
+
     if working_agents:
         print(f"\n✅ These agents are working correctly:")
         for agent_id, name, model in working_agents:
             safe_limit = get_safe_token_limit(model)
             print(f"   - {name} ({model}) - max_tokens: {safe_limit}")
-    
+
     if problematic_agents:
         print(f"\n❌ These agents have token limit issues:")
         for agent_id, name, model in problematic_agents:
             safe_limit = get_safe_token_limit(model)
             print(f"   - {name} ({model}) - needs max_tokens: {safe_limit}")
-        
+
         print(f"\n💡 RECOMMENDATIONS:")
         print("1. For NEW agents: They will automatically use correct token limits")
         print("2. For EXISTING problematic agents: They need to be recreated")
         print("3. Run the web GUI test to see if the issue is resolved")
-        
+
         # Create recreation script
         create_agent_recreation_script(problematic_agents)
-    
+
     print(f"\n🎯 NEXT STEPS:")
     print("1. Test your web GUI - new agents should work correctly")
     print("2. If you still see token errors, check the Letta server logs")

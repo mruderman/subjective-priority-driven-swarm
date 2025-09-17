@@ -1,17 +1,27 @@
 """
 Unit tests for spds.swarm_manager module.
 """
+
 import json
-import pytest
-from unittest.mock import Mock, patch, MagicMock, call
-from io import StringIO
 import sys
-
-from letta_client.types import AgentState, LettaResponse, Message, LlmConfig, EmbeddingConfig, Memory
+from io import StringIO
 from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock, call, patch
+
+import pytest
+from letta_client.types import (
+    AgentState,
+    EmbeddingConfig,
+    LettaResponse,
+    LlmConfig,
+    Memory,
+    Message,
+)
 
 
-def mk_agent_state(id: str, name: str, system: str = "Test", model: str = "openai/gpt-4"):
+def mk_agent_state(
+    id: str, name: str, system: str = "Test", model: str = "openai/gpt-4"
+):
     """Build a minimally valid AgentState for current letta_client schema."""
     llm = LlmConfig(model=model, model_endpoint_type="openai", context_window=128000)
     emb = EmbeddingConfig(
@@ -34,30 +44,31 @@ def mk_agent_state(id: str, name: str, system: str = "Test", model: str = "opena
         model=model,
         embedding="openai/text-embedding-ada-002",
     )
+
+
 from letta_client.errors import NotFoundError
 
-from spds.swarm_manager import SwarmManager
 from spds.spds_agent import SPDSAgent
+from spds.swarm_manager import SwarmManager
 
 
 def make_tool_response(text: str):
     """
     Create a synthetic tool-message response object representing a single tool call to `send_message`.
-    
+
     The returned object is a SimpleNamespace with a `messages` list containing one message SimpleNamespace that mimics a tool-generated message:
     - message_type is "tool_message"
     - the message contains a single `tool_call` whose `function.name` is "send_message" and whose `function.arguments` is a JSON string encoding {"message": text}
-    
+
     Parameters:
         text (str): The message text to embed as the `message` argument of the simulated `send_message` tool call.
-    
+
     Returns:
         SimpleNamespace: An object with shape compatible with tests that expect tool-based agent responses (i.e., has a `messages` attribute with the described message structure).
     """
     tool_call = SimpleNamespace(
         function=SimpleNamespace(
-            name="send_message",
-            arguments=json.dumps({"message": text})
+            name="send_message", arguments=json.dumps({"message": text})
         )
     )
     message = SimpleNamespace(
@@ -72,13 +83,13 @@ def make_tool_response(text: str):
 def make_assistant_response(text: str, *, as_list: bool = False):
     """
     Create a synthetic assistant message object for tests.
-    
+
     Useful in unit tests to simulate an assistant response. By default the message content is a plain string; set `as_list=True` to produce a list-style content payload (a list containing a single dict with keys `type` and `text`).
-    
+
     Parameters:
         text (str): The assistant's text content.
         as_list (bool, optional): When True, wrap `text` in a list-style content object. Defaults to False.
-    
+
     Returns:
         types.SimpleNamespace: A SimpleNamespace with a `messages` attribute containing a single assistant message. Each message includes `role`, `message_type`, `content`, and placeholders for `tool_calls` and `tool_return`.
     """
@@ -99,28 +110,28 @@ def make_assistant_response(text: str, *, as_list: bool = False):
 
 class TestSwarmManager:
     """Test the SwarmManager class."""
-    
+
     def test_init_with_agent_profiles(self, mock_letta_client, sample_agent_profiles):
         """Test SwarmManager initialization with agent profiles."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             # Mock created agents
             mock_agent1 = Mock(spec=SPDSAgent)
             mock_agent1.name = "Test Agent 1"
             mock_agent2 = Mock(spec=SPDSAgent)
             mock_agent2.name = "Test Agent 2"
             mock_create.side_effect = [mock_agent1, mock_agent2]
-            
+
             manager = SwarmManager(
                 client=mock_letta_client,
                 agent_profiles=sample_agent_profiles,
                 conversation_mode="sequential",
             )
-            
+
             assert len(manager.agents) == 2
             assert manager.agents[0] == mock_agent1
             assert manager.agents[1] == mock_agent2
             assert manager.conversation_history == ""
-            
+
             # Verify agents were created with correct parameters
             expected_calls = [
                 call(
@@ -129,7 +140,7 @@ class TestSwarmManager:
                     expertise=["testing", "validation"],
                     client=mock_letta_client,
                     model="openai/gpt-4",
-                    embedding="openai/text-embedding-ada-002"
+                    embedding="openai/text-embedding-ada-002",
                 ),
                 call(
                     name="Test Agent 2",
@@ -137,79 +148,88 @@ class TestSwarmManager:
                     expertise=["analysis", "reporting"],
                     client=mock_letta_client,
                     model="anthropic/claude-3-5-sonnet-20241022",
-                    embedding="openai/text-embedding-ada-002"
-                )
+                    embedding="openai/text-embedding-ada-002",
+                ),
             ]
             mock_create.assert_has_calls(expected_calls)
-    
+
     def test_init_with_agent_ids(self, mock_letta_client):
         """Test SwarmManager initialization with agent IDs."""
         agent_ids = ["ag-123", "ag-456"]
-        
+
         # Mock agent states
-        mock_agent_state1 = mk_agent_state(id="ag-123", name="Agent 1", system="Test", model="openai/gpt-4")
-        mock_agent_state2 = mk_agent_state(id="ag-456", name="Agent 2", system="Test", model="openai/gpt-4")
-        
-        mock_letta_client.agents.retrieve.side_effect = [mock_agent_state1, mock_agent_state2]
-        
-        with patch('spds.swarm_manager.SPDSAgent') as mock_spds_agent:
+        mock_agent_state1 = mk_agent_state(
+            id="ag-123", name="Agent 1", system="Test", model="openai/gpt-4"
+        )
+        mock_agent_state2 = mk_agent_state(
+            id="ag-456", name="Agent 2", system="Test", model="openai/gpt-4"
+        )
+
+        mock_letta_client.agents.retrieve.side_effect = [
+            mock_agent_state1,
+            mock_agent_state2,
+        ]
+
+        with patch("spds.swarm_manager.SPDSAgent") as mock_spds_agent:
             mock_agent1 = Mock()
             mock_agent2 = Mock()
             mock_spds_agent.side_effect = [mock_agent1, mock_agent2]
-            
-            manager = SwarmManager(
-                client=mock_letta_client,
-                agent_ids=agent_ids
-            )
-            
+
+            manager = SwarmManager(client=mock_letta_client, agent_ids=agent_ids)
+
             assert len(manager.agents) == 2
-            mock_letta_client.agents.retrieve.assert_has_calls([
-                call(agent_id="ag-123"),
-                call(agent_id="ag-456")
-            ])
-    
+            mock_letta_client.agents.retrieve.assert_has_calls(
+                [call(agent_id="ag-123"), call(agent_id="ag-456")]
+            )
+
     def test_init_with_agent_names(self, mock_letta_client):
         """Test SwarmManager initialization with agent names."""
         agent_names = ["Agent One", "Agent Two"]
-        
+
         # Mock agent states
-        mock_agent_state1 = mk_agent_state(id="ag-123", name="Agent One", system="Test", model="openai/gpt-4")
-        mock_agent_state2 = mk_agent_state(id="ag-456", name="Agent Two", system="Test", model="openai/gpt-4")
-        
+        mock_agent_state1 = mk_agent_state(
+            id="ag-123", name="Agent One", system="Test", model="openai/gpt-4"
+        )
+        mock_agent_state2 = mk_agent_state(
+            id="ag-456", name="Agent Two", system="Test", model="openai/gpt-4"
+        )
+
         mock_letta_client.agents.list.side_effect = [
             [mock_agent_state1],  # First call returns Agent One
-            [mock_agent_state2]   # Second call returns Agent Two
+            [mock_agent_state2],  # Second call returns Agent Two
         ]
-        
-        with patch('spds.swarm_manager.SPDSAgent') as mock_spds_agent:
+
+        with patch("spds.swarm_manager.SPDSAgent") as mock_spds_agent:
             mock_agent1 = Mock()
             mock_agent2 = Mock()
             mock_spds_agent.side_effect = [mock_agent1, mock_agent2]
-            
-            manager = SwarmManager(
-                client=mock_letta_client,
-                agent_names=agent_names
-            )
-            
+
+            manager = SwarmManager(client=mock_letta_client, agent_names=agent_names)
+
             assert len(manager.agents) == 2
-            mock_letta_client.agents.list.assert_has_calls([
-                call(name="Agent One", limit=1),
-                call(name="Agent Two", limit=1)
-            ])
-    
+            mock_letta_client.agents.list.assert_has_calls(
+                [call(name="Agent One", limit=1), call(name="Agent Two", limit=1)]
+            )
+
     def test_init_with_no_agents_raises_error(self, mock_letta_client):
         """Test that initializing with no agents raises ValueError."""
-        with pytest.raises(ValueError, match="Swarm manager initialized with no agents"):
+        with pytest.raises(
+            ValueError, match="Swarm manager initialized with no agents"
+        ):
             SwarmManager(client=mock_letta_client)
-    
+
     def test_load_agents_by_id_with_missing_agent(self, mock_letta_client):
         """Test loading agents by ID when some agents are not found."""
         agent_ids = ["ag-123", "ag-missing", "ag-456"]
-        
+
         # Mock retrieval with one NotFoundError
-        mock_agent_state1 = mk_agent_state(id="ag-123", name="Agent 1", system="Test", model="openai/gpt-4")
-        mock_agent_state3 = mk_agent_state(id="ag-456", name="Agent 3", system="Test", model="openai/gpt-4")
-        
+        mock_agent_state1 = mk_agent_state(
+            id="ag-123", name="Agent 1", system="Test", model="openai/gpt-4"
+        )
+        mock_agent_state3 = mk_agent_state(
+            id="ag-456", name="Agent 3", system="Test", model="openai/gpt-4"
+        )
+
         def mock_retrieve(agent_id):
             if agent_id == "ag-missing":
                 raise NotFoundError("Agent not found")
@@ -217,40 +237,41 @@ class TestSwarmManager:
                 return mock_agent_state1
             elif agent_id == "ag-456":
                 return mock_agent_state3
-        
+
         mock_letta_client.agents.retrieve.side_effect = mock_retrieve
-        
-        with patch('spds.swarm_manager.SPDSAgent') as mock_spds_agent:
+
+        with patch("spds.swarm_manager.SPDSAgent") as mock_spds_agent:
             mock_agent1 = Mock()
             mock_agent3 = Mock()
             mock_spds_agent.side_effect = [mock_agent1, mock_agent3]
-            
+
             # Capture stdout to check warning message
             captured_output = StringIO()
             sys.stdout = captured_output
-            
-            manager = SwarmManager(
-                client=mock_letta_client,
-                agent_ids=agent_ids
-            )
-            
+
+            manager = SwarmManager(client=mock_letta_client, agent_ids=agent_ids)
+
             sys.stdout = sys.__stdout__
-            
+
             # Should only have 2 agents (missing one skipped)
             assert len(manager.agents) == 2
-            
+
             # Check warning was printed
             output = captured_output.getvalue()
             assert "WARNING: Agent with ID 'ag-missing' not found" in output
-    
+
     def test_load_agents_by_name_with_missing_agent(self, mock_letta_client):
         """Test loading agents by name when some agents are not found."""
         agent_names = ["Agent One", "Missing Agent", "Agent Three"]
-        
+
         # Mock agent states
-        mock_agent_state1 = mk_agent_state(id="ag-123", name="Agent One", system="Test", model="openai/gpt-4")
-        mock_agent_state3 = mk_agent_state(id="ag-456", name="Agent Three", system="Test", model="openai/gpt-4")
-        
+        mock_agent_state1 = mk_agent_state(
+            id="ag-123", name="Agent One", system="Test", model="openai/gpt-4"
+        )
+        mock_agent_state3 = mk_agent_state(
+            id="ag-456", name="Agent Three", system="Test", model="openai/gpt-4"
+        )
+
         def mock_list(name, limit):
             if name == "Missing Agent":
                 return []  # Empty list means not found
@@ -258,32 +279,29 @@ class TestSwarmManager:
                 return [mock_agent_state1]
             elif name == "Agent Three":
                 return [mock_agent_state3]
-        
+
         mock_letta_client.agents.list.side_effect = mock_list
-        
-        with patch('spds.swarm_manager.SPDSAgent') as mock_spds_agent:
+
+        with patch("spds.swarm_manager.SPDSAgent") as mock_spds_agent:
             mock_agent1 = Mock()
             mock_agent3 = Mock()
             mock_spds_agent.side_effect = [mock_agent1, mock_agent3]
-            
+
             # Capture stdout to check warning message
             captured_output = StringIO()
             sys.stdout = captured_output
-            
-            manager = SwarmManager(
-                client=mock_letta_client,
-                agent_names=agent_names
-            )
-            
+
+            manager = SwarmManager(client=mock_letta_client, agent_names=agent_names)
+
             sys.stdout = sys.__stdout__
-            
+
             # Should only have 2 agents (missing one skipped)
             assert len(manager.agents) == 2
-            
+
             # Check warning was printed
             output = captured_output.getvalue()
             assert "WARNING: Agent with name 'Missing Agent' not found" in output
-    
+
     def test_create_agents_from_profiles_with_model_config(self, mock_letta_client):
         """Test creating agents from profiles with model configuration."""
         profiles = [
@@ -292,27 +310,24 @@ class TestSwarmManager:
                 "persona": "An OpenAI agent",
                 "expertise": ["analysis"],
                 "model": "openai/gpt-4",
-                "embedding": "openai/text-embedding-ada-002"
+                "embedding": "openai/text-embedding-ada-002",
             },
             {
-                "name": "Claude Agent", 
+                "name": "Claude Agent",
                 "persona": "An Anthropic agent",
                 "expertise": ["reasoning"],
                 "model": "anthropic/claude-3-5-sonnet-20241022",
-                "embedding": "openai/text-embedding-ada-002"
-            }
+                "embedding": "openai/text-embedding-ada-002",
+            },
         ]
-        
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             mock_agent1 = Mock()
             mock_agent2 = Mock()
             mock_create.side_effect = [mock_agent1, mock_agent2]
-            
-            manager = SwarmManager(
-                client=mock_letta_client,
-                agent_profiles=profiles
-            )
-            
+
+            manager = SwarmManager(client=mock_letta_client, agent_profiles=profiles)
+
             # Verify agents were created with model-specific parameters
             expected_calls = [
                 call(
@@ -321,7 +336,7 @@ class TestSwarmManager:
                     expertise=["analysis"],
                     client=mock_letta_client,
                     model="openai/gpt-4",
-                    embedding="openai/text-embedding-ada-002"
+                    embedding="openai/text-embedding-ada-002",
                 ),
                 call(
                     name="Claude Agent",
@@ -329,185 +344,219 @@ class TestSwarmManager:
                     expertise=["reasoning"],
                     client=mock_letta_client,
                     model="anthropic/claude-3-5-sonnet-20241022",
-                    embedding="openai/text-embedding-ada-002"
-                )
+                    embedding="openai/text-embedding-ada-002",
+                ),
             ]
             mock_create.assert_has_calls(expected_calls)
-    
-    def test_agent_turn_with_motivated_agents(self, mock_letta_client, sample_agent_profiles):
+
+    def test_agent_turn_with_motivated_agents(
+        self, mock_letta_client, sample_agent_profiles
+    ):
         """Test agent turn when agents are motivated to speak."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             # Create mock agents with different priority scores
             mock_agent1 = Mock(spec=SPDSAgent)
             mock_agent1.name = "Agent 1"
             mock_agent1.priority_score = 15.0
             mock_agent1.motivation_score = 40
             mock_agent1.assess_motivation_and_priority = Mock()
-            
+
             mock_agent2 = Mock(spec=SPDSAgent)
             mock_agent2.name = "Agent 2"
             mock_agent2.priority_score = 25.0  # Higher priority
             mock_agent2.motivation_score = 50
             mock_agent2.assess_motivation_and_priority = Mock()
-            
+
             # Mock speak response
-            mock_response = SimpleNamespace(messages=[SimpleNamespace(id="msg-123", role="assistant", content=[{"type": "text", "text": "This is my response"}])])
+            mock_response = SimpleNamespace(
+                messages=[
+                    SimpleNamespace(
+                        id="msg-123",
+                        role="assistant",
+                        content=[{"type": "text", "text": "This is my response"}],
+                    )
+                ]
+            )
             mock_agent2.speak.return_value = mock_response
-            
+
             mock_create.side_effect = [mock_agent1, mock_agent2]
-            
+
             manager = SwarmManager(
                 client=mock_letta_client,
                 agent_profiles=sample_agent_profiles,
                 conversation_mode="sequential",
             )
-            
+
             # Capture output
             captured_output = StringIO()
             sys.stdout = captured_output
-            
+
             manager._agent_turn("Test Topic")
-            
+
             sys.stdout = sys.__stdout__
             output = captured_output.getvalue()
-            
+
             # Verify assessments were called
             mock_agent1.assess_motivation_and_priority.assert_called_once()
             mock_agent2.assess_motivation_and_priority.assert_called_once()
-            
+
             # Verify the higher priority agent spoke
             mock_agent2.speak.assert_called_once()
             mock_agent1.speak.assert_not_called()
-            
+
             # Check output contains agent response
             assert "Agent 2: This is my response" in output
             assert "Agent 2 is speaking" in output
-    
-    def test_agent_turn_with_no_motivated_agents(self, mock_letta_client, sample_agent_profiles):
+
+    def test_agent_turn_with_no_motivated_agents(
+        self, mock_letta_client, sample_agent_profiles
+    ):
         """Test agent turn when no agents are motivated to speak."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             # Create mock agents with zero priority scores
             mock_agent1 = Mock(spec=SPDSAgent)
             mock_agent1.name = "Agent 1"
             mock_agent1.priority_score = 0.0
             mock_agent1.motivation_score = 20
             mock_agent1.assess_motivation_and_priority = Mock()
-            
+
             mock_agent2 = Mock(spec=SPDSAgent)
             mock_agent2.name = "Agent 2"
             mock_agent2.priority_score = 0.0
             mock_agent2.motivation_score = 15
             mock_agent2.assess_motivation_and_priority = Mock()
-            
+
             mock_create.side_effect = [mock_agent1, mock_agent2]
-            
+
             manager = SwarmManager(
-                client=mock_letta_client,
-                agent_profiles=sample_agent_profiles
+                client=mock_letta_client, agent_profiles=sample_agent_profiles
             )
-            
+
             # Capture output
             captured_output = StringIO()
             sys.stdout = captured_output
-            
+
             manager._agent_turn("Test Topic")
-            
+
             sys.stdout = sys.__stdout__
             output = captured_output.getvalue()
-            
+
             # Verify no agent spoke
             mock_agent1.speak.assert_not_called()
             mock_agent2.speak.assert_not_called()
-            
+
             # Check appropriate message was printed
             assert "No agent is motivated to speak" in output
-    
-    def test_agent_turn_with_speak_error(self, mock_letta_client, sample_agent_profiles):
+
+    def test_agent_turn_with_speak_error(
+        self, mock_letta_client, sample_agent_profiles
+    ):
         """Test agent turn when speaking agent encounters an error."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             # Create mock agent that will have speak error
             mock_agent = Mock(spec=SPDSAgent)
             mock_agent.name = "Error Agent"
             mock_agent.priority_score = 30.0
             mock_agent.motivation_score = 50
             mock_agent.assess_motivation_and_priority = Mock()
-            
+
             # Mock speak to raise an exception
             mock_agent.speak.side_effect = Exception("API Error")
-            
+
             mock_create.return_value = mock_agent
-            
+
             manager = SwarmManager(
                 client=mock_letta_client,
                 agent_profiles=[sample_agent_profiles[0]],  # Just one agent
                 conversation_mode="sequential",
             )
-            
+
             # Capture output
             captured_output = StringIO()
             sys.stdout = captured_output
-            
+
             manager._agent_turn("Test Topic")
-            
+
             sys.stdout = sys.__stdout__
             output = captured_output.getvalue()
-            
+
             # Should handle the error gracefully
-            assert "Error Agent: I have some thoughts but I'm having trouble phrasing them." in output
-            assert ("[Debug: Error during speak() - API Error]" in output or
-                    "[Debug: Error in sequential response - API Error]" in output)
-    
-    @patch('builtins.input')
-    def test_start_chat_basic_flow(self, mock_input, mock_letta_client, sample_agent_profiles):
+            assert (
+                "Error Agent: I have some thoughts but I'm having trouble phrasing them."
+                in output
+            )
+            assert (
+                "[Debug: Error during speak() - API Error]" in output
+                or "[Debug: Error in sequential response - API Error]" in output
+            )
+
+    @patch("builtins.input")
+    def test_start_chat_basic_flow(
+        self, mock_input, mock_letta_client, sample_agent_profiles
+    ):
         """Test basic chat flow with user input."""
         # Mock user inputs: topic, one message, then quit
-        mock_input.side_effect = ["Testing Discussion", "Let's talk about testing", "quit"]
-        
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        mock_input.side_effect = [
+            "Testing Discussion",
+            "Let's talk about testing",
+            "quit",
+        ]
+
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             mock_agent = Mock(spec=SPDSAgent)
             mock_agent.name = "Test Agent"
             mock_agent.priority_score = 30.0
             mock_agent.motivation_score = 50
             mock_agent.assess_motivation_and_priority = Mock()
-            
+
             # Mock successful speak
-            mock_response = SimpleNamespace(messages=[SimpleNamespace(id="msg-123", role="assistant", content=[{"type": "text", "text": "Great point about testing!"}])])
-            mock_agent.speak.return_value = mock_response
-            
-            mock_create.return_value = mock_agent
-            
-            manager = SwarmManager(
-                client=mock_letta_client,
-                agent_profiles=[sample_agent_profiles[0]]
+            mock_response = SimpleNamespace(
+                messages=[
+                    SimpleNamespace(
+                        id="msg-123",
+                        role="assistant",
+                        content=[
+                            {"type": "text", "text": "Great point about testing!"}
+                        ],
+                    )
+                ]
             )
-            
+            mock_agent.speak.return_value = mock_response
+
+            mock_create.return_value = mock_agent
+
+            manager = SwarmManager(
+                client=mock_letta_client, agent_profiles=[sample_agent_profiles[0]]
+            )
+
             # Capture output
             captured_output = StringIO()
             sys.stdout = captured_output
-            
+
             manager.start_chat()
-            
+
             sys.stdout = sys.__stdout__
             output = captured_output.getvalue()
-            
+
             # Verify conversation flow
             assert "Swarm chat started" in output
             assert "Test Agent: Great point about testing!" in output
             assert "Exiting chat" in output
-    
-    @patch('builtins.input')
-    def test_start_chat_eof_handling(self, mock_input, mock_letta_client, sample_agent_profiles):
+
+    @patch("builtins.input")
+    def test_start_chat_eof_handling(
+        self, mock_input, mock_letta_client, sample_agent_profiles
+    ):
         """Test chat handling of EOF (Ctrl+D)."""
         # Mock EOFError on topic input
         mock_input.side_effect = EOFError()
 
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             mock_agent = Mock()
             mock_create.return_value = mock_agent
 
             manager = SwarmManager(
-                client=mock_letta_client,
-                agent_profiles=[sample_agent_profiles[0]]
+                client=mock_letta_client, agent_profiles=[sample_agent_profiles[0]]
             )
 
             # Capture output
@@ -528,8 +577,10 @@ class TestSwarmManager:
         sample_agent_profiles,
     ):
         """Token limit errors should trigger a reset and retry."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
-            dummy_agent = SimpleNamespace(name="Agent 1", agent=SimpleNamespace(id="agent-1"))
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
+            dummy_agent = SimpleNamespace(
+                name="Agent 1", agent=SimpleNamespace(id="agent-1")
+            )
             mock_create.return_value = dummy_agent
             manager = SwarmManager(
                 client=mock_letta_client,
@@ -542,7 +593,9 @@ class TestSwarmManager:
             None,
         ]
 
-        manager._update_agent_memories("Important update", speaker="Facilitator", max_retries=2)
+        manager._update_agent_memories(
+            "Important update", speaker="Facilitator", max_retries=2
+        )
 
         manager._reset_agent_messages.assert_called_once_with("agent-1")
         assert mock_letta_client.agents.messages.create.call_count == 2
@@ -554,8 +607,10 @@ class TestSwarmManager:
         capsys,
     ):
         """A non-retryable error should report the failure without retry."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
-            dummy_agent = SimpleNamespace(name="Agent 1", agent=SimpleNamespace(id="agent-1"))
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
+            dummy_agent = SimpleNamespace(
+                name="Agent 1", agent=SimpleNamespace(id="agent-1")
+            )
             mock_create.return_value = dummy_agent
             manager = SwarmManager(
                 client=mock_letta_client,
@@ -568,14 +623,17 @@ class TestSwarmManager:
 
         output = capsys.readouterr().out
         assert "Failed to update Agent 1" in output
+
     def test_get_agent_message_count_success_and_error(
         self,
         mock_letta_client,
         sample_agent_profiles,
     ):
         """_get_agent_message_count should handle success and exceptions."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
-            dummy_agent = SimpleNamespace(name="Agent 1", agent=SimpleNamespace(id="agent-1"))
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
+            dummy_agent = SimpleNamespace(
+                name="Agent 1", agent=SimpleNamespace(id="agent-1")
+            )
             mock_create.return_value = dummy_agent
             manager = SwarmManager(
                 client=mock_letta_client,
@@ -594,18 +652,22 @@ class TestSwarmManager:
         sample_agent_profiles,
     ):
         """_warm_up_agent should return True on success and False on failure."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
-            dummy_agent = SimpleNamespace(name="Agent 1", agent=SimpleNamespace(id="agent-1"))
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
+            dummy_agent = SimpleNamespace(
+                name="Agent 1", agent=SimpleNamespace(id="agent-1")
+            )
             mock_create.return_value = dummy_agent
             manager = SwarmManager(
                 client=mock_letta_client,
                 agent_profiles=[sample_agent_profiles[0]],
             )
 
-        test_agent = SimpleNamespace(name="Agent 1", agent=SimpleNamespace(id="agent-1"))
+        test_agent = SimpleNamespace(
+            name="Agent 1", agent=SimpleNamespace(id="agent-1")
+        )
 
         mock_letta_client.agents.messages.create.return_value = None
-        with patch('spds.swarm_manager.time.sleep') as sleep_mock:
+        with patch("spds.swarm_manager.time.sleep") as sleep_mock:
             assert manager._warm_up_agent(test_agent, "Topic") is True
             sleep_mock.assert_called()
 
@@ -618,8 +680,10 @@ class TestSwarmManager:
         sample_agent_profiles,
     ):
         """_extract_agent_response should handle tool calls, lists, and fallbacks."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
-            dummy_agent = SimpleNamespace(name="Agent 1", agent=SimpleNamespace(id="agent-1"))
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
+            dummy_agent = SimpleNamespace(
+                name="Agent 1", agent=SimpleNamespace(id="agent-1")
+            )
             mock_create.return_value = dummy_agent
             manager = SwarmManager(
                 client=mock_letta_client,
@@ -650,7 +714,7 @@ class TestSwarmManager:
         sample_agent_profiles,
     ):
         """Hybrid mode should handle both strong and fallback responses."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -670,7 +734,9 @@ class TestSwarmManager:
                         "This is a detailed contribution that explores nuances of the topic.",
                         as_list=True,
                     ),
-                    make_assistant_response("Following up after hearing everyone else."),
+                    make_assistant_response(
+                        "Following up after hearing everyone else."
+                    ),
                 ]
             ),
             assess_motivation_and_priority=Mock(),
@@ -684,7 +750,9 @@ class TestSwarmManager:
             speak=Mock(
                 side_effect=[
                     make_assistant_response("short"),
-                    make_assistant_response("Expanding on the previous viewpoints with detail."),
+                    make_assistant_response(
+                        "Expanding on the previous viewpoints with detail."
+                    ),
                 ]
             ),
             assess_motivation_and_priority=Mock(),
@@ -701,7 +769,9 @@ class TestSwarmManager:
         assert agent2.speak.call_count == 2
         assert "expertise in analysis" in manager.conversation_history
         assert manager._notify_secretary_agent_response.call_count == 3
-        assert mock_letta_client.agents.messages.create.call_count == len(manager.agents)
+        assert mock_letta_client.agents.messages.create.call_count == len(
+            manager.agents
+        )
 
     def test_all_speak_turn_updates_memories(
         self,
@@ -709,7 +779,7 @@ class TestSwarmManager:
         sample_agent_profiles,
     ):
         """All-speak mode should update memories and notify secretary."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -722,7 +792,9 @@ class TestSwarmManager:
             priority_score=10.0,
             motivation_score=15,
             agent=SimpleNamespace(id="agent-1"),
-            speak=Mock(return_value=make_assistant_response("First detailed response.")),
+            speak=Mock(
+                return_value=make_assistant_response("First detailed response.")
+            ),
             assess_motivation_and_priority=Mock(),
         )
         agent2 = SimpleNamespace(
@@ -730,7 +802,9 @@ class TestSwarmManager:
             priority_score=9.0,
             motivation_score=14,
             agent=SimpleNamespace(id="agent-2"),
-            speak=Mock(return_value=make_assistant_response("Second response with more depth.")),
+            speak=Mock(
+                return_value=make_assistant_response("Second response with more depth.")
+            ),
             assess_motivation_and_priority=Mock(),
         )
 
@@ -741,13 +815,17 @@ class TestSwarmManager:
 
         manager._all_speak_turn([agent1, agent2], "Innovation")
 
-        manager._update_agent_memories.assert_has_calls([
-            call("First detailed response.", "Agent 1"),
-            call("Second response with more depth.", "Agent 2"),
-        ])
+        manager._update_agent_memories.assert_has_calls(
+            [
+                call("First detailed response.", "Agent 1"),
+                call("Second response with more depth.", "Agent 2"),
+            ]
+        )
         assert manager._notify_secretary_agent_response.call_count == 2
         assert "Agent 1: First detailed response." in manager.conversation_history
-        assert "Agent 2: Second response with more depth." in manager.conversation_history
+        assert (
+            "Agent 2: Second response with more depth." in manager.conversation_history
+        )
 
     def test_sequential_turn_fairness_prefers_second_agent(
         self,
@@ -755,7 +833,7 @@ class TestSwarmManager:
         sample_agent_profiles,
     ):
         """Sequential mode should rotate when the top speaker just spoke."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -777,7 +855,9 @@ class TestSwarmManager:
             priority_score=11.0,
             motivation_score=14,
             agent=SimpleNamespace(id="agent-2"),
-            speak=Mock(return_value=make_assistant_response("Second agent takes the turn.")),
+            speak=Mock(
+                return_value=make_assistant_response("Second agent takes the turn.")
+            ),
             assess_motivation_and_priority=Mock(),
         )
 
@@ -798,7 +878,7 @@ class TestSwarmManager:
         sample_agent_profiles,
     ):
         """Sequential mode should fall back gracefully on errors."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -832,7 +912,7 @@ class TestSwarmManager:
         sample_agent_profiles,
     ):
         """Pure priority mode should report fallback on errors."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -856,7 +936,9 @@ class TestSwarmManager:
 
         manager._pure_priority_turn([failing_agent], "Topic")
 
-        fallback = "I have thoughts on this topic but I'm having difficulty expressing them."
+        fallback = (
+            "I have thoughts on this topic but I'm having difficulty expressing them."
+        )
         assert f"Agent 1: {fallback}" in manager.conversation_history
         manager._notify_secretary_agent_response.assert_called_with("Agent 1", fallback)
 
@@ -866,7 +948,7 @@ class TestSwarmManager:
         sample_agent_profiles,
     ):
         """_start_meeting should coordinate with the secretary and log the topic."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -897,9 +979,11 @@ class TestSwarmManager:
         assert secretary.meeting_metadata["conversation_mode"] == "hybrid"
         assert "System: The topic is 'Strategy'." in manager.conversation_history
 
-    def test_handle_secretary_commands_without_secretary(self, mock_letta_client, sample_agent_profiles, capsys):
+    def test_handle_secretary_commands_without_secretary(
+        self, mock_letta_client, sample_agent_profiles, capsys
+    ):
         """Secretary-specific commands should warn when secretary is disabled."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -915,9 +999,11 @@ class TestSwarmManager:
         assert handled is True
         assert "Secretary is not enabled" in output
 
-    def test_handle_secretary_commands_routes_to_secretary(self, mock_letta_client, sample_agent_profiles, capsys):
+    def test_handle_secretary_commands_routes_to_secretary(
+        self, mock_letta_client, sample_agent_profiles, capsys
+    ):
         """Commands should call through to the secretary when available."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -963,9 +1049,11 @@ class TestSwarmManager:
         assert manager._handle_secretary_commands("/stats") is True
         assert "summary" in capsys.readouterr().out
 
-    def test_handle_secretary_commands_memory_reports(self, mock_letta_client, sample_agent_profiles, capsys):
+    def test_handle_secretary_commands_memory_reports(
+        self, mock_letta_client, sample_agent_profiles, capsys
+    ):
         """Memory commands should run even without a secretary."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -974,17 +1062,17 @@ class TestSwarmManager:
             )
 
         summary = {
-            'total_agents': 2,
-            'agents_with_high_memory': 1,
-            'total_messages_across_agents': 123,
-            'agents_status': [
+            "total_agents": 2,
+            "agents_with_high_memory": 1,
+            "total_messages_across_agents": 123,
+            "agents_status": [
                 {
-                    'name': 'Agent 1',
-                    'recall_memory': 600,
-                    'archival_memory': 2,
-                    'high_memory': True,
+                    "name": "Agent 1",
+                    "recall_memory": 600,
+                    "archival_memory": 2,
+                    "high_memory": True,
                 }
-            ]
+            ],
         }
         manager.get_memory_status_summary = Mock(return_value=summary)
         manager.check_memory_awareness_status = Mock()
@@ -997,9 +1085,11 @@ class TestSwarmManager:
         assert manager._handle_secretary_commands("/memory-awareness") is True
         manager.check_memory_awareness_status.assert_called_with(silent=False)
 
-    def test_handle_export_command_variants(self, mock_letta_client, sample_agent_profiles):
+    def test_handle_export_command_variants(
+        self, mock_letta_client, sample_agent_profiles
+    ):
         """_handle_export_command should dispatch to the correct exporter."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -1029,11 +1119,15 @@ class TestSwarmManager:
 
         manager.export_manager.export_complete_package.return_value = ["one", "two"]
         manager._handle_export_command("all")
-        manager.export_manager.export_complete_package.assert_called_with(meeting_data, "adaptive")
+        manager.export_manager.export_complete_package.assert_called_with(
+            meeting_data, "adaptive"
+        )
 
-    def test_handle_export_command_unknown_format(self, mock_letta_client, sample_agent_profiles, capsys):
+    def test_handle_export_command_unknown_format(
+        self, mock_letta_client, sample_agent_profiles, capsys
+    ):
         """Unknown export formats should notify the user."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -1056,9 +1150,11 @@ class TestSwarmManager:
         output = capsys.readouterr().out
         assert "Unknown export format" in output
 
-    def test_offer_export_options_invokes_command(self, mock_letta_client, sample_agent_profiles):
+    def test_offer_export_options_invokes_command(
+        self, mock_letta_client, sample_agent_profiles
+    ):
         """_offer_export_options should forward user input to command handler."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -1067,17 +1163,26 @@ class TestSwarmManager:
                 enable_secretary=True,
             )
 
-        manager.secretary = SimpleNamespace(meeting_metadata={}, conversation_log="", action_items=[], decisions=[], mode="adaptive", get_conversation_stats=Mock(return_value={}))
+        manager.secretary = SimpleNamespace(
+            meeting_metadata={},
+            conversation_log="",
+            action_items=[],
+            decisions=[],
+            mode="adaptive",
+            get_conversation_stats=Mock(return_value={}),
+        )
         manager._handle_secretary_commands = Mock()
 
-        with patch('builtins.input', return_value='/minutes'):
+        with patch("builtins.input", return_value="/minutes"):
             manager._offer_export_options()
 
-        manager._handle_secretary_commands.assert_called_once_with('/minutes')
+        manager._handle_secretary_commands.assert_called_once_with("/minutes")
 
-    def test_notify_secretary_agent_response(self, mock_letta_client, sample_agent_profiles):
+    def test_notify_secretary_agent_response(
+        self, mock_letta_client, sample_agent_profiles
+    ):
         """_notify_secretary_agent_response should forward to secretary when present."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -1092,9 +1197,11 @@ class TestSwarmManager:
 
         observer.assert_called_once_with("Agent", "Message")
 
-    def test_check_memory_awareness_status_outputs_info(self, mock_letta_client, sample_agent_profiles, capsys):
+    def test_check_memory_awareness_status_outputs_info(
+        self, mock_letta_client, sample_agent_profiles, capsys
+    ):
         """Memory awareness information should be printed when available."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -1107,7 +1214,9 @@ class TestSwarmManager:
             SimpleNamespace(name="Agent 2", agent=SimpleNamespace(id="agent-2")),
         ]
 
-        with patch('spds.swarm_manager.create_memory_awareness_for_agent') as awareness_patch:
+        with patch(
+            "spds.swarm_manager.create_memory_awareness_for_agent"
+        ) as awareness_patch:
             awareness_patch.side_effect = ["Awareness message", RuntimeError("fail")]
 
             manager.check_memory_awareness_status(silent=False)
@@ -1116,9 +1225,11 @@ class TestSwarmManager:
         assert "Awareness message" in output
         assert "Could not generate memory awareness" in output
 
-    def test_check_memory_awareness_status_silent(self, mock_letta_client, sample_agent_profiles, capsys):
+    def test_check_memory_awareness_status_silent(
+        self, mock_letta_client, sample_agent_profiles, capsys
+    ):
         """Silent checks should not print anything."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -1126,18 +1237,25 @@ class TestSwarmManager:
                 agent_profiles=[sample_agent_profiles[0]],
             )
 
-        manager.agents = [SimpleNamespace(name="Agent 1", agent=SimpleNamespace(id="agent-1"))]
+        manager.agents = [
+            SimpleNamespace(name="Agent 1", agent=SimpleNamespace(id="agent-1"))
+        ]
 
         capsys.readouterr()
 
-        with patch('spds.swarm_manager.create_memory_awareness_for_agent', return_value="Message"):
+        with patch(
+            "spds.swarm_manager.create_memory_awareness_for_agent",
+            return_value="Message",
+        ):
             manager.check_memory_awareness_status(silent=True)
 
         assert capsys.readouterr().out == ""
 
-    def test_get_memory_status_summary_with_errors(self, mock_letta_client, sample_agent_profiles):
+    def test_get_memory_status_summary_with_errors(
+        self, mock_letta_client, sample_agent_profiles
+    ):
         """get_memory_status_summary should handle errors per agent."""
-        with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
             base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
             mock_create.return_value = base_agent
             manager = SwarmManager(
@@ -1158,8 +1276,8 @@ class TestSwarmManager:
 
         summary = manager.get_memory_status_summary()
 
-        assert summary['total_agents'] == 2
-        assert summary['agents_with_high_memory'] == 1
-        assert summary['total_messages_across_agents'] == 600
-        assert summary['agents_status'][0]['high_memory'] is True
-        assert summary['agents_status'][1]['error'] == "fail"
+        assert summary["total_agents"] == 2
+        assert summary["agents_with_high_memory"] == 1
+        assert summary["total_messages_across_agents"] == 600
+        assert summary["agents_status"][0]["high_memory"] is True
+        assert summary["agents_status"][1]["error"] == "fail"

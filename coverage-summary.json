@@ -1,0 +1,26 @@
+{
+  "unit": {
+    "lines-valid": 1546,
+    "lines-covered": 1217,
+    "line-rate": 0.7872,
+    "percent": 78.72
+  },
+  "integration": {
+    "lines-valid": 1546,
+    "lines-covered": 290,
+    "line-rate": 0.1876,
+    "percent": 18.76
+  },
+  "e2e": {
+    "lines-valid": 1546,
+    "lines-covered": 420,
+    "line-rate": 0.2717,
+    "percent": 27.17
+  },
+  "all": {
+    "lines-valid": 1546,
+    "lines-covered": 1353,
+    "line-rate": 0.8752,
+    "percent": 87.52
+  }
+}

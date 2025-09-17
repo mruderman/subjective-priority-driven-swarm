@@ -174,11 +174,14 @@ def test_export_raw_transcript_fills_missing_fields(tmp_path):
 def test_export_structured_data_serializes_nested_datetimes(tmp_path):
     manager = ExportManager(export_directory=str(tmp_path))
     meeting_data = build_sample_meeting_data()
-    meeting_data["metadata"]["end_time"] = meeting_data["metadata"]["start_time"] + timedelta(
-        hours=1
-    )
+    meeting_data["metadata"]["end_time"] = meeting_data["metadata"][
+        "start_time"
+    ] + timedelta(hours=1)
     meeting_data["notes"] = [
-        {"created_at": meeting_data["metadata"]["start_time"], "content": "Detailed note"}
+        {
+            "created_at": meeting_data["metadata"]["start_time"],
+            "content": "Detailed note",
+        }
     ]
 
     path = manager.export_structured_data(meeting_data, filename="structured")
@@ -187,9 +190,10 @@ def test_export_structured_data_serializes_nested_datetimes(tmp_path):
 
     data = json.loads(exported.read_text(encoding="utf-8"))
     assert datetime.fromisoformat(data["metadata"]["start_time"])
-    assert data["notes"][0]["created_at"] == meeting_data["metadata"][
-        "start_time"
-    ].isoformat()
+    assert (
+        data["notes"][0]["created_at"]
+        == meeting_data["metadata"]["start_time"].isoformat()
+    )
 
 
 def test_export_action_items_mixed_status_counts(tmp_path):
@@ -221,7 +225,9 @@ def test_export_action_items_mixed_status_counts(tmp_path):
 def test_export_action_items_empty_list_message(tmp_path):
     manager = ExportManager(export_directory=str(tmp_path))
 
-    path = manager.export_action_items([], {"topic": "Weekly Sync"}, filename="actions_empty")
+    path = manager.export_action_items(
+        [], {"topic": "Weekly Sync"}, filename="actions_empty"
+    )
     content = Path(path).read_text(encoding="utf-8")
 
     assert "No action items were recorded." in content
@@ -266,7 +272,9 @@ def test_export_formatted_conversation_groups_by_speaker(tmp_path):
 def test_export_executive_summary_truncates_lists(tmp_path):
     manager = ExportManager(export_directory=str(tmp_path))
     meeting_data = build_sample_meeting_data()
-    meeting_data["decisions"] = [{"decision": f"Decision {index}"} for index in range(4)]
+    meeting_data["decisions"] = [
+        {"decision": f"Decision {index}"} for index in range(4)
+    ]
     meeting_data["action_items"] = [
         {"description": f"Task {index}", "assignee": f"Owner {index}"}
         for index in range(5)

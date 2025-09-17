@@ -1,7 +1,7 @@
-import os
-import threading
 import http.server
+import os
 import socketserver
+import threading
 import time
 
 import pytest
@@ -11,11 +11,11 @@ def _start_simple_server(port=0):
     class Handler(http.server.SimpleHTTPRequestHandler):
         def do_GET(self):
             self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
+            self.send_header("Content-type", "text/plain")
             self.end_headers()
-            self.wfile.write(b'OK')
+            self.wfile.write(b"OK")
 
-    httpd = socketserver.TCPServer(('127.0.0.1', port), Handler)
+    httpd = socketserver.TCPServer(("127.0.0.1", port), Handler)
 
     def serve():
         try:
@@ -33,8 +33,8 @@ def test_validate_connectivity_success(monkeypatch):
     assigned_port = server.server_address[1]
 
     try:
-        monkeypatch.setenv('LETTA_BASE_URL', f'http://127.0.0.1:{assigned_port}')
-        monkeypatch.setenv('LETTA_ENVIRONMENT', 'SELF_HOSTED')
+        monkeypatch.setenv("LETTA_BASE_URL", f"http://127.0.0.1:{assigned_port}")
+        monkeypatch.setenv("LETTA_ENVIRONMENT", "SELF_HOSTED")
 
         from spds import config
 

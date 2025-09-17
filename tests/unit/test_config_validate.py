@@ -36,13 +36,13 @@ def test_validate_letta_config_connectivity_failure(monkeypatch):
         status_code = 500
         text = "Internal Error"
 
-
     def fake_get(url, timeout):
         raise Exception("connection refused")
 
     monkeypatch.setenv("LETTA_API_KEY", "")
     # Patch the top-level requests.get so the import inside the validator uses the mocked function
     import requests
+
     monkeypatch.setattr(requests, "get", fake_get)
 
     from spds import config

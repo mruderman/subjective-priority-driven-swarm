@@ -1,7 +1,8 @@
 # spds/config.py
 
-import os
 import logging
+import os
+
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -71,9 +72,7 @@ def validate_letta_config(check_connectivity: bool = False, timeout: int = 5) ->
             resp = requests.get(cur_base_url, timeout=timeout)
         except Exception as exc:
             # Catch any exception from the requests call and surface a RuntimeError
-            raise RuntimeError(
-                f"Unable to reach LETTA server at {cur_base_url}: {exc}"
-            )
+            raise RuntimeError(f"Unable to reach LETTA server at {cur_base_url}: {exc}")
 
         if not (200 <= getattr(resp, "status_code", 0) < 400):
             raise RuntimeError(
@@ -81,6 +80,7 @@ def validate_letta_config(check_connectivity: bool = False, timeout: int = 5) ->
             )
 
     return True
+
 
 # Default Model Configuration (fallback values)
 DEFAULT_AGENT_MODEL = "openai/gpt-4"
@@ -133,7 +133,9 @@ DEFAULT_MEETING_TYPE = "discussion"  # "discussion", "board_meeting", "working_s
 
 # Export Configuration
 DEFAULT_EXPORT_DIRECTORY = os.getenv("EXPORT_DIRECTORY", "./exports")
-DEFAULT_EXPORT_FORMAT = "minutes"  # "minutes", "casual", "transcript", "actions", "summary", "all"
+DEFAULT_EXPORT_FORMAT = (
+    "minutes"  # "minutes", "casual", "transcript", "actions", "summary", "all"
+)
 AUTO_EXPORT_ON_END = bool(os.getenv("AUTO_EXPORT_ON_END", "False"))
 
 # Organization Settings for Formal Minutes

@@ -1,12 +1,25 @@
 """
 Unit tests for spds.spds_agent module.
 """
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from letta_client.types import AgentState, Tool, LettaResponse, Message, LlmConfig, EmbeddingConfig, Memory
-from types import SimpleNamespace
 
-def mk_agent_state(id: str, name: str, system: str, model: str = "openai/gpt-4", tools=None):
+from types import SimpleNamespace
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+from letta_client.types import (
+    AgentState,
+    EmbeddingConfig,
+    LettaResponse,
+    LlmConfig,
+    Memory,
+    Message,
+    Tool,
+)
+
+
+def mk_agent_state(
+    id: str, name: str, system: str, model: str = "openai/gpt-4", tools=None
+):
     llm = LlmConfig(model=model, model_endpoint_type="openai", context_window=128000)
     emb = EmbeddingConfig(
         embedding_endpoint_type="openai",
@@ -28,17 +41,21 @@ def mk_agent_state(id: str, name: str, system: str, model: str = "openai/gpt-4",
         model=model,
         embedding="openai/text-embedding-ada-002",
     )
+
+
 from letta_client.errors import NotFoundError
 
+from spds import config
 from spds.spds_agent import SPDSAgent
 from spds.tools import SubjectiveAssessment
-from spds import config
 
 
 class TestSPDSAgent:
     """Test the SPDSAgent class."""
-    
-    def test_init_with_agent_state(self, mock_letta_client, sample_agent_state, mock_tool_state):
+
+    def test_init_with_agent_state(
+        self, mock_letta_client, sample_agent_state, mock_tool_state
+    ):
         """Test SPDSAgent initialization with existing AgentState."""
         # Build an agent state with tool already attached (can't mutate frozen model)
         agent_state = mk_agent_state(
@@ -62,16 +79,16 @@ class TestSPDSAgent:
             model=agent_state.model,
             embedding=agent_state.embedding,
         )
-        
+
         agent = SPDSAgent(agent_state, mock_letta_client)
-        
+
         assert agent.client == mock_letta_client
         assert agent.agent.id == agent_state.id
         assert agent.name == "Test Agent"
         assert agent.motivation_score == 0
         assert agent.priority_score == 0
         assert agent.last_assessment is None
-    
+
     def test_parse_system_prompt_with_valid_format(self, mock_letta_client):
         """Test parsing system prompt with proper persona and expertise format."""
         agent_state = mk_agent_state(
@@ -80,12 +97,12 @@ class TestSPDSAgent:
             system="You are Test Agent. Your persona is: A helpful testing assistant. Your expertise is in: unit testing, validation, QA. You are part of a swarm.",
             model="openai/gpt-4",
         )
-        
+
         agent = SPDSAgent(agent_state, mock_letta_client)
-        
+
         assert agent.persona == "A helpful testing assistant"
         assert agent.expertise == ["unit testing", "validation", "QA"]
-    
+
     def test_parse_system_prompt_with_missing_info(self, mock_letta_client):
         """Test parsing system prompt with missing persona/expertise."""
         agent_state = mk_agent_state(
@@ -94,18 +111,18 @@ class TestSPDSAgent:
             system="You are a basic agent without proper formatting.",
             model="openai/gpt-4",
         )
-        
+
         agent = SPDSAgent(agent_state, mock_letta_client)
-        
+
         assert agent.persona == "A helpful assistant."
         assert agent.expertise == [""]
-    
-    @patch('spds.spds_agent.config')
+
+    @patch("spds.spds_agent.config")
     def test_create_new_agent_with_default_models(self, mock_config, mock_letta_client):
         """Test creating new agent with default model configuration."""
         mock_config.DEFAULT_AGENT_MODEL = "openai/gpt-4"
         mock_config.DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-ada-002"
-        
+
         # Mock the client.agents.create response
         mock_agent_state = mk_agent_state(
             id="ag-new-123",
@@ -114,32 +131,32 @@ class TestSPDSAgent:
             model="openai/gpt-4",
         )
         mock_letta_client.agents.create.return_value = mock_agent_state
-        
+
         agent = SPDSAgent.create_new(
             name="New Agent",
             persona="A test agent",
             expertise=["testing"],
-            client=mock_letta_client
+            client=mock_letta_client,
         )
-        
+
         # Verify client.agents.create was called with correct parameters
         mock_letta_client.agents.create.assert_called_once()
         call_args = mock_letta_client.agents.create.call_args
-        
-        assert call_args[1]['name'] == "New Agent"
-        assert call_args[1]['model'] == "openai/gpt-4"
-        assert call_args[1]['embedding'] == "openai/text-embedding-ada-002"
-        assert call_args[1]['include_base_tools'] == True
-        assert "You are New Agent" in call_args[1]['system']
-        assert "A test agent" in call_args[1]['system']
-        assert "testing" in call_args[1]['system']
-    
-    @patch('spds.spds_agent.config')
+
+        assert call_args[1]["name"] == "New Agent"
+        assert call_args[1]["model"] == "openai/gpt-4"
+        assert call_args[1]["embedding"] == "openai/text-embedding-ada-002"
+        assert call_args[1]["include_base_tools"] == True
+        assert "You are New Agent" in call_args[1]["system"]
+        assert "A test agent" in call_args[1]["system"]
+        assert "testing" in call_args[1]["system"]
+
+    @patch("spds.spds_agent.config")
     def test_create_new_agent_with_custom_models(self, mock_config, mock_letta_client):
         """Test creating new agent with custom model configuration."""
         mock_config.DEFAULT_AGENT_MODEL = "openai/gpt-4"
         mock_config.DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-ada-002"
-        
+
         # Mock the client.agents.create response
         mock_agent_state = mk_agent_state(
             id="ag-new-456",
@@ -148,22 +165,24 @@ class TestSPDSAgent:
             model="anthropic/claude-3-5-sonnet-20241022",
         )
         mock_letta_client.agents.create.return_value = mock_agent_state
-        
+
         agent = SPDSAgent.create_new(
             name="Custom Agent",
             persona="An AI assistant",
             expertise=["analysis"],
             client=mock_letta_client,
             model="anthropic/claude-3-5-sonnet-20241022",
-            embedding="openai/text-embedding-ada-002"
+            embedding="openai/text-embedding-ada-002",
         )
-        
+
         # Verify client.agents.create was called with custom models
         call_args = mock_letta_client.agents.create.call_args
-        assert call_args[1]['model'] == "anthropic/claude-3-5-sonnet-20241022"
-        assert call_args[1]['embedding'] == "openai/text-embedding-ada-002"
-    
-    def test_ensure_assessment_tool_already_attached(self, mock_letta_client, mock_tool_state):
+        assert call_args[1]["model"] == "anthropic/claude-3-5-sonnet-20241022"
+        assert call_args[1]["embedding"] == "openai/text-embedding-ada-002"
+
+    def test_ensure_assessment_tool_already_attached(
+        self, mock_letta_client, mock_tool_state
+    ):
         """Test tool attachment when tool is already present."""
         # Mock agent state with tool already attached
         agent_state = mk_agent_state(
@@ -173,13 +192,13 @@ class TestSPDSAgent:
             model="openai/gpt-4",
             tools=[mock_tool_state],
         )
-        
+
         agent = SPDSAgent(agent_state, mock_letta_client)
-        
+
         # Tool creation should not be called since tool is already present
         mock_letta_client.tools.create_from_function.assert_not_called()
         assert agent.assessment_tool == mock_tool_state
-    
+
     def test_ensure_assessment_tool_needs_attachment(self, mock_letta_client):
         """Test tool attachment when tool is not present."""
         # Mock agent state without the tool
@@ -189,15 +208,15 @@ class TestSPDSAgent:
             system="Test system prompt",
             model="openai/gpt-4",
         )
-        
+
         # Mock tool creation
         mock_tool = Tool(
             id="tool-assessment-123",
             name="perform_subjective_assessment",
-            description="Assessment tool"
+            description="Assessment tool",
         )
         mock_letta_client.tools.create_from_function.return_value = mock_tool
-        
+
         # Mock tool attachment
         updated_agent_state = mk_agent_state(
             id="ag-test-123",
@@ -207,79 +226,115 @@ class TestSPDSAgent:
             tools=[mock_tool],
         )
         mock_letta_client.agents.tools.attach.return_value = updated_agent_state
-        
+
         agent = SPDSAgent(agent_state, mock_letta_client)
-        
+
         # Verify tool was created and attached
         mock_letta_client.tools.create_from_function.assert_called_once()
         mock_letta_client.agents.tools.attach.assert_called_once_with(
-            agent_id="ag-test-123",
-            tool_id="tool-assessment-123"
+            agent_id="ag-test-123", tool_id="tool-assessment-123"
         )
         assert agent.assessment_tool == mock_tool
         assert agent.agent == updated_agent_state
-    
-    @patch('spds.spds_agent.tools.perform_subjective_assessment')
-    def test_get_full_assessment_with_tool_return(self, mock_assessment_func, mock_letta_client, sample_agent_state, sample_assessment):
+
+    @patch("spds.spds_agent.tools.perform_subjective_assessment")
+    def test_get_full_assessment_with_tool_return(
+        self,
+        mock_assessment_func,
+        mock_letta_client,
+        sample_agent_state,
+        sample_assessment,
+    ):
         """Test assessment when agent properly returns tool result."""
         agent = SPDSAgent(sample_agent_state, mock_letta_client)
-        
+
         # Mock successful tool return in message response
-        response = SimpleNamespace(messages=[SimpleNamespace(id="msg-tool-123", role="tool", content=[{"type": "text", "text": '{"importance_to_self": 8, "perceived_gap": 6, "unique_perspective": 7, "emotional_investment": 5, "expertise_relevance": 9, "urgency": 7, "importance_to_group": 8}'}])])
+        response = SimpleNamespace(
+            messages=[
+                SimpleNamespace(
+                    id="msg-tool-123",
+                    role="tool",
+                    content=[
+                        {
+                            "type": "text",
+                            "text": '{"importance_to_self": 8, "perceived_gap": 6, "unique_perspective": 7, "emotional_investment": 5, "expertise_relevance": 9, "urgency": 7, "importance_to_group": 8}',
+                        }
+                    ],
+                )
+            ]
+        )
         mock_letta_client.agents.messages.create.return_value = response
-        
+
         agent._get_full_assessment("test conversation", "test topic")
-        
+
         assert agent.last_assessment is not None
         assert agent.last_assessment.importance_to_self == 8
         assert agent.last_assessment.expertise_relevance == 9
-    
-    @patch('spds.spds_agent.tools.perform_subjective_assessment')
-    def test_get_full_assessment_fallback(self, mock_assessment_func, mock_letta_client, sample_agent_state, sample_assessment):
+
+    @patch("spds.spds_agent.tools.perform_subjective_assessment")
+    def test_get_full_assessment_fallback(
+        self,
+        mock_assessment_func,
+        mock_letta_client,
+        sample_agent_state,
+        sample_assessment,
+    ):
         """Test assessment fallback when no tool return found."""
         agent = SPDSAgent(sample_agent_state, mock_letta_client)
-        
+
         # Mock response without tool return
-        response = SimpleNamespace(messages=[SimpleNamespace(id="msg-regular-123", role="assistant", content=[{"type": "text", "text": "I'm thinking about this..."}] )])
+        response = SimpleNamespace(
+            messages=[
+                SimpleNamespace(
+                    id="msg-regular-123",
+                    role="assistant",
+                    content=[{"type": "text", "text": "I'm thinking about this..."}],
+                )
+            ]
+        )
         mock_letta_client.agents.messages.create.return_value = response
         mock_assessment_func.return_value = sample_assessment
-        
+
         agent._get_full_assessment("test conversation", "test topic")
-        
+
         # Should fall back to direct function call
         mock_assessment_func.assert_called_once_with(
             "test topic", "test conversation", agent.persona, agent.expertise
         )
         assert agent.last_assessment == sample_assessment
-    
-    @patch('spds.spds_agent.config')
-    def test_assess_motivation_and_priority_above_threshold(self, mock_config, mock_letta_client, sample_agent_state, sample_assessment):
+
+    @patch("spds.spds_agent.config")
+    def test_assess_motivation_and_priority_above_threshold(
+        self, mock_config, mock_letta_client, sample_agent_state, sample_assessment
+    ):
         """Test priority calculation when motivation exceeds threshold."""
         mock_config.PARTICIPATION_THRESHOLD = 30
         mock_config.URGENCY_WEIGHT = 0.6
         mock_config.IMPORTANCE_WEIGHT = 0.4
-        
+
         agent = SPDSAgent(sample_agent_state, mock_letta_client)
         agent.last_assessment = sample_assessment
-        
-        with patch.object(agent, '_get_full_assessment') as mock_assess:
+
+        with patch.object(agent, "_get_full_assessment") as mock_assess:
             agent.assess_motivation_and_priority("test topic")
-        
+
         # Calculate expected motivation score (sum of first 5 dimensions)
         expected_motivation = 8 + 6 + 7 + 5 + 9  # = 35
         assert agent.motivation_score == expected_motivation
-        
+
         # Calculate expected priority score (urgency * 0.6 + importance_to_group * 0.4)
         expected_priority = 7 * 0.6 + 8 * 0.4  # = 4.2 + 3.2 = 7.4
         assert agent.priority_score == expected_priority
-    
-    @patch('spds.spds_agent.config')
-    def test_assess_motivation_and_priority_below_threshold(self, mock_config, mock_letta_client, sample_agent_state):
+
+    @patch("spds.spds_agent.config")
+    def test_assess_motivation_and_priority_below_threshold(
+        self, mock_config, mock_letta_client, sample_agent_state
+    ):
         """Test priority calculation when motivation is below threshold."""
         mock_config.PARTICIPATION_THRESHOLD = 50  # Higher threshold
         mock_config.URGENCY_WEIGHT = 0.6
         mock_config.IMPORTANCE_WEIGHT = 0.4
-        
+
         # Create low-motivation assessment
         low_assessment = SubjectiveAssessment(
             importance_to_self=2,
@@ -288,41 +343,45 @@ class TestSPDSAgent:
             emotional_investment=1,
             expertise_relevance=3,
             urgency=5,
-            importance_to_group=6
+            importance_to_group=6,
         )
-        
+
         agent = SPDSAgent(sample_agent_state, mock_letta_client)
         agent.last_assessment = low_assessment
-        
-        with patch.object(agent, '_get_full_assessment') as mock_assess:
+
+        with patch.object(agent, "_get_full_assessment") as mock_assess:
             agent.assess_motivation_and_priority("test topic")
-        
+
         expected_motivation = 2 + 1 + 2 + 1 + 3  # = 9 (below threshold of 50)
         assert agent.motivation_score == expected_motivation
         assert agent.priority_score == 0  # Should be 0 when below threshold
-    
-    def test_speak_method(self, mock_letta_client, sample_agent_state, mock_message_response):
+
+    def test_speak_method(
+        self, mock_letta_client, sample_agent_state, mock_message_response
+    ):
         """Test the speak method."""
         agent = SPDSAgent(sample_agent_state, mock_letta_client)
         mock_letta_client.agents.messages.create.return_value = mock_message_response
-        
+
         conversation_history = "Previous conversation content"
         response = agent.speak(conversation_history)
-        
+
         # Verify correct API call
         mock_letta_client.agents.messages.create.assert_called_once_with(
             agent_id="ag-test-123",
-            messages=[{
-                "role": "user", 
-                "content": f"{conversation_history}\nBased on my assessment, here is my contribution:"
-            }]
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{conversation_history}\nBased on my assessment, here is my contribution:",
+                }
+            ],
         )
         assert response == mock_message_response
-    
+
     def test_agent_string_representation(self, mock_letta_client, sample_agent_state):
         """Test that agent can be represented as string."""
         agent = SPDSAgent(sample_agent_state, mock_letta_client)
-        
+
         # Should not raise an error
         str_repr = str(agent)
         assert "Test Agent" in str_repr or "SPDSAgent" in str_repr

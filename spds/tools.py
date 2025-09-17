@@ -95,25 +95,31 @@ Return ONLY a JSON object with these exact keys and integer values 0-10.
     # More nuanced assessment based on topic and expertise
     topic_words = topic.lower().split()
     expertise_match = sum(
-        2 for exp in agent_expertise 
-        if any(word in exp.lower() for word in topic_words)
+        2 for exp in agent_expertise if any(word in exp.lower() for word in topic_words)
     )
-    
+
     # Check for questions and discussion gaps
     has_question = "?" in recent_history
     needs_perspective = any(
-        phrase in recent_history.lower() 
+        phrase in recent_history.lower()
         for phrase in ["should we", "what if", "consider", "think about", "prioritize"]
     )
-    
+
     # Boost personal relevance based on expertise and topic alignment
     personal_relevance = min(10, personal_relevance + expertise_match)
-    
+
     # Check if the topic is in the agent's domain
-    is_ethics_topic = any(word in topic.lower() for word in ["ethics", "moral", "responsible"])
-    is_tech_topic = any(word in topic.lower() for word in ["develop", "model", "capabilities", "improve"])
-    is_strategy_topic = any(word in topic.lower() for word in ["prioritize", "framework", "focus"])
-    
+    is_ethics_topic = any(
+        word in topic.lower() for word in ["ethics", "moral", "responsible"]
+    )
+    is_tech_topic = any(
+        word in topic.lower()
+        for word in ["develop", "model", "capabilities", "improve"]
+    )
+    is_strategy_topic = any(
+        word in topic.lower() for word in ["prioritize", "framework", "focus"]
+    )
+
     # Create a somewhat intelligent assessment based on content analysis
     assessment = SubjectiveAssessment(
         importance_to_self=personal_relevance,

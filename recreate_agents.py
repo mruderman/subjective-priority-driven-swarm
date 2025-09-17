@@ -7,11 +7,14 @@ Run this script AFTER backing up any important agent data.
 """
 
 import sys
-sys.path.append('.')
+
+sys.path.append(".")
 
 from letta_client import Letta
+
 from spds import config
 from spds.spds_agent import SPDSAgent
+
 
 def get_client():
     """Get authenticated Letta client."""
@@ -22,12 +25,13 @@ def get_client():
     else:
         return Letta(base_url=config.LETTA_BASE_URL)
 
+
 def main():
     print("🔧 Agent Recreation Script")
     print("=" * 50)
-    
+
     client = get_client()
-    
+
     # Agents to recreate (with token limit issues):
 
     print("\n🔄 Recreating agent: Casey - Engineer")
@@ -35,18 +39,18 @@ def main():
         # Delete old agent with token issues (CAUTION: This removes all conversation history)
         # client.agents.delete(agent_id="agent-1d9ee942-70b4-4efd-a057-dec444eacfcb")
         print("   ⚠️  Old agent deletion commented out for safety")
-        
+
         # Create new agent with correct token limits
         # Note: You may need to customize persona/expertise based on the original agent
         new_agent = SPDSAgent.create_new(
             name="Casey - Engineer_fixed",
             persona="A helpful AI assistant",  # TODO: Customize based on original
-            expertise=["general"],  # TODO: Customize based on original  
+            expertise=["general"],  # TODO: Customize based on original
             client=client,
-            model="openai/gpt-4"
+            model="openai/gpt-4",
         )
         print(f"   ✅ Created new agent: {new_agent.name} with max_tokens=2048")
-        
+
     except Exception as e:
         print(f"   ❌ Failed to recreate Casey - Engineer: {e}")
 
@@ -55,18 +59,18 @@ def main():
         # Delete old agent with token issues (CAUTION: This removes all conversation history)
         # client.agents.delete(agent_id="agent-c56117ef-4008-4495-ad2d-003d0bdce13d")
         print("   ⚠️  Old agent deletion commented out for safety")
-        
+
         # Create new agent with correct token limits
         # Note: You may need to customize persona/expertise based on the original agent
         new_agent = SPDSAgent.create_new(
             name="Jordan - Designer_fixed",
             persona="A helpful AI assistant",  # TODO: Customize based on original
-            expertise=["general"],  # TODO: Customize based on original  
+            expertise=["general"],  # TODO: Customize based on original
             client=client,
-            model="openai/gpt-4"
+            model="openai/gpt-4",
         )
         print(f"   ✅ Created new agent: {new_agent.name} with max_tokens=2048")
-        
+
     except Exception as e:
         print(f"   ❌ Failed to recreate Jordan - Designer: {e}")
 
@@ -75,18 +79,18 @@ def main():
         # Delete old agent with token issues (CAUTION: This removes all conversation history)
         # client.agents.delete(agent_id="agent-b19181d9-fa49-4840-9a69-096fc18cf23f")
         print("   ⚠️  Old agent deletion commented out for safety")
-        
+
         # Create new agent with correct token limits
         # Note: You may need to customize persona/expertise based on the original agent
         new_agent = SPDSAgent.create_new(
             name="Alex - Project Manager_fixed",
             persona="A helpful AI assistant",  # TODO: Customize based on original
-            expertise=["general"],  # TODO: Customize based on original  
+            expertise=["general"],  # TODO: Customize based on original
             client=client,
-            model="openai/gpt-4"
+            model="openai/gpt-4",
         )
         print(f"   ✅ Created new agent: {new_agent.name} with max_tokens=2048")
-        
+
     except Exception as e:
         print(f"   ❌ Failed to recreate Alex - Project Manager: {e}")
 
@@ -95,18 +99,18 @@ def main():
         # Delete old agent with token issues (CAUTION: This removes all conversation history)
         # client.agents.delete(agent_id="agent-24e9a246-5c80-4e28-8c11-fe00d1ea0722")
         print("   ⚠️  Old agent deletion commented out for safety")
-        
+
         # Create new agent with correct token limits
         # Note: You may need to customize persona/expertise based on the original agent
         new_agent = SPDSAgent.create_new(
             name="Adaptive Secretary_fixed",
             persona="A helpful AI assistant",  # TODO: Customize based on original
-            expertise=["general"],  # TODO: Customize based on original  
+            expertise=["general"],  # TODO: Customize based on original
             client=client,
-            model="openai/gpt-4"
+            model="openai/gpt-4",
         )
         print(f"   ✅ Created new agent: {new_agent.name} with max_tokens=2048")
-        
+
     except Exception as e:
         print(f"   ❌ Failed to recreate Adaptive Secretary: {e}")
 
@@ -115,18 +119,18 @@ def main():
         # Delete old agent with token issues (CAUTION: This removes all conversation history)
         # client.agents.delete(agent_id="agent-82b34704-b43f-4c69-93e7-1c24c4686e6d")
         print("   ⚠️  Old agent deletion commented out for safety")
-        
+
         # Create new agent with correct token limits
         # Note: You may need to customize persona/expertise based on the original agent
         new_agent = SPDSAgent.create_new(
             name="companion-agent-1753201615269_fixed",
             persona="A helpful AI assistant",  # TODO: Customize based on original
-            expertise=["general"],  # TODO: Customize based on original  
+            expertise=["general"],  # TODO: Customize based on original
             client=client,
-            model="openai/gpt-4"
+            model="openai/gpt-4",
         )
         print(f"   ✅ Created new agent: {new_agent.name} with max_tokens=2048")
-        
+
     except Exception as e:
         print(f"   ❌ Failed to recreate companion-agent-1753201615269: {e}")
 
@@ -135,18 +139,18 @@ def main():
         # Delete old agent with token issues (CAUTION: This removes all conversation history)
         # client.agents.delete(agent_id="agent-b09107c2-43a3-462a-acfb-c35ccc1f552f")
         print("   ⚠️  Old agent deletion commented out for safety")
-        
+
         # Create new agent with correct token limits
         # Note: You may need to customize persona/expertise based on the original agent
         new_agent = SPDSAgent.create_new(
             name="Hypatia-sleeptime_fixed",
             persona="A helpful AI assistant",  # TODO: Customize based on original
-            expertise=["general"],  # TODO: Customize based on original  
+            expertise=["general"],  # TODO: Customize based on original
             client=client,
-            model="openai/gpt-4"
+            model="openai/gpt-4",
         )
         print(f"   ✅ Created new agent: {new_agent.name} with max_tokens=2048")
-        
+
     except Exception as e:
         print(f"   ❌ Failed to recreate Hypatia-sleeptime: {e}")
 
@@ -155,23 +159,24 @@ def main():
         # Delete old agent with token issues (CAUTION: This removes all conversation history)
         # client.agents.delete(agent_id="agent-1670c5f8-7808-408d-b66f-1f135397878b")
         print("   ⚠️  Old agent deletion commented out for safety")
-        
+
         # Create new agent with correct token limits
         # Note: You may need to customize persona/expertise based on the original agent
         new_agent = SPDSAgent.create_new(
             name="Hypatia_fixed",
             persona="A helpful AI assistant",  # TODO: Customize based on original
-            expertise=["general"],  # TODO: Customize based on original  
+            expertise=["general"],  # TODO: Customize based on original
             client=client,
-            model="openai/gpt-4"
+            model="openai/gpt-4",
         )
         print(f"   ✅ Created new agent: {new_agent.name} with max_tokens=2048")
-        
+
     except Exception as e:
         print(f"   ❌ Failed to recreate Hypatia: {e}")
 
     print("\n✅ Agent recreation completed!")
     print("💡 Remember to update any scripts/configs that reference the old agent IDs")
+
 
 if __name__ == "__main__":
     main()
