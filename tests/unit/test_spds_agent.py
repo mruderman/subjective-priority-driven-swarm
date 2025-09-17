@@ -46,7 +46,7 @@ def mk_agent_state(
 
 from letta_client.errors import NotFoundError
 
-from spds import config, tools
+from spds import tools
 from spds.spds_agent import SPDSAgent
 from spds.tools import SubjectiveAssessment
 
