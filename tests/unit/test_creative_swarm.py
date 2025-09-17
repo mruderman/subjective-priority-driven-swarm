@@ -2,7 +2,9 @@
 import ast
 import importlib.util
 from pathlib import Path
+import pytest
 
+pytestmark = pytest.mark.unit
 
 def test_creative_swarm_profiles_have_expected_structure():
     root = Path(__file__).resolve().parents[2]
