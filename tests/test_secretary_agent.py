@@ -3,6 +3,7 @@ from datetime import datetime as real_datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
+from unittest.mock import Mock, patch
 
 import spds.secretary_agent as secretary_module
 from spds.secretary_agent import SecretaryAgent
@@ -260,3 +261,168 @@ def test_generate_minutes_reports_processing_when_content_short(fixed_datetime):
     result = secretary.generate_minutes()
 
     assert result == "Secretary is still processing the meeting notes. Please try again in a moment."
+
+
+def test_retry_with_backoff_retries_on_server_error():
+    failing_then_success = Mock(side_effect=[Exception("500 Internal Server Error"), "success"])
+
+    with patch.object(secretary_module.time, "sleep") as sleep_mock:
+        result = secretary_module.retry_with_backoff(
+            failing_then_success,
+            max_retries=3,
+            backoff_factor=2,
+        )
+
+    assert result == "success"
+    assert failing_then_success.call_count == 2
+    sleep_mock.assert_called_once_with(2)
+
+
+def test_retry_with_backoff_raises_non_retryable_error():
+    always_fail = Mock(side_effect=ValueError("bad request"))
+
+    with pytest.raises(ValueError):
+        secretary_module.retry_with_backoff(always_fail, max_retries=2)
+
+    assert always_fail.call_count == 1
+
+
+def test_start_meeting_handles_missing_response(fixed_datetime, capsys, monkeypatch):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+
+    def fake_retry(func, max_retries=3, backoff_factor=1):
+        func()
+        return None
+
+    monkeypatch.setattr(secretary_module, "retry_with_backoff", fake_retry)
+
+    secretary.start_meeting("Weekly Sync", ["Ada", "Lin"], meeting_type="sync")
+
+    captured = capsys.readouterr()
+    assert "Secretary may not have received meeting start notification" in captured.out
+    assert client.agents.messages.calls  # Inner function executed
+
+
+def test_extract_agent_response_handles_invalid_tool_json(fixed_datetime):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+
+    broken_tool_message = SimpleNamespace(
+        tool_calls=[SimpleNamespace(function=SimpleNamespace(name="send_message", arguments="{"))],
+        tool_return=None,
+        message_type="tool_message",
+        content=None,
+    )
+    assistant_message = make_assistant_message("Fallback after error")
+    response = SimpleNamespace(messages=[broken_tool_message, assistant_message])
+
+    assert secretary._extract_agent_response(response) == "Fallback after error"
+
+
+def test_extract_agent_response_defaults_when_no_content(fixed_datetime):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+
+    empty_message = SimpleNamespace(
+        tool_calls=[],
+        tool_return=None,
+        message_type=None,
+        content=None,
+    )
+    response = SimpleNamespace(messages=[empty_message])
+
+    assert secretary._extract_agent_response(response) == "Secretary is ready to take notes."
+
+
+def test_observe_message_skips_when_agent_missing(fixed_datetime):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+    secretary.agent = None
+
+    secretary.observe_message("Ada", "Hello team")
+
+    assert client.agents.messages.calls == []
+
+
+def test_add_action_item_without_agent_does_not_send_message(fixed_datetime):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+    secretary.agent = None
+
+    secretary.add_action_item("Prepare deck")
+
+    assert client.agents.messages.calls == []
+
+
+def test_get_conversation_stats_without_meeting_metadata_returns_summary_only(fixed_datetime):
+    client = DummyClient()
+    stats_response = SimpleNamespace(messages=[make_tool_message("Only summary provided")])
+    client.agents.messages.responses.append(stats_response)
+    secretary = SecretaryAgent(client)
+    secretary.meeting_metadata = {}
+
+    stats = secretary.get_conversation_stats()
+
+    assert stats == {"summary": "Only summary provided"}
+
+
+def test_get_conversation_stats_handles_exception(fixed_datetime):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+    secretary.client.agents.messages.create = Mock(side_effect=RuntimeError("fail"))
+
+    assert secretary.get_conversation_stats() == {}
+
+
+def test_generate_minutes_requires_agent(fixed_datetime):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+    secretary.agent = None
+
+    assert secretary.generate_minutes() == "Secretary agent not available."
+
+
+def test_generate_minutes_requires_meeting_metadata(fixed_datetime):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+    secretary.meeting_metadata = {}
+
+    assert secretary.generate_minutes() == "No meeting in progress."
+
+
+def test_generate_minutes_handles_missing_response(fixed_datetime, monkeypatch):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+    secretary.meeting_metadata = {
+        "meeting_type": "sync",
+        "topic": "Roadmap",
+    }
+
+    def fake_retry(func, max_retries=3, backoff_factor=1):
+        func()
+        return None
+
+    monkeypatch.setattr(secretary_module, "retry_with_backoff", fake_retry)
+
+    result = secretary.generate_minutes()
+
+    assert result == "Secretary is temporarily unavailable. Please try again."
+
+
+def test_generate_minutes_handles_exception(fixed_datetime, monkeypatch):
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+    secretary.meeting_metadata = {
+        "meeting_type": "sync",
+        "topic": "Roadmap",
+    }
+
+    def fake_retry(func, max_retries=3, backoff_factor=1):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(secretary_module, "retry_with_backoff", fake_retry)
+
+    result = secretary.generate_minutes()
+
+    assert result.startswith("Error generating minutes: boom")
