@@ -292,6 +292,16 @@ def test_start_meeting_handles_missing_response(fixed_datetime, capsys, monkeypa
     secretary = SecretaryAgent(client)
 
     def fake_retry(func, max_retries=3, backoff_factor=1):
+        """
+        Test helper that invokes the provided callable exactly once and returns None.
+        
+        This fake replacement for a retry-with-backoff utility ignores retry semantics and backoff parameters. It calls `func()` a single time and always returns None. Useful in tests to simulate a retry helper that does not retry or return a value.
+        
+        Parameters:
+            func (callable): Function to execute once.
+            max_retries (int): Ignored. Present to match the real helper's signature.
+            backoff_factor (int|float): Ignored. Present to match the real helper's signature.
+        """
         func()
         return None
 
@@ -400,6 +410,16 @@ def test_generate_minutes_handles_missing_response(fixed_datetime, monkeypatch):
     }
 
     def fake_retry(func, max_retries=3, backoff_factor=1):
+        """
+        Test helper that invokes the provided callable exactly once and returns None.
+        
+        This fake replacement for a retry-with-backoff utility ignores retry semantics and backoff parameters. It calls `func()` a single time and always returns None. Useful in tests to simulate a retry helper that does not retry or return a value.
+        
+        Parameters:
+            func (callable): Function to execute once.
+            max_retries (int): Ignored. Present to match the real helper's signature.
+            backoff_factor (int|float): Ignored. Present to match the real helper's signature.
+        """
         func()
         return None
 
@@ -419,6 +439,20 @@ def test_generate_minutes_handles_exception(fixed_datetime, monkeypatch):
     }
 
     def fake_retry(func, max_retries=3, backoff_factor=1):
+        """
+        Test helper that simulates a failing retry function.
+        
+        This replacement for a retry helper always raises RuntimeError("boom"), regardless of the provided
+        callable or retry parameters. Use in tests to simulate an unrecoverable error from retry logic.
+        
+        Parameters:
+            func: Ignored. The callable that would be retried.
+            max_retries (int): Ignored. Retry limit placeholder.
+            backoff_factor (int|float): Ignored. Backoff multiplier placeholder.
+        
+        Raises:
+            RuntimeError: Always raised with message "boom".
+        """
         raise RuntimeError("boom")
 
     monkeypatch.setattr(secretary_module, "retry_with_backoff", fake_retry)
