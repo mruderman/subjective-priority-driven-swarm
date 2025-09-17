@@ -528,7 +528,7 @@ class TestSwarmManager:
         sample_agent_profiles,
         capsys,
     ):
-        """A non-retryable error should report the failure after retries."""
+        """A non-retryable error should report the failure without retry."""
         with patch('spds.swarm_manager.SPDSAgent.create_new') as mock_create:
             dummy_agent = SimpleNamespace(name="Agent 1", agent=SimpleNamespace(id="agent-1"))
             mock_create.return_value = dummy_agent
@@ -543,7 +543,6 @@ class TestSwarmManager:
 
         output = capsys.readouterr().out
         assert "Failed to update Agent 1" in output
-
     def test_get_agent_message_count_success_and_error(
         self,
         mock_letta_client,
