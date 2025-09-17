@@ -41,6 +41,19 @@ from spds.spds_agent import SPDSAgent
 
 
 def make_tool_response(text: str):
+    """
+    Create a synthetic tool-message response object representing a single tool call to `send_message`.
+    
+    The returned object is a SimpleNamespace with a `messages` list containing one message SimpleNamespace that mimics a tool-generated message:
+    - message_type is "tool_message"
+    - the message contains a single `tool_call` whose `function.name` is "send_message" and whose `function.arguments` is a JSON string encoding {"message": text}
+    
+    Parameters:
+        text (str): The message text to embed as the `message` argument of the simulated `send_message` tool call.
+    
+    Returns:
+        SimpleNamespace: An object with shape compatible with tests that expect tool-based agent responses (i.e., has a `messages` attribute with the described message structure).
+    """
     tool_call = SimpleNamespace(
         function=SimpleNamespace(
             name="send_message",
@@ -57,6 +70,18 @@ def make_tool_response(text: str):
 
 
 def make_assistant_response(text: str, *, as_list: bool = False):
+    """
+    Create a synthetic assistant message object for tests.
+    
+    Useful in unit tests to simulate an assistant response. By default the message content is a plain string; set `as_list=True` to produce a list-style content payload (a list containing a single dict with keys `type` and `text`).
+    
+    Parameters:
+        text (str): The assistant's text content.
+        as_list (bool, optional): When True, wrap `text` in a list-style content object. Defaults to False.
+    
+    Returns:
+        types.SimpleNamespace: A SimpleNamespace with a `messages` attribute containing a single assistant message. Each message includes `role`, `message_type`, `content`, and placeholders for `tool_calls` and `tool_return`.
+    """
     if as_list:
         content = [{"type": "text", "text": text}]
     else:
