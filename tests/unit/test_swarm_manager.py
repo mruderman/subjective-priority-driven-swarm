@@ -600,6 +600,41 @@ class TestSwarmManager:
         manager._reset_agent_messages.assert_called_once_with("agent-1")
         assert mock_letta_client.agents.messages.create.call_count == 2
 
+    def test_update_agent_memories_token_reset_retry_failure(
+        self,
+        mock_letta_client,
+        sample_agent_profiles,
+        capsys,
+    ):
+        """If the retry after a reset fails, we should log the failure."""
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
+            dummy_agent = SimpleNamespace(
+                name="Agent 1", agent=SimpleNamespace(id="agent-1")
+            )
+            mock_create.return_value = dummy_agent
+            manager = SwarmManager(
+                client=mock_letta_client,
+                agent_profiles=[sample_agent_profiles[0]],
+            )
+
+        manager._reset_agent_messages = Mock()
+        mock_letta_client.agents.messages.create.side_effect = [
+            Exception("token limit exceeded"),
+            Exception("still failing"),
+        ]
+
+        manager._update_agent_memories(
+            "Critical update", speaker="Facilitator", max_retries=2
+        )
+
+        manager._reset_agent_messages.assert_called_once_with("agent-1")
+        assert mock_letta_client.agents.messages.create.call_count == 2
+
+        output = capsys.readouterr().out
+        assert "Token limit reached for Agent 1" in output
+        assert "Retry failed for Agent 1: still failing" in output
+        assert "Failed to update Agent 1 after 2 attempts" in output
+
     def test_update_agent_memories_reports_failure_after_retries(
         self,
         mock_letta_client,
@@ -871,6 +906,84 @@ class TestSwarmManager:
         agent1.speak.assert_not_called()
         agent2.speak.assert_called_once()
         assert "Agent 2: Second agent takes the turn." in manager.conversation_history
+
+    def test_sequential_turn_updates_last_speaker_after_rotation(
+        self,
+        mock_letta_client,
+        sample_agent_profiles,
+    ):
+        """After rotating, the new speaker should become the last speaker."""
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
+            base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
+            mock_create.return_value = base_agent
+            manager = SwarmManager(
+                client=mock_letta_client,
+                agent_profiles=[sample_agent_profiles[0]],
+                conversation_mode="sequential",
+            )
+
+        agent1 = SimpleNamespace(
+            name="Agent 1",
+            priority_score=12.0,
+            motivation_score=15,
+            agent=SimpleNamespace(id="agent-1"),
+            speak=Mock(return_value=make_assistant_response("Should not speak")),
+            assess_motivation_and_priority=Mock(),
+        )
+        agent2 = SimpleNamespace(
+            name="Agent 2",
+            priority_score=11.0,
+            motivation_score=14,
+            agent=SimpleNamespace(id="agent-2"),
+            speak=Mock(
+                return_value=make_assistant_response("Second agent takes the turn.")
+            ),
+            assess_motivation_and_priority=Mock(),
+        )
+
+        manager.agents = [agent1, agent2]
+        manager.last_speaker = "Agent 1"
+        manager.conversation_history = ""
+        manager._notify_secretary_agent_response = Mock()
+
+        manager._sequential_turn([agent1, agent2], "Planning")
+
+        assert manager.last_speaker == "Agent 2"
+
+    def test_sequential_turn_single_agent_still_speaks_when_last_speaker_matches(
+        self,
+        mock_letta_client,
+        sample_agent_profiles,
+    ):
+        """A single motivated agent should speak even if they spoke last turn."""
+        with patch("spds.swarm_manager.SPDSAgent.create_new") as mock_create:
+            base_agent = SimpleNamespace(name="Base", agent=SimpleNamespace(id="base"))
+            mock_create.return_value = base_agent
+            manager = SwarmManager(
+                client=mock_letta_client,
+                agent_profiles=[sample_agent_profiles[0]],
+                conversation_mode="sequential",
+            )
+
+        agent = SimpleNamespace(
+            name="Solo Agent",
+            priority_score=13.0,
+            motivation_score=16,
+            agent=SimpleNamespace(id="agent-1"),
+            speak=Mock(return_value=make_assistant_response("Taking another turn.")),
+            assess_motivation_and_priority=Mock(),
+        )
+
+        manager.agents = [agent]
+        manager.last_speaker = "Solo Agent"
+        manager.conversation_history = ""
+        manager._notify_secretary_agent_response = Mock()
+
+        manager._sequential_turn([agent], "Topic")
+
+        agent.speak.assert_called_once()
+        assert manager.last_speaker == "Solo Agent"
+        assert "Solo Agent: Taking another turn." in manager.conversation_history
 
     def test_sequential_turn_handles_exception_fallback(
         self,
