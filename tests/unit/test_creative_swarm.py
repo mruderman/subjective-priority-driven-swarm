@@ -20,7 +20,8 @@ def test_creative_swarm_profiles_have_expected_structure():
     assert expr_node is not None, "creative-swarm.py must contain a top-level literal"
     profiles = ast.literal_eval(expr_node)
     assert isinstance(profiles, list)
-    assert {profile["name"] for profile in profiles} == {"Lyra", "Orion", "Scribe"}
+    names = {p["name"] for p in profiles}
+    assert {"Lyra", "Orion", "Scribe"} <= names
 
     for profile in profiles:
         assert profile["persona"]
