@@ -101,7 +101,7 @@ def test_get_full_assessment_parses_tool_return_json(monkeypatch):
             SimpleNamespace(
                 tool_calls=[
                     SimpleNamespace(
-                        function=SimpleNamespace(name="send_message", arguments="{")
+                        function=SimpleNamespace(name="send_message", arguments="{}")
                     )
                 ],
                 tool_return=None,
