@@ -64,9 +64,9 @@ def setup_logging():
 
     logging.getLogger(__name__).info("Logging configured successfully with console and file output.")
 
-# Initialize logging when the module is loaded
-setup_logging()
-
+# Initialize logging when the module is loaded (can be disabled for tests/embedding)
+if os.getenv("SPDS_INIT_LOGGING", "1") == "1":
+    setup_logging()
 logger = logging.getLogger(__name__)
 
 
