@@ -205,6 +205,50 @@ def test_diverse_models(self, mock_letta_client):
   - `spds_agent.py` 
   - `swarm_manager.py`
 
+## Targets by Group
+
+Clear targets help keep our suite fast, reliable, and meaningful. These are the expectations per group and what they gate in CI.
+
+### Unit Tests
+
+- Purpose: Validate small units (functions/classes) in isolation with full mocking at boundaries.
+- Runtime: Entire unit suite completes in under 60 seconds on CI; individual tests typically < 200 ms.
+- Coverage targets:
+    - New/changed code: ≥ 95% line coverage, ≥ 90% branch coverage where practical
+    - Utilities and pure functions: aim for ~100% line coverage
+- Flakiness: 0% tolerated (no retries). Tests must be deterministic (seed randomness where used).
+- Isolation: No network, filesystem, or environment dependencies unless explicitly mocked.
+- CI gating: Required on every PR and on main; failures block merges.
+
+### Integration Tests
+
+- Purpose: Verify component interactions and data flow across modules (mock external services only).
+- Runtime: Full integration suite ≤ 5 minutes on CI; individual tests typically ≤ 5 seconds.
+- Coverage targets:
+    - Not line-coverage driven, but ensure each critical interaction path is exercised.
+    - Aim for ≥ 80% coverage on integration-focused modules where feasible.
+- Flakiness: < 0.5% (no flaky known failures). Retries disabled by default; fix root causes.
+- Environment: Use shared fixtures and temporary resources; no real network calls.
+- CI gating: Required on every PR and on main; failures block merges.
+
+### End-to-End (E2E) Tests
+
+- Purpose: Validate complete user scenarios through CLI and key workflows with external dependencies mocked.
+- Runtime: Full E2E pack ≤ 10 minutes on CI; a smoke subset ≤ 2 minutes for PRs.
+- Coverage targets: Scenario coverage over line coverage; ensure top user journeys are covered and remain stable.
+- Flakiness: < 2% tolerated. One retry allowed in CI; capture logs/artifacts for failures.
+- Scope: Prefer a compact set of stable scenarios; avoid brittle UI timing assumptions.
+- CI gating:
+    - PRs: Run a smoke subset (fast) and gate merges.
+    - Nightly/On main: Run full E2E suite; failures create alerts/issues.
+
+### General Targets (All Groups)
+
+- No external network calls (use mocks/fakes); tests must be deterministic.
+- Parallel-safe: Tests should pass with `-n auto`.
+- Clear diagnostics: Failures must show actionable messages; prefer `assert …, "why"`.
+- Keep per-test runtime small; prefer more granular tests over large slow ones.
+
 ### Checking Coverage
 
 ```bash
