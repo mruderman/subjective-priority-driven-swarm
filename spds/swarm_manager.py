@@ -5,6 +5,7 @@ import time
 from letta_client import Letta
 from letta_client.errors import NotFoundError
 
+from .config import logger
 from .export_manager import ExportManager
 from .memory_awareness import create_memory_awareness_for_agent
 from .secretary_agent import SecretaryAgent
@@ -29,6 +30,8 @@ class SwarmManager:
         self.secretary = None
         self.export_manager = ExportManager()
 
+        logger.info(f"Initializing SwarmManager in {conversation_mode} mode.")
+
         if agent_ids:
             self._load_agents_by_id(agent_ids)
         elif agent_names:
@@ -37,9 +40,12 @@ class SwarmManager:
             self._create_agents_from_profiles(agent_profiles)
 
         if not self.agents:
+            logger.error("Swarm manager initialized with no agents.")
             raise ValueError(
                 "Swarm manager initialized with no agents. Please provide profiles, IDs, or names."
             )
+
+        logger.info(f"Swarm initialized with {len(self.agents)} agents.")
 
         self.conversation_history = ""
         self.last_speaker = None  # For fairness tracking
@@ -50,48 +56,50 @@ class SwarmManager:
         if enable_secretary:
             try:
                 self.secretary = SecretaryAgent(client, mode=secretary_mode)
-                print(f"📝 Secretary enabled in {secretary_mode} mode")
+                logger.info(f"Secretary enabled in {secretary_mode} mode")
             except Exception as e:
-                print(f"⚠️  Failed to create secretary agent: {e}")
+                logger.error(f"Failed to create secretary agent: {e}")
                 self.enable_secretary = False
 
         # Validate conversation mode
         valid_modes = ["hybrid", "all_speak", "sequential", "pure_priority"]
         if conversation_mode not in valid_modes:
+            logger.error(f"Invalid conversation mode: {conversation_mode}")
             raise ValueError(
                 f"Invalid conversation mode: {conversation_mode}. Valid modes: {valid_modes}"
             )
 
     def _load_agents_by_id(self, agent_ids: list):
         """Loads existing agents from the Letta server by their IDs."""
-        print("Loading swarm from existing agent IDs...")
+        logger.info("Loading swarm from existing agent IDs...")
         for agent_id in agent_ids:
             try:
-                print(f"  - Retrieving agent: {agent_id}")
+                logger.info(f"Retrieving agent: {agent_id}")
                 agent_state = self.client.agents.retrieve(agent_id=agent_id)
                 self.agents.append(SPDSAgent(agent_state, self.client))
             except NotFoundError:
-                print(f"  - WARNING: Agent with ID '{agent_id}' not found. Skipping.")
+                logger.warning(f"Agent with ID '{agent_id}' not found. Skipping.")
 
     def _load_agents_by_name(self, agent_names: list):
         """Loads existing agents from the Letta server by their names."""
-        print("Loading swarm from existing agent names...")
+        logger.info("Loading swarm from existing agent names...")
         for name in agent_names:
-            print(f"  - Retrieving agent by name: {name}")
+            logger.info(f"Retrieving agent by name: {name}")
             # The list method with a name filter returns a list. We'll take the first one.
             found_agents = self.client.agents.list(name=name, limit=1)
             if not found_agents:
-                print(f"  - WARNING: Agent with name '{name}' not found. Skipping.")
+                logger.warning(f"Agent with name '{name}' not found. Skipping.")
                 continue
             self.agents.append(SPDSAgent(found_agents[0], self.client))
 
     def _create_agents_from_profiles(self, agent_profiles: list):
         """Creates new, temporary agents from a list of profiles."""
-        print("Creating swarm from temporary agent profiles...")
+        logger.info("Creating swarm from temporary agent profiles...")
         for profile in agent_profiles:
-            print(f"  - Creating agent: {profile['name']}")
-            self.agents.append(
-                SPDSAgent.create_new(
+            start_time = time.time()
+            logger.info(f"Creating agent: {profile['name']}")
+            try:
+                agent = SPDSAgent.create_new(
                     name=profile["name"],
                     persona=profile["persona"],
                     expertise=profile["expertise"],
@@ -99,19 +107,23 @@ class SwarmManager:
                     model=profile.get("model"),
                     embedding=profile.get("embedding"),
                 )
-            )
+                self.agents.append(agent)
+                duration = time.time() - start_time
+                logger.info(f"Agent {profile['name']} created in {duration:.2f} seconds.")
+            except Exception as e:
+                logger.error(f"Failed to create agent {profile['name']}: {e}")
 
     def start_chat(self):
         """Starts and manages the group chat."""
-        print("\nSwarm chat started. Type 'quit' or Ctrl+D to end the session.")
+        logger.info("Swarm chat started. Type 'quit' or Ctrl+D to end the session.")
         try:
             topic = input("Enter the topic of conversation: ")
         except EOFError:
-            print("\nExiting.")
+            logger.info("Exiting.")
             return
 
-        print(
-            f"\nSwarm chat started with topic: '{topic}' (Mode: {self.conversation_mode.upper()})"
+        logger.info(
+            f"Swarm chat started with topic: '{topic}' (Mode: {self.conversation_mode.upper()})"
         )
         self._start_meeting(topic)
 
@@ -119,11 +131,11 @@ class SwarmManager:
             try:
                 human_input = input("\nYou: ")
             except EOFError:
-                print("\nExiting chat.")
+                logger.info("Exiting chat.")
                 break
 
             if human_input.lower() == "quit":
-                print("Exiting chat.")
+                logger.info("Exiting chat.")
                 break
 
             # Check for secretary commands
@@ -142,15 +154,15 @@ class SwarmManager:
 
     def start_chat_with_topic(self, topic: str):
         """Starts and manages the group chat with a pre-set topic."""
-        print(
-            f"\nSwarm chat started with topic: '{topic}' (Mode: {self.conversation_mode.upper()})"
+        logger.info(
+            f"Swarm chat started with topic: '{topic}' (Mode: {self.conversation_mode.upper()})"
         )
         if self.secretary:
-            print(
-                f"📝 Secretary: {self.secretary.agent.name if self.secretary.agent else 'Recording'} ({self.secretary.mode} mode)"
+            logger.info(
+                f"Secretary: {self.secretary.agent.name if self.secretary.agent else 'Recording'} ({self.secretary.mode} mode)"
             )
-        print("Type 'quit' or Ctrl+D to end the session.")
-        print("Available commands: /minutes, /export, /formal, /casual, /action-item")
+        logger.info("Type 'quit' or Ctrl+D to end the session.")
+        logger.info("Available commands: /minutes, /export, /formal, /casual, /action-item")
 
         self._start_meeting(topic)
 
@@ -158,11 +170,11 @@ class SwarmManager:
             try:
                 human_input = input("\nYou: ")
             except EOFError:
-                print("\nExiting chat.")
+                logger.info("Exiting chat.")
                 break
 
             if human_input.lower() == "quit":
-                print("Exiting chat.")
+                logger.info("Exiting chat.")
                 break
 
             # Check for secretary commands
@@ -180,7 +192,10 @@ class SwarmManager:
         self._end_meeting()
 
     def _update_agent_memories(
-        self, message: str, speaker: str = "User", max_retries=3
+        self,
+        message: str,
+        speaker: str = "User",
+        max_retries=3
     ):
         """Send a message to all agents to update their internal memory with retry logic."""
         for agent in self.agents:
@@ -189,7 +204,7 @@ class SwarmManager:
                 try:
                     self.client.agents.messages.create(
                         agent_id=agent.agent.id,
-                        messages=[{"role": "user", "content": f"{speaker}: {message}"}],
+                        messages=[{"role": "user", "content": f"{speaker}: {message}"}]
                     )
                     success = True
                     break
@@ -199,18 +214,18 @@ class SwarmManager:
                         "500" in error_str or "disconnected" in error_str.lower()
                     ):
                         wait_time = 0.5 * (2**attempt)
-                        print(f"[Debug: Retrying {agent.name} after {wait_time}s...]")
+                        logger.warning(f"Retrying {agent.name} after {wait_time}s...")
                         time.sleep(wait_time)
                         continue
                     else:
-                        print(f"[Debug: Error updating {agent.name} memory: {e}]")
+                        logger.error(f"Error updating {agent.name} memory: {e}")
                         # For token limit errors, reset and retry once
                         if (
                             "max_tokens" in error_str.lower()
                             or "token" in error_str.lower()
                         ):
-                            print(
-                                f"[Debug: Token limit reached for {agent.name}, resetting messages...]"
+                            logger.warning(
+                                f"Token limit reached for {agent.name}, resetting messages..."
                             )
                             self._reset_agent_messages(agent.agent.id)
                             try:
@@ -225,23 +240,23 @@ class SwarmManager:
                                 )
                                 success = True
                             except Exception as retry_e:
-                                print(
-                                    f"[Debug: Retry failed for {agent.name}: {retry_e}]"
+                                logger.error(
+                                    f"Retry failed for {agent.name}: {retry_e}"
                                 )
                         break
 
             if not success:
-                print(
-                    f"[Debug: Failed to update {agent.name} after {max_retries} attempts]"
+                logger.error(
+                    f"Failed to update {agent.name} after {max_retries} attempts"
                 )
 
     def _reset_agent_messages(self, agent_id: str):
         """Reset agent message history when token limits are reached."""
         try:
             self.client.agents.messages.reset(agent_id=agent_id)
-            print(f"[Debug: Successfully reset messages for agent {agent_id}]")
+            logger.info(f"Successfully reset messages for agent {agent_id}]")
         except Exception as e:
-            print(f"[Debug: Failed to reset messages for agent {agent_id}: {e}]")
+            logger.error(f"Failed to reset messages for agent {agent_id}: {e}]")
 
     def _get_agent_message_count(self, agent_id: str) -> int:
         """Get the number of messages in an agent's history for monitoring."""
@@ -249,7 +264,7 @@ class SwarmManager:
             messages = self.client.agents.messages.list(agent_id=agent_id, limit=1000)
             return len(messages) if hasattr(messages, "__len__") else 0
         except Exception as e:
-            print(f"[Debug: Failed to get message count for agent {agent_id}: {e}]")
+            logger.error(f"Failed to get message count for agent {agent_id}: {e}]")
             return 0
 
     def _warm_up_agent(self, agent, topic: str) -> bool:
@@ -268,19 +283,24 @@ class SwarmManager:
             time.sleep(0.3)  # Small delay to allow processing
             return True
         except Exception as e:
-            print(f"[Debug: Agent warm-up failed for {agent.name}: {e}]")
+            logger.error(f"Agent warm-up failed for {agent.name}: {e}]")
             return False
 
     def _agent_turn(self, topic: str):
         """Manages a single turn of agent responses based on conversation mode."""
-        print(
-            f"\n--- Assessing agent motivations ({self.conversation_mode.upper()} mode) ---"
+        logger.info(
+            f"--- Assessing agent motivations ({self.conversation_mode.upper()} mode) ---"
         )
+        start_time = time.time()
         for agent in self.agents:
             agent.assess_motivation_and_priority(topic)
-            print(
+            logger.info(
                 f"  - {agent.name}: Motivation Score = {agent.motivation_score}, Priority Score = {agent.priority_score:.2f}"
             )
+        duration = time.time() - start_time
+        logger.info(f"Motivation assessment for {len(self.agents)} agents took {duration:.2f} seconds.")
+        if duration > 5:
+            logger.warning(f"Slow motivation assessment: {duration:.2f} seconds.")
 
         motivated_agents = sorted(
             [agent for agent in self.agents if agent.priority_score > 0],
@@ -289,11 +309,11 @@ class SwarmManager:
         )
 
         if not motivated_agents:
-            print("\nSystem: No agent is motivated to speak at this time.")
+            logger.info("System: No agent is motivated to speak at this time.")
             return
 
-        print(
-            f"\n🎭 {len(motivated_agents)} agent(s) motivated to speak in {self.conversation_mode.upper()} mode"
+        logger.info(
+            f"🎭 {len(motivated_agents)} agent(s) motivated to speak in {self.conversation_mode.upper()} mode"
         )
 
         # Dispatch to appropriate conversation mode
@@ -334,10 +354,10 @@ class SwarmManager:
                                     extraction_successful = True
                                     break
                             except json.JSONDecodeError as e:
-                                print(f"[Debug: JSON parse error in tool call: {e}]")
+                                logger.warning(f"JSON parse error in tool call: {e}]")
                                 continue
                             except Exception as e:
-                                print(f"[Debug: Tool call extraction error: {e}]")
+                                logger.warning(f"Tool call extraction error: {e}]")
                                 continue
 
                 # Only proceed if we haven't successfully extracted a message yet
@@ -388,13 +408,12 @@ class SwarmManager:
                     break
 
             if not message_text:
-                message_text = (
+                message_text =
                     "I have some thoughts but I'm having trouble phrasing them."
-                )
 
         except Exception as e:
             message_text = "I have some thoughts but I'm having trouble phrasing them."
-            print(f"[Debug: Error extracting response - {e}]")
+            logger.error(f"Error extracting response - {e}]")
 
         return message_text
 
@@ -402,11 +421,11 @@ class SwarmManager:
         """Two-phase conversation: independent responses then synthesis."""
 
         # Phase 1: Independent responses
-        print("\n=== 🧠 INITIAL RESPONSES ===")
+        logger.info("\n=== 🧠 INITIAL RESPONSES ===")
         initial_responses = []
 
         for i, agent in enumerate(motivated_agents, 1):
-            print(
+            logger.info(
                 f"\n({i}/{len(motivated_agents)}) {agent.name} (priority: {agent.priority_score:.2f}) - Initial thoughts..."
             )
 
@@ -416,10 +435,15 @@ class SwarmManager:
 
             for attempt in range(max_attempts):
                 try:
+                    start_time = time.time()
                     # Use current conversation history to avoid API overhead and align with agent interface
                     response = agent.speak(
                         conversation_history=self.conversation_history
                     )
+                    duration = time.time() - start_time
+                    logger.info(f"Agent {agent.name} LLM response generated in {duration:.2f} seconds.")
+                    if duration > 5:
+                        logger.warning(f"Slow LLM response from {agent.name}: {duration:.2f} seconds.")
                     message_text = self._extract_agent_response(response)
 
                     # Validate response quality
@@ -432,7 +456,7 @@ class SwarmManager:
                         break
                     elif attempt < max_attempts - 1:
                         # Poor response, retry once
-                        print(f"[Debug: Weak response detected, retrying...")
+                        logger.warning("[Debug: Weak response detected, retrying...")
                         time.sleep(0.5)
                         # Send a more specific prompt
                         self.client.agents.messages.create(
@@ -446,16 +470,15 @@ class SwarmManager:
                         )
 
                 except Exception as e:
-                    print(
-                        f"[Debug: Error in initial response attempt {attempt+1} - {e}]"
-                    )
+                    logger.error(
+                        f"Error in initial response attempt {attempt+1} - {e}]")
                     if attempt < max_attempts - 1:
                         time.sleep(0.5)
 
             # Use the response or a more specific fallback
             if message_text and len(message_text.strip()) > 10:
                 initial_responses.append((agent, message_text))
-                print(f"{agent.name}: {message_text}")
+                logger.info(f"{agent.name}: {message_text}")
                 # Add to conversation history for secretary
                 self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
@@ -464,12 +487,12 @@ class SwarmManager:
                 # More specific fallback based on agent's expertise
                 fallback = f"As someone with expertise in {getattr(agent, 'expertise', 'this area')}, I'm processing the topic of {topic} and will share my thoughts in the next round."
                 initial_responses.append((agent, fallback))
-                print(f"{agent.name}: {fallback}")
+                logger.info(f"{agent.name}: {fallback}")
                 self.conversation_history += f"{agent.name}: {fallback}\n"
 
         # Phase 2: Response round - agents react to each other's ideas
-        print("\n=== 💬 RESPONSE ROUND ===")
-        print("Agents now respond to each other's initial thoughts...")
+        logger.info("\n=== 💬 RESPONSE ROUND ===")
+        logger.info("Agents now respond to each other's initial thoughts...")
 
         # Send instruction to all agents about response phase
         for agent in self.agents:
@@ -484,47 +507,56 @@ class SwarmManager:
                     ],
                 )
             except Exception as e:
-                print(
-                    f"[Debug: Error sending response instruction to {agent.name}: {e}]"
-                )
+                logger.error(
+                    f"Error sending response instruction to {agent.name}: {e}]")
 
         # Build response prompt context from current conversation history
         history_with_initials = self.conversation_history
         response_prompt_addition = "\nNow that you've heard everyone's initial thoughts, please consider how you might respond."
 
         for i, agent in enumerate(motivated_agents, 1):
-            print(
+            logger.info(
                 f"\n({i}/{len(motivated_agents)}) {agent.name} - Responding to the discussion..."
             )
             try:
+                start_time = time.time()
                 response = agent.speak(
                     conversation_history=history_with_initials
                     + response_prompt_addition
                 )
+                duration = time.time() - start_time
+                logger.info(f"Agent {agent.name} LLM response generated in {duration:.2f} seconds.")
+                if duration > 5:
+                    logger.warning(f"Slow LLM response from {agent.name}: {duration:.2f} seconds.")
                 message_text = self._extract_agent_response(response)
-                print(f"{agent.name}: {message_text}")
+                logger.info(f"{agent.name}: {message_text}")
                 # Add responses to conversation history
                 self.conversation_history += f"{agent.name}: {message_text}\n"
                 # Notify secretary
                 self._notify_secretary_agent_response(agent.name, message_text)
             except Exception as e:
                 fallback = "I find the different perspectives here really interesting and would like to engage more with these ideas."
-                print(f"{agent.name}: {fallback}")
+                logger.info(f"{agent.name}: {fallback}")
                 self.conversation_history += f"{agent.name}: {fallback}\n"
-                print(f"[Debug: Error in response round - {e}]")
+                logger.error(f"Error in response round - {e}]")
 
     def _all_speak_turn(self, motivated_agents: list, topic: str):
         """All motivated agents speak in priority order, seeing previous responses."""
-        print(f"\n=== 👥 ALL SPEAK MODE ({len(motivated_agents)} agents) ===")
+        logger.info(f"\n=== 👥 ALL SPEAK MODE ({len(motivated_agents)} agents) ===")
 
         for i, agent in enumerate(motivated_agents, 1):
-            print(
+            logger.info(
                 f"\n({i}/{len(motivated_agents)}) {agent.name} (priority: {agent.priority_score:.2f}) is speaking..."
             )
             try:
+                start_time = time.time()
                 response = agent.speak(conversation_history=self.conversation_history)
+                duration = time.time() - start_time
+                logger.info(f"Agent {agent.name} LLM response generated in {duration:.2f} seconds.")
+                if duration > 5:
+                    logger.warning(f"Slow LLM response from {agent.name}: {duration:.2f} seconds.")
                 message_text = self._extract_agent_response(response)
-                print(f"{agent.name}: {message_text}")
+                logger.info(f"{agent.name}: {message_text}")
                 # Update all agents' memories with this response
                 self._update_agent_memories(message_text, agent.name)
                 # Add each response to history so subsequent agents can see it
@@ -533,13 +565,13 @@ class SwarmManager:
                 self._notify_secretary_agent_response(agent.name, message_text)
             except Exception as e:
                 fallback = "I have some thoughts but I'm having trouble expressing them clearly."
-                print(f"{agent.name}: {fallback}")
+                logger.info(f"{agent.name}: {fallback}")
                 self.conversation_history += f"{agent.name}: {fallback}\n"
-                print(f"[Debug: Error in all-speak response - {e}]")
+                logger.error(f"Error in all-speak response - {e}]")
 
     def _sequential_turn(self, motivated_agents: list, topic: str):
         """One agent speaks per turn with fairness rotation."""
-        print(f"\n=== 🔀 SEQUENTIAL MODE (fairness rotation) ===")
+        logger.info(f"\n=== 🔀 SEQUENTIAL MODE (fairness rotation) ===")
 
         # Implement fairness: if multiple agents are motivated, give others a chance
         if len(motivated_agents) > 1:
@@ -550,7 +582,7 @@ class SwarmManager:
             ):
                 # Give the second-highest priority agent a chance
                 speaker = motivated_agents[1]
-                print(
+                logger.info(
                     f"\n[Fairness: Giving {speaker.name} a turn (priority: {speaker.priority_score:.2f})]"
                 )
             else:
@@ -560,45 +592,55 @@ class SwarmManager:
 
         # Track the last speaker for fairness
         self.last_speaker = speaker.name
-        print(f"\n({speaker.name} is speaking...)")
+        logger.info(f"\n({speaker.name} is speaking...)")
 
         try:
+            start_time = time.time()
             response = speaker.speak(conversation_history=self.conversation_history)
+            duration = time.time() - start_time
+            logger.info(f"Agent {speaker.name} LLM response generated in {duration:.2f} seconds.")
+            if duration > 5:
+                logger.warning(f"Slow LLM response from {speaker.name}: {duration:.2f} seconds.")
             message_text = self._extract_agent_response(response)
-            print(f"{speaker.name}: {message_text}")
+            logger.info(f"{speaker.name}: {message_text}")
             self.conversation_history += f"{speaker.name}: {message_text}\n"
             # Notify secretary
             self._notify_secretary_agent_response(speaker.name, message_text)
         except Exception as e:
             fallback = "I have some thoughts but I'm having trouble phrasing them."
-            print(f"{speaker.name}: {fallback}")
+            logger.info(f"{speaker.name}: {fallback}")
             self.conversation_history += f"{speaker.name}: {fallback}\n"
             # Notify secretary of fallback too
             self._notify_secretary_agent_response(speaker.name, fallback)
-            print(f"[Debug: Error in sequential response - {e}]")
+            logger.error(f"Error in sequential response - {e}]")
 
     def _pure_priority_turn(self, motivated_agents: list, topic: str):
         """Always highest priority motivated agent speaks."""
         speaker = motivated_agents[0]  # Already sorted by priority
-        print(f"\n=== 🎯 PURE PRIORITY MODE ===")
-        print(
+        logger.info(f"\n=== 🎯 PURE PRIORITY MODE ===")
+        logger.info(
             f"\n({speaker.name} is speaking - highest priority: {speaker.priority_score:.2f})"
         )
 
         try:
+            start_time = time.time()
             response = speaker.speak(conversation_history=self.conversation_history)
+            duration = time.time() - start_time
+            logger.info(f"Agent {speaker.name} LLM response generated in {duration:.2f} seconds.")
+            if duration > 5:
+                logger.warning(f"Slow LLM response from {speaker.name}: {duration:.2f} seconds.")
             message_text = self._extract_agent_response(response)
-            print(f"{speaker.name}: {message_text}")
+            logger.info(f"{speaker.name}: {message_text}")
             self.conversation_history += f"{speaker.name}: {message_text}\n"
             # Notify secretary
             self._notify_secretary_agent_response(speaker.name, message_text)
         except Exception as e:
             fallback = "I have thoughts on this topic but I'm having difficulty expressing them."
-            print(f"{speaker.name}: {fallback}")
+            logger.info(f"{speaker.name}: {fallback}")
             self.conversation_history += f"{speaker.name}: {fallback}\n"
             # Notify secretary of fallback too
             self._notify_secretary_agent_response(speaker.name, fallback)
-            print(f"[Debug: Error in pure priority response - {e}]")
+            logger.error(f"Error in pure priority response - {e}]")
 
     def _start_meeting(self, topic: str):
         """Initialize meeting with secretary if enabled."""
@@ -618,15 +660,14 @@ class SwarmManager:
             )
 
             # Set conversation mode in metadata
-            self.secretary.meeting_metadata["conversation_mode"] = (
+            self.secretary.meeting_metadata["conversation_mode"] =
                 self.conversation_mode
-            )
 
     def _end_meeting(self):
         """End meeting and offer export options."""
         if self.secretary:
-            print("\n" + "=" * 50)
-            print("🏁 Meeting ended! Export options available.")
+            logger.info("\n" + "=" * 50)
+            logger.info("🏁 Meeting ended! Export options available.")
             self._offer_export_options()
 
     def _handle_secretary_commands(self, user_input: str) -> bool:
@@ -661,14 +702,14 @@ class SwarmManager:
             return True
 
         elif command == "memory-awareness":
-            print("\n📊 Checking memory awareness status for all agents...")
+            logger.info("\n📊 Checking memory awareness status for all agents...")
             self.check_memory_awareness_status(silent=False)
             return True
 
         # Secretary-specific commands
         if not self.secretary:
             if command in ["minutes", "export", "formal", "casual", "action-item"]:
-                print(
+                logger.warning(
                     "❌ Secretary is not enabled. Please restart with secretary mode."
                 )
                 return True
@@ -679,7 +720,7 @@ class SwarmManager:
                 return False
 
         if command == "minutes":
-            print("\n📋 Generating current meeting minutes...")
+            logger.info("\n📋 Generating current meeting minutes...")
             minutes = self.secretary.generate_minutes()
             print(minutes)
             return True
@@ -690,12 +731,12 @@ class SwarmManager:
 
         elif command == "formal":
             self.secretary.set_mode("formal")
-            print("📝 Secretary mode changed to formal")
+            logger.info("📝 Secretary mode changed to formal")
             return True
 
         elif command == "casual":
             self.secretary.set_mode("casual")
-            print("📝 Secretary mode changed to casual")
+            logger.info("📝 Secretary mode changed to casual")
             return True
 
         elif command == "action-item":
@@ -721,7 +762,7 @@ class SwarmManager:
     def _handle_export_command(self, args: str):
         """Handle export command with optional format specification."""
         if not self.secretary:
-            print("❌ Secretary not available")
+            logger.warning("❌ Secretary not available")
             return
 
         # Get current meeting data
@@ -758,19 +799,19 @@ class SwarmManager:
                 files = self.export_manager.export_complete_package(
                     meeting_data, self.secretary.mode
                 )
-                print(f"✅ Complete package exported: {len(files)} files")
+                logger.info(f"✅ Complete package exported: {len(files)} files")
                 return
             else:
-                print(f"❌ Unknown export format: {format_type}")
+                logger.error(f"❌ Unknown export format: {format_type}")
                 print(
                     "Available formats: minutes, casual, transcript, actions, summary, all"
                 )
                 return
 
-            print(f"✅ Exported: {file_path}")
+            logger.info(f"✅ Exported: {file_path}")
 
         except Exception as e:
-            print(f"❌ Export failed: {e}")
+            logger.error(f"❌ Export failed: {e}")
 
     def _offer_export_options(self):
         """Offer export options at the end of meeting."""
@@ -793,7 +834,7 @@ class SwarmManager:
         except (EOFError, KeyboardInterrupt):
             pass
 
-        print("👋 Meeting complete!")
+        logger.info("👋 Meeting complete!")
 
     def _show_secretary_help(self):
         """Show available commands."""
@@ -817,8 +858,7 @@ General:
   /help              - Show this help message
 
 Note: Memory awareness information respects agent autonomy and provides neutral facts only.
-        """
-        )
+        """)
 
     def _notify_secretary_agent_response(self, agent_name: str, message: str):
         """Notify secretary of an agent response."""
@@ -857,7 +897,7 @@ Note: Memory awareness information respects agent autonomy and provides neutral 
                     )
             except Exception as e:
                 if not silent:
-                    print(
+                    logger.warning(
                         f"⚠️ Could not generate memory awareness for {agent.name}: {e}"
                     )
 

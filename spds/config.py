@@ -1,6 +1,7 @@
 # spds/config.py
 
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 
 from dotenv import load_dotenv
@@ -8,7 +9,54 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+
+# --- Logging Configuration ---
+
+def setup_logging():
+    """Sets up a configurable logging system with console and rotating file output."""
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_dir = "logs"
+    log_file = os.path.join(log_dir, "spds.log")
+
+    # Create log directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Get the root logger
+    logger = logging.getLogger()
+
+    # Prevent duplicate handlers if called multiple times
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    logger.setLevel(log_level)
+
+    # Create console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level)
+    console_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+
+    # Create rotating file handler
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=10*1024*1024, backupCount=5  # 10MB per file, 5 backups
+    )
+    file_handler.setLevel(log_level)
+    file_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"
+    )
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+
+    logging.getLogger(__name__).info("Logging configured successfully with console and file output.")
+
+# Initialize logging when the module is loaded
+setup_logging()
+
 logger = logging.getLogger(__name__)
+
 
 # Letta ADE Server Configuration
 # Read sensitive values from environment. For local development we provide a
