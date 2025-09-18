@@ -75,12 +75,16 @@ logger = logging.getLogger(__name__)
 # non-sensitive localhost fallback so the app works out of the box. Production
 # deployments should set real environment variables or use a secrets manager.
 LETTA_API_KEY = os.getenv("LETTA_API_KEY", "")
-LETTA_SERVER_PASSWORD = os.getenv("LETTA_PASSWORD", "")
+LETTA_SERVER_PASSWORD = os.getenv("LETTA_SERVER_PASSWORD", "")
 # Default to localhost for self-hosted development convenience
 LETTA_BASE_URL = os.getenv("LETTA_BASE_URL", "http://localhost:8283")
 # Environment: e.g. "SELF_HOSTED", "LETTA_CLOUD", "PRODUCTION" (fallback
 # is SELF_HOSTED for local dev). Keep the value explicit in production.
 LETTA_ENVIRONMENT = os.getenv("LETTA_ENVIRONMENT", "SELF_HOSTED")
+
+# Tool execution (Docker/self-hosted)
+TOOL_EXEC_DIR = os.getenv("TOOL_EXEC_DIR", "/app/tools")
+TOOL_EXEC_VENV_NAME = os.getenv("TOOL_EXEC_VENV_NAME", "venv")
 
 
 def validate_letta_config(check_connectivity: bool = False, timeout: int = 5) -> bool:
@@ -144,7 +148,7 @@ def validate_letta_config(check_connectivity: bool = False, timeout: int = 5) ->
 
 # Default Model Configuration (fallback values)
 DEFAULT_AGENT_MODEL = "openai/gpt-4"
-DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-ada-002"
+DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 # Default Swarm Configuration
 # This list of agent profiles is used if no other configuration is provided.
@@ -156,28 +160,28 @@ AGENT_PROFILES = [
         "persona": "A pragmatic and analytical project manager who values clarity and efficiency.",
         "expertise": ["risk management", "scheduling", "budgeting"],
         "model": "openai/gpt-4",
-        "embedding": "openai/text-embedding-ada-002",
+        "embedding": "openai/text-embedding-3-small",
     },
     {
         "name": "Jordan",
         "persona": "A creative and user-focused designer with a passion for intuitive interfaces.",
         "expertise": ["UX/UI design", "user research", "prototyping"],
         "model": "anthropic/claude-3-5-sonnet-20241022",
-        "embedding": "openai/text-embedding-ada-002",
+        "embedding": "openai/text-embedding-3-small",
     },
     {
         "name": "Casey",
         "persona": "A detail-oriented and meticulous engineer who prioritizes code quality and stability.",
         "expertise": ["backend systems", "database architecture", "API development"],
         "model": "openai/gpt-4",
-        "embedding": "openai/text-embedding-ada-002",
+        "embedding": "openai/text-embedding-3-small",
     },
     {
         "name": "Morgan",
         "persona": "A strategic and forward-thinking product owner focused on market fit and business goals.",
         "expertise": ["market analysis", "product strategy", "roadmapping"],
         "model": "together/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF",
-        "embedding": "openai/text-embedding-ada-002",
+        "embedding": "openai/text-embedding-3-small",
     },
 ]
 
