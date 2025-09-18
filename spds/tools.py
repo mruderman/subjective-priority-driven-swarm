@@ -1,6 +1,13 @@
 # spds/tools.py
 
+import json
+import logging
+from typing import Any, Callable, Dict, Optional
+
 from pydantic import BaseModel, Field
+
+
+logger = logging.getLogger(__name__)
 
 
 class SubjectiveAssessment(BaseModel):
@@ -139,3 +146,135 @@ Return ONLY a JSON object with these exact keys and integer values 0-10.
     )
 
     return assessment
+
+
+def get_external_tool_functions() -> Dict[str, Callable[[str], str]]:
+    """Get external tool functions from integrations registry.
+    
+    This function initializes the integrations registry, attempts to register
+    available providers (MCP, Composio), and returns a mapping of tool names
+    to callable functions that can be registered with Letta's tool system.
+    
+    Returns:
+        Dictionary mapping tool names to callable functions with signature
+        def tool_func(input_str: str, **kwargs) -> str
+    """
+    from .config import get_integrations_enabled
+    from .integrations.registry import get_registry
+    
+    # Check if integrations are enabled
+    if not get_integrations_enabled():
+        logger.debug("Integrations disabled, returning empty tool mapping")
+        return {}
+    
+    # Initialize registry
+    registry = get_registry()
+    
+    # Register available providers
+    try:
+        from .integrations import mcp, composio
+        
+        # Attempt to register MCP provider
+        mcp.maybe_register_with(registry)
+        
+        # Attempt to register Composio provider
+        composio.maybe_register_with(registry)
+        
+    except Exception as e:
+        logger.warning(f"Failed to register some integration providers: {e}")
+    
+    # Get available tools
+    tools = registry.list_tools()
+    
+    # Create callable functions for each tool
+    tool_functions = {}
+    for tool_fqname, descriptor in tools.items():
+        def create_tool_function(fqname):
+            def tool_func(input_str: str, **kwargs) -> str:
+                """Wrapper function for external tool execution.
+                
+                Args:
+                    input_str: Input string, potentially JSON
+                    **kwargs: Additional keyword arguments
+                    
+                Returns:
+                    String result from tool execution
+                """
+                try:
+                    # Parse input_str as JSON if it looks like JSON
+                    if input_str.strip().startswith(('{', '[')):
+                        try:
+                            args = json.loads(input_str)
+                        except json.JSONDecodeError:
+                            # If JSON parsing fails, treat as plain text
+                            args = {"input": input_str}
+                    else:
+                        # Treat as plain text input
+                        args = {"input": input_str}
+                    
+                    # Merge with any kwargs
+                    if kwargs:
+                        args.update(kwargs)
+                    
+                    # Run the tool
+                    result = registry.run(fqname, args)
+                    
+                    # Convert result to string
+                    if isinstance(result, (dict, list)):
+                        return json.dumps(result)
+                    else:
+                        return str(result)
+                        
+                except Exception as e:
+                    logger.error(f"External tool '{fqname}' execution failed: {e}")
+                    return f"Error executing tool: {e}"
+            
+            return tool_func
+        
+        tool_functions[tool_fqname] = create_tool_function(tool_fqname)
+    
+    logger.info(f"Loaded {len(tool_functions)} external tools from integrations")
+    return tool_functions
+
+
+def load_and_register_external_tools(client_or_agent, create_fn) -> None:
+    """Load and register external tools with a Letta client or agent.
+    
+    This helper function fetches external tool functions and registers them
+    with the provided create function (typically client.tools.create_from_function).
+    Errors are caught and logged but do not fail the main flow.
+    
+    Args:
+        client_or_agent: Letta client or agent instance
+        create_fn: Function to create tools (e.g., client.tools.create_from_function)
+    """
+    try:
+        # Get external tool functions
+        external_tools = get_external_tool_functions()
+        
+        if not external_tools:
+            logger.debug("No external tools available for registration")
+            return
+        
+        # Register each tool
+        registered_count = 0
+        for tool_name, tool_func in external_tools.items():
+            try:
+                # Create tool using provided create function
+                create_fn(
+                    function=tool_func,
+                    name=tool_name,
+                    description=f"External tool from integration: {tool_name}"
+                )
+                registered_count += 1
+                logger.debug(f"Registered external tool: {tool_name}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to register external tool '{tool_name}': {e}")
+                # Continue with other tools even if one fails
+        
+        logger.info(f"Successfully registered {registered_count} external tools")
+        
+    except Exception as e:
+        logger.error(f"Failed to load external tools: {e}")
+        # Don't fail the main flow - integrations are optional

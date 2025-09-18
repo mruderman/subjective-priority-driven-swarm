@@ -1,13 +1,17 @@
 # spds/export_manager.py
 
 import json
-import os
+import logging
+import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from . import config
 from .meeting_templates import BoardMinutesTemplate, CasualMinutesTemplate
+from .session_store import SessionState, get_default_session_store
+
+logger = logging.getLogger(__name__)
 
 
 class ExportManager:
@@ -425,3 +429,354 @@ class ExportManager:
             print(f"🧹 Cleaned up {removed_count} old export files")
 
         return removed_count
+
+
+def build_session_summary(
+    session_state_or_id: Union[SessionState, str],
+) -> Dict[str, Any]:
+    """
+    Build a session summary from session events.
+
+    Args:
+        session_state_or_id: Either a SessionState object or a session ID string
+
+    Returns:
+        Dict containing:
+            - minutes_markdown: Structured meeting minutes
+            - actions: List of action events
+            - decisions: List of decision events
+            - messages: List of message excerpts
+            - meta: Session metadata
+    """
+    # Load session if ID provided
+    if isinstance(session_state_or_id, str):
+        session_store = get_default_session_store()
+        session_state = session_store.load(session_state_or_id)
+    else:
+        session_state = session_state_or_id
+
+    # Extract events by type
+    actions = []
+    decisions = []
+    messages = []
+
+    for event in session_state.events:
+        if event.type == "action":
+            actions.append(
+                {"ts": event.ts.isoformat(), "actor": event.actor, **event.payload}
+            )
+        elif event.type == "decision":
+            decisions.append(
+                {"ts": event.ts.isoformat(), "actor": event.actor, **event.payload}
+            )
+        elif event.type == "message":
+            content = event.payload.get("content", "")
+            # Trim long content to 2000 chars max
+            if len(content) > 2000:
+                content = content[:2000] + "..."
+            messages.append(
+                {
+                    "ts": event.ts.isoformat(),
+                    "actor": event.actor,
+                    "role": event.payload.get("message_type", "unknown"),
+                    "content": content,
+                }
+            )
+
+    # Build minutes markdown
+    minutes_markdown = _build_minutes_markdown(
+        session_state, messages, decisions, actions
+    )
+
+    return {
+        "minutes_markdown": minutes_markdown,
+        "actions": actions,
+        "decisions": decisions,
+        "messages": messages,
+        "meta": {
+            "session_id": session_state.meta.id,
+            "title": session_state.meta.title,
+            "created_at": session_state.meta.created_at.isoformat(),
+            "last_updated": session_state.meta.last_updated.isoformat(),
+            "total_events": len(session_state.events),
+        },
+    }
+
+
+def _build_minutes_markdown(
+    session_state: SessionState,
+    messages: List[Dict],
+    decisions: List[Dict],
+    actions: List[Dict],
+) -> str:
+    """Build formatted minutes markdown from session data."""
+    content = f"# Session Minutes: {session_state.meta.title or 'Untitled Session'}\n\n"
+    content += f"**Session ID**: {session_state.meta.id}\n"
+    content += f"**Created**: {session_state.meta.created_at.strftime('%B %d, %Y at %I:%M %p')}\n"
+    content += f"**Last Updated**: {session_state.meta.last_updated.strftime('%B %d, %Y at %I:%M %p')}\n"
+    content += f"**Total Events**: {len(session_state.events)}\n\n"
+
+    content += "## Transcript\n\n"
+
+    if messages:
+        # Sort chronologically
+        sorted_messages = sorted(messages, key=lambda x: x["ts"])
+        for msg in sorted_messages:
+            timestamp = datetime.fromisoformat(msg["ts"]).strftime("%I:%M %p")
+            content += f"**{msg['actor']}** ({msg['role']}) *{timestamp}*: {msg['content']}\n\n"
+    else:
+        content += "*No messages recorded.*\n\n"
+
+    content += "## Decisions\n\n"
+    if decisions:
+        for decision in decisions:
+            timestamp = datetime.fromisoformat(decision["ts"]).strftime("%I:%M %p")
+            content += f"- **{decision['actor']}** *{timestamp}*: "
+            if "decision_type" in decision:
+                content += f"{decision['decision_type']}: "
+            if "details" in decision:
+                details = decision["details"]
+                if isinstance(details, dict):
+                    content += f"{details.get('content', str(details))}"
+                else:
+                    content += str(details)
+            content += "\n"
+    else:
+        content += "*No decisions recorded.*\n"
+
+    content += "\n## Action Items\n\n"
+    if actions:
+        for action in actions:
+            timestamp = datetime.fromisoformat(action["ts"]).strftime("%I:%M %p")
+            content += f"- **{action['actor']}** *{timestamp}*: "
+            if "action_type" in action:
+                content += f"{action['action_type']}: "
+            if "details" in action:
+                details = action["details"]
+                if isinstance(details, dict):
+                    content += f"{details.get('content', str(details))}"
+                else:
+                    content += str(details)
+            content += "\n"
+    else:
+        content += "*No action items recorded.*\n"
+
+    return content
+
+
+def export_session_to_markdown(
+    session_id: str, dest_dir: Optional[Union[Path, str]] = None
+) -> Path:
+    """
+    Export session to markdown file.
+
+    Args:
+        session_id: Session ID to export
+        dest_dir: Optional destination directory (defaults to exports/sessions/{session_id})
+
+    Returns:
+        Path to the exported markdown file
+    """
+    # Get destination directory
+    if dest_dir is None:
+        dest_dir = Path(config.DEFAULT_EXPORT_DIRECTORY) / "sessions" / session_id
+    else:
+        dest_dir = Path(dest_dir)
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build summary
+    summary = build_session_summary(session_id)
+
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"minutes_{session_id}_{timestamp}.md"
+    filepath = dest_dir / filename
+
+    # Write markdown content
+    content = summary["minutes_markdown"]
+
+    # Use atomic write
+    temp_file = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=dest_dir, delete=False, suffix=".tmp"
+        ) as f:
+            temp_file = Path(f.name)
+            f.write(content)
+
+        # Atomic replace
+        temp_file.replace(filepath)
+        logger.info(f"Exported session {session_id} to markdown: {filepath}")
+
+    except Exception as e:
+        # Clean up temp file on error
+        if temp_file and temp_file.exists():
+            temp_file.unlink(missing_ok=True)
+        raise e
+
+    return filepath
+
+
+def export_session_to_json(
+    session_id: str, dest_dir: Optional[Union[Path, str]] = None
+) -> Path:
+    """
+    Export session summary to JSON file.
+
+    Args:
+        session_id: Session ID to export
+        dest_dir: Optional destination directory (defaults to exports/sessions/{session_id})
+
+    Returns:
+        Path to the exported JSON file
+    """
+    # Get destination directory
+    if dest_dir is None:
+        dest_dir = Path(config.DEFAULT_EXPORT_DIRECTORY) / "sessions" / session_id
+    else:
+        dest_dir = Path(dest_dir)
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build summary
+    summary = build_session_summary(session_id)
+
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"summary_{session_id}_{timestamp}.json"
+    filepath = dest_dir / filename
+
+    # Use atomic write
+    temp_file = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=dest_dir, delete=False, suffix=".tmp"
+        ) as f:
+            temp_file = Path(f.name)
+            json.dump(summary, f, indent=2, ensure_ascii=False, default=str)
+
+        # Atomic replace
+        temp_file.replace(filepath)
+        logger.info(f"Exported session {session_id} to JSON: {filepath}")
+
+    except Exception as e:
+        # Clean up temp file on error
+        if temp_file and temp_file.exists():
+            temp_file.unlink(missing_ok=True)
+        raise e
+
+    return filepath
+
+
+def restore_session_from_json(
+    json_path: Union[Path, str], target_session_id: Optional[str] = None
+) -> str:
+    """
+    Restore session from JSON summary file.
+
+    Args:
+        json_path: Path to the JSON summary file
+        target_session_id: Optional target session ID. If provided and exists,
+                          events are appended to existing session. Otherwise,
+                          a new session is created.
+
+    Returns:
+        The session ID that was restored to
+    """
+    json_path = Path(json_path)
+
+    if not json_path.exists():
+        raise ValueError(f"JSON file not found: {json_path}")
+
+    try:
+        with json_path.open("r") as f:
+            summary = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Malformed JSON file {json_path}: {e}")
+
+    # Validate required structure
+    required_keys = ["minutes_markdown", "actions", "decisions", "messages", "meta"]
+    missing_keys = [key for key in required_keys if key not in summary]
+    if missing_keys:
+        raise ValueError(f"Missing required keys in JSON: {missing_keys}")
+
+    required_meta_keys = ["session_id", "title", "created_at", "last_updated"]
+    missing_meta_keys = [
+        key for key in required_meta_keys if key not in summary["meta"]
+    ]
+    if missing_meta_keys:
+        raise ValueError(f"Missing required meta keys: {missing_meta_keys}")
+
+    # Get session store
+    session_store = get_default_session_store()
+
+    # Determine target session
+    if target_session_id:
+        try:
+            session_state = session_store.load(target_session_id)
+            session_id = target_session_id
+            logger.info(f"Restoring to existing session {session_id}")
+        except ValueError:
+            # Session doesn't exist, create new one
+            target_session_id = None
+
+    if not target_session_id:
+        # Create new session
+        title = summary["meta"]["title"]
+        if not title:
+            title = "Restored Session"
+        session_state = session_store.create(title=f"{title} (restored)")
+        session_id = session_state.meta.id
+        logger.info(f"Created new session {session_id} for restoration")
+
+    # Add system event for minutes
+    if summary["minutes_markdown"]:
+        from .session_tracking import track_system_event
+
+        track_system_event(
+            "minutes_imported",
+            {
+                "content": summary["minutes_markdown"],
+                "source_file": str(json_path),
+                "original_session_id": summary["meta"]["session_id"],
+            },
+        )
+
+    # Add decision events
+    for decision in summary["decisions"]:
+        from .session_tracking import track_decision
+
+        track_decision(
+            decision["actor"],
+            decision.get("decision_type", "imported_decision"),
+            {
+                **{k: v for k, v in decision.items() if k not in ["ts", "actor"]},
+                "original_ts": decision["ts"],
+                "imported_from": summary["meta"]["session_id"],
+            },
+        )
+
+    # Add action events
+    for action in summary["actions"]:
+        from .session_tracking import track_action
+
+        track_action(
+            action["actor"],
+            action.get("action_type", "imported_action"),
+            {
+                **{k: v for k, v in action.items() if k not in ["ts", "actor"]},
+                "original_ts": action["ts"],
+                "imported_from": summary["meta"]["session_id"],
+            },
+        )
+
+    # Add system event indicating transcript availability
+    if summary["messages"]:
+        track_system_event(
+            "transcript_available_in_export",
+            {"message_count": len(summary["messages"]), "source_file": str(json_path)},
+        )
+
+    logger.info(f"Successfully restored session from {json_path} to {session_id}")
+    return session_id

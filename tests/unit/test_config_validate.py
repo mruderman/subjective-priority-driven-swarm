@@ -102,3 +102,65 @@ def test_validate_letta_config_raises_on_bad_status(monkeypatch):
 
     with pytest.raises(RuntimeError):
         config.validate_letta_config(check_connectivity=True)
+
+
+def test_get_letta_password_preference_letta_password_only(monkeypatch, caplog):
+    """Test that LETTA_PASSWORD is used when only it is set."""
+    monkeypatch.setenv("LETTA_PASSWORD", "new_password")
+    monkeypatch.delenv("LETTA_SERVER_PASSWORD", raising=False)
+
+    from spds import config
+
+    caplog.clear()
+    result = config.get_letta_password()
+
+    assert result == "new_password"
+    # Should not log any deprecation warning or preference message
+    assert "Preferring LETTA_PASSWORD" not in caplog.text
+    assert "deprecated" not in caplog.text
+
+
+def test_get_letta_password_deprecation_server_password_only(monkeypatch, caplog):
+    """Test that LETTA_SERVER_PASSWORD triggers deprecation warning."""
+    monkeypatch.delenv("LETTA_PASSWORD", raising=False)
+    monkeypatch.setenv("LETTA_SERVER_PASSWORD", "old_password")
+
+    from spds import config
+
+    caplog.clear()
+    with caplog.at_level("WARNING"):
+        result = config.get_letta_password()
+
+    assert result == "old_password"
+    assert "deprecated LETTA_SERVER_PASSWORD" in caplog.text
+    assert "migrate to LETTA_PASSWORD" in caplog.text
+
+
+def test_get_letta_password_preference_both_set(monkeypatch, caplog):
+    """Test that LETTA_PASSWORD is preferred when both are set."""
+    monkeypatch.setenv("LETTA_PASSWORD", "new_password")
+    monkeypatch.setenv("LETTA_SERVER_PASSWORD", "old_password")
+
+    from spds import config
+
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        result = config.get_letta_password()
+
+    assert result == "new_password"
+    assert "Preferring LETTA_PASSWORD over LETTA_SERVER_PASSWORD" in caplog.text
+
+
+def test_get_letta_password_neither_set(monkeypatch, caplog):
+    """Test that empty string is returned when neither is set."""
+    monkeypatch.delenv("LETTA_PASSWORD", raising=False)
+    monkeypatch.delenv("LETTA_SERVER_PASSWORD", raising=False)
+
+    from spds import config
+
+    caplog.clear()
+    result = config.get_letta_password()
+
+    assert result == ""
+    # Should not log any messages
+    assert caplog.text == ""

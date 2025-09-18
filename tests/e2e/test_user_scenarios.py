@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+import logging
 from letta_client import Letta
 from letta_client.types import AgentState, EmbeddingConfig, LlmConfig, Memory, Tool
 
@@ -96,7 +97,7 @@ class TestE2EUserScenarios:
     @patch("spds.main.Letta")
     @patch("builtins.input")
     def test_ephemeral_swarm_conversation_scenario(
-        self, mock_input, mock_letta_class, mock_letta_environment
+        self, mock_input, mock_letta_class, mock_letta_environment, caplog
     ):
         """Test complete scenario: user runs ephemeral swarm and has conversation."""
         # Mock user inputs: topic, one message, then quit
@@ -235,13 +236,19 @@ class TestE2EUserScenarios:
 
         # Verify expected workflow occurred
         assert "Creating swarm from temporary agent profiles" in output
-        assert "Creating agent: Alex" in output
-        assert "Creating agent: Jordan" in output
-        assert "Swarm chat started" in output
-        assert "Project Planning Discussion" in output
-        assert "Assessing agent motivations" in output
-        assert "Alex: I think we should start with a thorough risk assessment" in output
-        assert "Exiting chat" in output
+
+        # Account for logging vs stdout: the application logs creation messages.
+        # Use caplog to assert the INFO log messages were emitted.
+        caplog.set_level(logging.INFO)
+        assert "Creating agent: Alex" in caplog.text
+        assert "Creating agent: Jordan" in caplog.text
+
+        # The following messages are emitted via logging; assert via caplog
+        assert "Swarm chat started" in caplog.text
+        assert "Project Planning Discussion" in caplog.text
+        assert "Assessing agent motivations" in caplog.text
+        assert "Alex: I think we should start with a thorough risk assessment" in caplog.text
+        assert "Exiting chat" in caplog.text
 
         # Verify API calls
         assert mock_client.agents.create.call_count == 2
@@ -256,6 +263,7 @@ class TestE2EUserScenarios:
         mock_letta_class,
         mock_letta_environment,
         sample_e2e_agent_states,
+        caplog,
     ):
         """Test scenario: user loads existing agents by ID and has conversation."""
         mock_input.side_effect = [
@@ -364,12 +372,13 @@ class TestE2EUserScenarios:
         sys.stdout = sys.__stdout__
         output = captured_output.getvalue()
 
-        # Verify workflow
-        assert "Loading swarm from existing agent IDs" in output
-        assert "Retrieving agent: ag-e2e-001" in output
-        assert "Retrieving agent: ag-e2e-002" in output
-        assert "Technical Architecture Review" in output
-        assert "E2E Agent 2: For microservices architecture, I recommend" in output
+        # Verify workflow (use logs for messages emitted via logging)
+        caplog.set_level(logging.INFO)
+        assert "Loading swarm from existing agent IDs" in caplog.text
+        assert "Retrieving agent: ag-e2e-001" in caplog.text
+        assert "Retrieving agent: ag-e2e-002" in caplog.text
+        assert "Technical Architecture Review" in caplog.text
+        assert "E2E Agent 2: For microservices architecture, I recommend" in caplog.text
 
         # Verify correct API calls
         mock_client.agents.retrieve.assert_any_call(agent_id="ag-e2e-001")
@@ -383,6 +392,7 @@ class TestE2EUserScenarios:
         mock_letta_class,
         mock_letta_environment,
         sample_e2e_agent_states,
+        caplog,
     ):
         """Test scenario: user loads existing agents by name."""
         mock_input.side_effect = [
@@ -493,12 +503,13 @@ class TestE2EUserScenarios:
         sys.stdout = sys.__stdout__
         output = captured_output.getvalue()
 
-        # Verify workflow
-        assert "Loading swarm from existing agent names" in output
-        assert "Retrieving agent by name: E2E Agent 1" in output
-        assert "Retrieving agent by name: E2E Agent 2" in output
-        assert "Team Collaboration" in output
-        assert "continuous integration" in output
+        # Verify workflow (use logs for messages emitted via logging)
+        caplog.set_level(logging.INFO)
+        assert "Loading swarm from existing agent names" in caplog.text
+        assert "Retrieving agent by name: E2E Agent 1" in caplog.text
+        assert "Retrieving agent by name: E2E Agent 2" in caplog.text
+        assert "Team Collaboration" in caplog.text
+        assert "continuous integration" in caplog.text
 
         # Verify API calls
         mock_client.agents.list.assert_any_call(name="E2E Agent 1", limit=1)
@@ -507,7 +518,7 @@ class TestE2EUserScenarios:
     @patch("spds.main.Letta")
     @patch("builtins.input")
     def test_custom_swarm_config_scenario(
-        self, mock_input, mock_letta_class, mock_letta_environment
+        self, mock_input, mock_letta_class, mock_letta_environment, caplog
     ):
         """Test scenario: user runs with custom swarm configuration file."""
         mock_input.side_effect = [
@@ -646,12 +657,13 @@ class TestE2EUserScenarios:
         sys.stdout = sys.__stdout__
         output = captured_output.getvalue()
 
-        # Verify workflow
-        assert "Creating swarm from temporary agent profiles" in output
-        assert "Creating agent: Innovator Sam" in output
-        assert "Creating agent: Analyst Riley" in output
-        assert "Creative Brainstorming" in output
-        assert "AI-powered personalization" in output
+        # Verify workflow (most messages emitted via logging)
+        caplog.set_level(logging.INFO)
+        assert "Creating swarm from temporary agent profiles" in caplog.text
+        assert "Creating agent: Innovator Sam" in caplog.text
+        assert "Creating agent: Analyst Riley" in caplog.text
+        assert "Creative Brainstorming" in caplog.text
+        assert "AI-powered personalization" in caplog.text
 
         # Verify diverse models were used in agent creation
         create_calls = mock_client.agents.create.call_args_list
@@ -662,7 +674,7 @@ class TestE2EUserScenarios:
     @patch("spds.main.Letta")
     @patch("builtins.input")
     def test_error_handling_scenario(
-        self, mock_input, mock_letta_class, mock_letta_environment
+        self, mock_input, mock_letta_class, mock_letta_environment, caplog
     ):
         """Test scenario: handling errors gracefully during conversation."""
         mock_input.side_effect = ["Error Testing", "Let's test error handling", "quit"]
@@ -731,15 +743,16 @@ class TestE2EUserScenarios:
         sys.stdout = sys.__stdout__
         output = captured_output.getvalue()
 
-        # Verify error was handled gracefully
-        assert "Error Testing" in output
-        assert "Assessing agent motivations" in output
+        # Verify error was handled gracefully (messages emitted via logging)
+        caplog.set_level(logging.INFO)
+        assert "Error Testing" in caplog.text
+        assert "Assessing agent motivations" in caplog.text
         assert (
             "Error Test Agent: I have some thoughts but I'm having trouble phrasing them."
-            in output
-            or "Error during speak()" in output
+            in caplog.text
+            or "Error in sequential response" in caplog.text
         )
-        assert "Exiting chat" in output
+        assert "Exiting chat" in caplog.text
 
     @patch("builtins.input")
     def test_eof_exit_scenario(self, mock_input):

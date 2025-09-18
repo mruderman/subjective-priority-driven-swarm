@@ -86,15 +86,22 @@ This project implements a multi-agent group chat system based on the Subjective 
     Create a `.env` file in the project root or set environment variables:
     ```bash
     LETTA_API_KEY=your-api-key-here
-    LETTA_PASSWORD=your-server-password
-X        LETTA_BASE_URL=http://localhost:8283  # For self-hosted (fallback for local dev)
-        LETTA_ENVIRONMENT=SELF_HOSTED  # Or LETTA_CLOUD
+    LETTA_PASSWORD=your-server-password  # Primary variable for server authentication
+    LETTA_BASE_URL=http://localhost:8283  # For self-hosted (fallback for local dev)
+    LETTA_ENVIRONMENT=SELF_HOSTED  # Or LETTA_CLOUD
     ```
 
-Notes:
+**Environment Variable Precedence for Server Authentication:**
+- **LETTA_PASSWORD** (recommended): Primary variable for Letta server authentication
+- **LETTA_SERVER_PASSWORD** (deprecated): Supported for backward compatibility, but will show a deprecation warning
+- **Precedence**: If both are set, LETTA_PASSWORD is used and a preference message is logged
+
+**Notes:**
 - The application provides a non-sensitive fallback of `http://localhost:8283` for
     local development so it works out-of-the-box. For production, set `LETTA_BASE_URL`
     and `LETTA_ENVIRONMENT` explicitly and use a secrets manager for API keys.
+- **Migration Guide**: If you're currently using LETTA_SERVER_PASSWORD, migrate to LETTA_PASSWORD
+    for future compatibility. Both will work during the transition period.
 - You can perform a startup validation with `spds.config.validate_letta_config()`
     to ensure required env vars are present and (optionally) to check connectivity to
     the Letta server. Example:

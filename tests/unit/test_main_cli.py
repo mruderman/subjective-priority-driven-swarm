@@ -108,9 +108,9 @@ def test_main_swarm_config_invalid_path():
 
 def test_main_auth_selection_self_hosted_password():
     with patch("spds.main.config.LETTA_ENVIRONMENT", "SELF_HOSTED"), patch(
-        "spds.main.config.LETTA_SERVER_PASSWORD", "pw"
-    ), patch("spds.main.config.LETTA_API_KEY", ""), patch(
-        "spds.main.config.LETTA_BASE_URL", "http://x"
+        "spds.main.config.LETTA_API_KEY", ""
+    ), patch("spds.main.config.LETTA_BASE_URL", "http://x"), patch(
+        "spds.main.config.get_letta_password", return_value="pw"
     ), patch(
         "spds.main.SwarmManager"
     ) as SM, patch(
@@ -136,7 +136,11 @@ def test_main_handles_swarm_initialization_error(monkeypatch, capsys):
         "spds.main.config.LETTA_SERVER_PASSWORD", ""
     ), patch("spds.main.config.LETTA_API_KEY", ""), patch(
         "spds.main.config.LETTA_BASE_URL", "http://x"
-    ), patch("spds.main.SwarmManager", FailingSwarm), patch("spds.main.Letta"):
+    ), patch(
+        "spds.main.SwarmManager", FailingSwarm
+    ), patch(
+        "spds.main.Letta"
+    ):
         from spds.main import main
 
         with pytest.raises(SystemExit) as excinfo:

@@ -8,6 +8,8 @@ from letta_client import CreateBlock, Letta, MessageCreate
 from letta_client.types import AgentState
 
 from . import config
+from .letta_api import letta_call
+from .session_tracking import track_message, track_action, track_system_event
 
 # spds/secretary_agent.py
 
@@ -82,7 +84,9 @@ class SecretaryAgent:
 
         # Create new agent using proper Letta memory blocks pattern
         try:
-            self.agent = self.client.agents.create(
+            self.agent = letta_call(
+                "secretary.agent.create",
+                self.client.agents.create,
                 name=name,
                 memory_blocks=[
                     CreateBlock(
@@ -142,7 +146,9 @@ class SecretaryAgent:
         )
 
         def send_start_message():
-            return self.client.agents.messages.create(
+            return letta_call(
+                "secretary.meeting.start",
+                self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[MessageCreate(role="user", content=meeting_start_message)],
             )
@@ -152,7 +158,20 @@ class SecretaryAgent:
             if response:
                 print(f"📋 Meeting started: {topic}")
                 print(f"👥 Participants: {', '.join(participants)}")
-                print(f"🤖 Secretary: {self._extract_agent_response(response)}")
+                secretary_response = self._extract_agent_response(response)
+                print(f"🤖 Secretary: {secretary_response}")
+                
+                # Track meeting start
+                track_system_event(
+                    event_type="meeting_started",
+                    details={
+                        "topic": topic,
+                        "participants": participants,
+                        "meeting_type": meeting_type,
+                        "secretary_mode": self.mode,
+                        "secretary_response": secretary_response
+                    }
+                )
             else:
                 print(f"⚠️ Secretary may not have received meeting start notification")
         except Exception as e:
@@ -228,7 +247,9 @@ class SecretaryAgent:
 
         # Send to secretary agent for processing and note-taking
         def send_observation():
-            return self.client.agents.messages.create(
+            return letta_call(
+                "secretary.message.observe",
+                self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[
                     MessageCreate(
@@ -240,6 +261,17 @@ class SecretaryAgent:
 
         try:
             retry_with_backoff(send_observation, max_retries=2, backoff_factor=0.5)
+            
+            # Track message observation
+            track_action(
+                actor="secretary",
+                action_type="observe_message",
+                details={
+                    "speaker": speaker,
+                    "message": message,
+                    "metadata": metadata or {}
+                }
+            )
         except Exception as e:
             # Don't print for every message - too noisy
             pass
@@ -261,11 +293,24 @@ class SecretaryAgent:
             action_message += f" (due: {due_date})"
 
         try:
-            self.client.agents.messages.create(
+            letta_call(
+                "secretary.action_item.add",
+                self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[MessageCreate(role="user", content=action_message)],
             )
             print(f"✅ Action item recorded: {description}")
+            
+            # Track action item creation
+            track_action(
+                actor="secretary",
+                action_type="add_action_item",
+                details={
+                    "description": description,
+                    "assignee": assignee,
+                    "due_date": due_date
+                }
+            )
         except Exception as e:
             print(f"❌ Failed to record action item: {e}")
 
@@ -280,11 +325,23 @@ class SecretaryAgent:
             decision_message += f" (context: {context})"
 
         try:
-            self.client.agents.messages.create(
+            letta_call(
+                "secretary.decision.record",
+                self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[MessageCreate(role="user", content=decision_message)],
             )
             print(f"📋 Decision recorded: {decision}")
+            
+            # Track decision recording
+            track_decision(
+                actor="secretary",
+                decision_type="record_decision",
+                details={
+                    "decision": decision,
+                    "context": context
+                }
+            )
         except Exception as e:
             print(f"❌ Failed to record decision: {e}")
 
@@ -294,7 +351,9 @@ class SecretaryAgent:
             return {}
 
         try:
-            response = self.client.agents.messages.create(
+            response = letta_call(
+                "secretary.stats.get",
+                self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[
                     MessageCreate(
@@ -346,7 +405,9 @@ class SecretaryAgent:
         )
 
         def request_minutes():
-            return self.client.agents.messages.create(
+            return letta_call(
+                "secretary.minutes.generate",
+                self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[MessageCreate(role="user", content=minutes_request)],
             )

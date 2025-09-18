@@ -8,9 +8,11 @@ from letta_client.errors import NotFoundError
 
 from .config import logger
 from .export_manager import ExportManager
+from .letta_api import letta_call
 from .memory_awareness import create_memory_awareness_for_agent
 from .secretary_agent import SecretaryAgent
 from .spds_agent import SPDSAgent
+from .session_tracking import track_message, track_action, track_system_event
 
 
 class SwarmManager:
@@ -98,7 +100,11 @@ class SwarmManager:
         for agent_id in agent_ids:
             try:
                 logger.info(f"Retrieving agent: {agent_id}")
-                agent_state = self.client.agents.retrieve(agent_id=agent_id)
+                agent_state = letta_call(
+                    "agents.retrieve",
+                    self.client.agents.retrieve,
+                    agent_id=agent_id
+                )
                 self.agents.append(SPDSAgent(agent_state, self.client))
             except NotFoundError:
                 logger.warning(f"Agent with ID '{agent_id}' not found. Skipping.")
@@ -116,7 +122,12 @@ class SwarmManager:
         for name in agent_names:
             logger.info(f"Retrieving agent by name: {name}")
             # The list method with a name filter returns a list. We'll take the first one.
-            found_agents = self.client.agents.list(name=name, limit=1)
+            found_agents = letta_call(
+                "agents.list",
+                self.client.agents.list,
+                name=name,
+                limit=1
+            )
             if not found_agents:
                 logger.warning(f"Agent with name '{name}' not found. Skipping.")
                 continue
@@ -267,6 +278,13 @@ class SwarmManager:
 
             self.conversation_history += f"You: {human_input}\n"
 
+            # Track user message
+            track_message(
+                actor="user",
+                content=human_input,
+                message_type="user"
+            )
+
             # Let secretary observe the human message
             if self.secretary:
                 self.secretary.observe_message("You", human_input)
@@ -295,7 +313,9 @@ class SwarmManager:
             success = False
             for attempt in range(max_retries):
                 try:
-                    self.client.agents.messages.create(
+                    letta_call(
+                        "agents.messages.create.update_memory",
+                        self.client.agents.messages.create,
                         agent_id=agent.agent.id,
                         messages=[{"role": "user", "content": f"{speaker}: {message}"}],
                         otid=str(uuid.uuid4())
@@ -323,7 +343,9 @@ class SwarmManager:
                             )
                             self._reset_agent_messages(agent.agent.id)
                             try:
-                                self.client.agents.messages.create(
+                                letta_call(
+                                    "agents.messages.create.retry_after_reset",
+                                    self.client.agents.messages.create,
                                     agent_id=agent.agent.id,
                                     messages=[
                                         {
@@ -355,7 +377,11 @@ class SwarmManager:
             agent_id (str): Identifier of the agent whose message history should be reset.
         """
         try:
-            self.client.agents.messages.reset(agent_id=agent_id)
+            letta_call(
+                "agents.messages.reset",
+                self.client.agents.messages.reset,
+                agent_id=agent_id
+            )
             logger.info(f"Successfully reset messages for agent {agent_id}")
         except Exception as e:
             logger.error(f"Failed to reset messages for agent {agent_id}: {e}")
@@ -373,7 +399,12 @@ class SwarmManager:
             int: Number of messages found (0 on error or when the result is not size-aware).
         """
         try:
-            messages = self.client.agents.messages.list(agent_id=agent_id, limit=1000)
+            messages = letta_call(
+                "agents.messages.list",
+                self.client.agents.messages.list,
+                agent_id=agent_id,
+                limit=1000
+            )
             return len(messages) if hasattr(messages, "__len__") else 0
         except Exception as e:
             logger.error(f"Failed to get message count for agent {agent_id}: {e}")
@@ -394,7 +425,9 @@ class SwarmManager:
         """
         try:
             # Send context primer to ensure agent is ready
-            self.client.agents.messages.create(
+            letta_call(
+                "agents.messages.create.warm_up",
+                self.client.agents.messages.create,
                 agent_id=agent.agent.id,
                 messages=[
                     {
@@ -627,7 +660,9 @@ class SwarmManager:
                         logger.warning("Weak response detected, retrying...")
                         time.sleep(0.5)
                         # Send a more specific prompt
-                        self.client.agents.messages.create(
+                        letta_call(
+                            "agents.messages.create.retry_prompt",
+                            self.client.agents.messages.create,
                             agent_id=agent.agent.id,
                             messages=[
                                 {
@@ -665,7 +700,9 @@ class SwarmManager:
         # Send instruction to all agents about response phase
         for agent in self.agents:
             try:
-                self.client.agents.messages.create(
+                letta_call(
+                    "agents.messages.create.response_instruction",
+                    self.client.agents.messages.create,
                     agent_id=agent.agent.id,
                     messages=[
                         {
@@ -857,6 +894,18 @@ class SwarmManager:
         """
         self.conversation_history += f"System: The topic is '{topic}'.\n"
 
+        # Track meeting start
+        track_system_event(
+            event_type="meeting_started",
+            details={
+                "topic": topic,
+                "meeting_type": self.meeting_type,
+                "conversation_mode": self.conversation_mode,
+                "agent_count": len(self.agents),
+                "secretary_enabled": self.enable_secretary
+            }
+        )
+
         # Topic is naturally included in conversation_history
 
         if self.secretary:
@@ -881,6 +930,17 @@ class SwarmManager:
         _self._offer_export_options()_ to present export/export-command choices to the user.
         If no secretary is configured, this method is a no-op.
         """
+        # Track meeting end
+        track_system_event(
+            event_type="meeting_ended",
+            details={
+                "meeting_type": self.meeting_type,
+                "conversation_mode": self.conversation_mode,
+                "secretary_enabled": self.enable_secretary,
+                "conversation_history_length": len(self.conversation_history)
+            }
+        )
+        
         if self.secretary:
             logger.info("\n" + "=" * 50)
             logger.info("🏁 Meeting ended! Export options available.")
@@ -1176,7 +1236,9 @@ Note: Memory awareness information respects agent autonomy and provides neutral 
 
         for agent in self.agents:
             try:
-                context_info = self.client.agents.context.retrieve(
+                context_info = letta_call(
+                    "agents.context.retrieve",
+                    self.client.agents.context.retrieve,
                     agent_id=agent.agent.id
                 )
                 recall_count = context_info.get("num_recall_memory", 0)

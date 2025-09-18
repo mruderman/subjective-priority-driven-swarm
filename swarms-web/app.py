@@ -4,7 +4,11 @@ import json
 import os
 import sys
 import uuid
+import time
+import random
+import string
 from datetime import datetime
+from io import BytesIO
 
 from flask import (
     Flask,
@@ -17,6 +21,7 @@ from flask import (
     url_for,
 )
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from werkzeug.utils import secure_filename
 
 # Add parent directory to path to import existing SPDS modules
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -25,9 +30,16 @@ from letta_client import Letta
 from letta_flask import LettaFlask, LettaFlaskConfig
 
 from spds import config
-from spds.export_manager import ExportManager
+from spds.export_manager import ExportManager, export_session_to_json, export_session_to_markdown
 from spds.secretary_agent import SecretaryAgent
+from spds.session_context import set_current_session_id
+from spds.session_store import get_default_session_store
 from spds.swarm_manager import SwarmManager
+from pathlib import Path
+import mimetypes
+
+import logging
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -54,6 +66,17 @@ except Exception as e:
     # Raise here so app startup fails fast with a clear message
     raise RuntimeError(f"Letta configuration invalid: {e}")
 
+# Validate agent profiles configuration at startup
+try:
+    validated_profiles = config.get_agent_profiles_validated()
+    print(
+        f"Web UI: Validated {len(validated_profiles.agents)} agent profiles successfully."
+    )
+except Exception as e:
+    # Log error but don't prevent startup since web UI primarily uses agent IDs
+    print(f"Warning: Agent profiles validation failed: {e}")
+    print("Web UI will continue but may have issues if using default agent profiles.")
+
 # Global storage for active swarm sessions
 active_sessions = {}
 
@@ -66,10 +89,9 @@ class WebSwarmManager:
         self.socketio = socketio_instance
 
         # Initialize Letta client
-        if config.LETTA_ENVIRONMENT == "SELF_HOSTED" and config.LETTA_SERVER_PASSWORD:
-            self.client = Letta(
-                token=config.LETTA_SERVER_PASSWORD, base_url=config.LETTA_BASE_URL
-            )
+        letta_password = config.get_letta_password()
+        if config.LETTA_ENVIRONMENT == "SELF_HOSTED" and letta_password:
+            self.client = Letta(token=letta_password, base_url=config.LETTA_BASE_URL)
         elif config.LETTA_API_KEY:
             self.client = Letta(
                 token=config.LETTA_API_KEY, base_url=config.LETTA_BASE_URL
@@ -604,6 +626,18 @@ def setup():
 @app.route("/chat")
 def chat():
     """Main chat interface."""
+    # In test environments we allow injecting a session_id via query param
+    # to simplify E2E testing (Playwright). When PLAYWRIGHT_TEST=1 is set,
+    # a test can navigate to /chat?session_id=<id> and the server will accept
+    # it and proceed without requiring a prior POST /api/start_session that
+    # performed LettA lookups.
+    from flask import request
+
+    if os.getenv("PLAYWRIGHT_TEST") == "1":
+        injected = request.args.get("session_id")
+        if injected:
+            session["session_id"] = injected
+
     if "session_id" not in session:
         return redirect(url_for("setup"))
     return render_template("chat.html")
@@ -614,10 +648,9 @@ def get_agents():
     """API endpoint to get available agents."""
     try:
         # Initialize Letta client
-        if config.LETTA_ENVIRONMENT == "SELF_HOSTED" and config.LETTA_SERVER_PASSWORD:
-            client = Letta(
-                token=config.LETTA_SERVER_PASSWORD, base_url=config.LETTA_BASE_URL
-            )
+        letta_password = config.get_letta_password()
+        if config.LETTA_ENVIRONMENT == "SELF_HOSTED" and letta_password:
+            client = Letta(token=letta_password, base_url=config.LETTA_BASE_URL)
         elif config.LETTA_API_KEY:
             client = Letta(token=config.LETTA_API_KEY, base_url=config.LETTA_BASE_URL)
         else:
@@ -680,6 +713,270 @@ def download_export(filename):
     return send_from_directory(export_dir, filename, as_attachment=True)
 
 
+# Session management endpoints
+@app.route("/sessions")
+def sessions_page():
+    """Sessions management page."""
+    return render_template("sessions.html")
+
+
+@app.route("/api/sessions", methods=["GET"])
+def get_sessions():
+    """Get list of sessions with optional limit."""
+    try:
+        store = get_default_session_store()
+        sessions = store.list_sessions()
+        
+        # Apply limit if provided
+        limit = request.args.get('limit', type=int)
+        if limit and limit > 0:
+            sessions = sessions[:limit]
+        
+        # Convert to JSON-serializable format
+        session_list = []
+        for session_meta in sessions:
+            session_list.append({
+                'id': session_meta.id,
+                'created_at': session_meta.created_at.isoformat(),
+                'last_updated': session_meta.last_updated.isoformat(),
+                'title': session_meta.title,
+                'tags': session_meta.tags
+            })
+        
+        logger.debug(f"Listed {len(session_list)} sessions")
+        return jsonify(session_list)
+        
+    except Exception as e:
+        logger.error(f"Error listing sessions: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sessions", methods=["POST"])
+def create_session():
+    """Create a new session."""
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify({"error": "Invalid JSON payload"}), 400
+        
+        title = data.get('title')
+        tags = data.get('tags', [])
+        
+        # Validate tags is a list if provided
+        if tags is not None and not isinstance(tags, list):
+            return jsonify({"error": "tags must be an array"}), 400
+        
+        store = get_default_session_store()
+        session_state = store.create(title=title, tags=tags)
+        
+        logger.info(f"Created session {session_state.meta.id} with title: {title}")
+        
+        return jsonify({
+            'id': session_state.meta.id,
+            'created_at': session_state.meta.created_at.isoformat(),
+            'last_updated': session_state.meta.last_updated.isoformat(),
+            'title': session_state.meta.title,
+            'tags': session_state.meta.tags
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Error creating session: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sessions/resume", methods=["POST"])
+def resume_session():
+    """Resume an existing session."""
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify({"error": "Invalid JSON payload"}), 400
+        
+        session_id = data.get('id')
+        if not session_id:
+            return jsonify({"error": "id is required"}), 400
+        
+        store = get_default_session_store()
+        
+        # Check if session exists
+        try:
+            store.load(session_id)
+        except ValueError:
+            return jsonify({"ok": False, "error": "not_found"}), 404
+        
+        # Set current session context
+        set_current_session_id(session_id)
+        
+        logger.info(f"Resumed session {session_id}")
+        
+        return jsonify({"ok": True, "id": session_id})
+        
+    except Exception as e:
+        logger.error(f"Error resuming session: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# Session export endpoints
+@app.route("/api/sessions/<session_id>/exports", methods=["GET"])
+def get_session_exports(session_id):
+    """Get list of export files for a session."""
+    try:
+        # Validate session exists
+        store = get_default_session_store()
+        try:
+            store.load(session_id)
+        except ValueError:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Get exports directory for this session
+        sessions_dir = config.get_sessions_dir()
+        session_exports_dir = sessions_dir / session_id
+        
+        if not session_exports_dir.exists():
+            return jsonify([])  # Return empty list if no exports
+        
+        # Get limit parameter
+        limit = request.args.get('limit', type=int)
+        
+        # Find export files matching patterns
+        export_files = []
+        for file_path in session_exports_dir.iterdir():
+            if file_path.is_file():
+                filename = file_path.name
+                # Check for allowed patterns
+                if filename.startswith("summary_") and filename.endswith(".json"):
+                    kind = "json"
+                elif filename.startswith("minutes_") and filename.endswith(".md"):
+                    kind = "markdown"
+                else:
+                    continue
+                
+                # Get file stats
+                stat = file_path.stat()
+                export_files.append({
+                    "filename": filename,
+                    "size_bytes": stat.st_size,
+                    "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "kind": kind
+                })
+        
+        # Sort by creation time (newest first)
+        export_files.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        # Apply limit if provided
+        if limit and limit > 0:
+            export_files = export_files[:limit]
+        
+        logger.debug(f"Listed {len(export_files)} exports for session {session_id}")
+        return jsonify(export_files)
+        
+    except Exception as e:
+        logger.error(f"Error listing session exports: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sessions/<session_id>/export", methods=["POST"])
+def trigger_session_export(session_id):
+    """Trigger export for a session."""
+    try:
+        # Validate session exists
+        store = get_default_session_store()
+        try:
+            store.load(session_id)
+        except ValueError:
+            return jsonify({"ok": False, "error": "Session not found"}), 404
+        
+        # Create exports directory for this session
+        sessions_dir = config.get_sessions_dir()
+        session_exports_dir = sessions_dir / session_id
+        session_exports_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Export to both JSON and Markdown
+        created_files = []
+        
+        try:
+            # Export to JSON
+            json_path = export_session_to_json(session_id, session_exports_dir)
+            json_filename = json_path.name
+            created_files.append({
+                "filename": json_filename,
+                "kind": "json"
+            })
+            
+            # Export to Markdown
+            md_path = export_session_to_markdown(session_id, session_exports_dir)
+            md_filename = md_path.name
+            created_files.append({
+                "filename": md_filename,
+                "kind": "markdown"
+            })
+            
+            logger.info(f"Exported session {session_id}: {json_filename}, {md_filename}")
+            return jsonify({
+                "ok": True,
+                "created": created_files
+            })
+            
+        except Exception as export_error:
+            logger.error(f"Export failed for session {session_id}: {export_error}")
+            return jsonify({
+                "ok": False,
+                "error": f"Export failed: {str(export_error)}"
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error triggering session export: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/sessions/<session_id>/exports/<filename>")
+def download_session_export(session_id, filename):
+    """Download a specific export file for a session."""
+    try:
+        # Validate session exists
+        store = get_default_session_store()
+        try:
+            store.load(session_id)
+        except ValueError:
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Security: Validate filename pattern
+        if not (filename.startswith("summary_") and filename.endswith(".json")) and \
+           not (filename.startswith("minutes_") and filename.endswith(".md")):
+            return jsonify({"error": "Invalid filename pattern"}), 400
+        
+        # Security: Prevent path traversal
+        if ".." in filename or "/" in filename or "\\" in filename:
+            return jsonify({"error": "Invalid filename"}), 400
+        
+        # Get file path
+        sessions_dir = config.get_sessions_dir()
+        file_path = sessions_dir / session_id / filename
+        
+        if not file_path.exists() or not file_path.is_file():
+            return jsonify({"error": "File not found"}), 404
+        
+        # Determine MIME type
+        if filename.endswith(".json"):
+            mime_type = "application/json"
+        elif filename.endswith(".md"):
+            mime_type = "text/markdown"
+        else:
+            mime_type = "application/octet-stream"
+        
+        logger.debug(f"Downloading export file: {file_path}")
+        return send_from_directory(
+            sessions_dir / session_id,
+            filename,
+            as_attachment=True,
+            mimetype=mime_type
+        )
+        
+    except Exception as e:
+        logger.error(f"Error downloading session export: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 # WebSocket events
 @socketio.on("connect")
 def on_connect():
@@ -722,6 +1019,213 @@ def on_user_message(data):
     if session_id in active_sessions:
         web_swarm = active_sessions[session_id]
         web_swarm.process_user_message(message)
+
+
+# File upload utilities
+ALLOWED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.pdf', '.docx', '.txt'}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+def _generate_unique_filename(original_filename: str) -> str:
+    """Generate a unique filename with timestamp and random suffix."""
+    # Get file extension
+    ext = Path(original_filename).suffix.lower()
+    
+    # Generate timestamp
+    timestamp = int(time.time() * 1000)
+    
+    # Generate random suffix
+    random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    
+    # Sanitize original name (remove extension and special chars)
+    base_name = secure_filename(Path(original_filename).stem)
+    
+    return f"{base_name}_{timestamp}_{random_suffix}{ext}"
+
+
+def _validate_file_upload(file) -> tuple[bool, str]:
+    """Validate file upload and return (is_valid, error_message)."""
+    if not file:
+        return False, "No file provided"
+    
+    if not file.filename:
+        return False, "No filename provided"
+    
+    # Check file extension
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return False, f"File type {ext} not allowed. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+    
+    # Check file size by reading first chunk
+    file.seek(0, 2)  # Seek to end
+    file_size = file.tell()
+    file.seek(0)  # Reset to beginning
+    
+    if file_size > MAX_FILE_SIZE:
+        return False, f"File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)}MB"
+    
+    return True, ""
+
+
+def _get_file_kind(mime_type: str, filename: str) -> str:
+    """Determine file kind from MIME type or filename."""
+    # Check MIME type first
+    if mime_type:
+        if mime_type.startswith('image/'):
+            return 'image'
+        elif mime_type == 'application/pdf':
+            return 'document'
+        elif mime_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document']:
+            return 'document'
+        elif mime_type.startswith('text/'):
+            return 'document'
+    
+    # Fallback to file extension
+    ext = Path(filename).suffix.lower()
+    if ext in {'.png', '.jpg', '.jpeg', '.gif'}:
+        return 'image'
+    elif ext in {'.pdf', '.docx', '.txt'}:
+        return 'document'
+    
+    return 'document'  # Default fallback
+
+
+# File upload endpoint
+@app.route("/api/uploads", methods=["POST"])
+def upload_file():
+    """Handle file uploads with multipart/form-data."""
+    try:
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part in request"}), 400
+        
+        file = request.files['file']
+        
+        # Validate file
+        is_valid, error_msg = _validate_file_upload(file)
+        if not is_valid:
+            return jsonify({"error": error_msg}), 400
+        
+        # Get optional parameters
+        session_id = request.form.get('session_id')
+        kind = request.form.get('kind')
+        
+        # Determine storage directory
+        sessions_dir = config.get_sessions_dir()
+        if session_id:
+            upload_dir = sessions_dir / session_id / "uploads"
+        else:
+            upload_dir = sessions_dir / "misc" / "uploads"
+        
+        # Ensure directory exists
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        unique_filename = _generate_unique_filename(file.filename)
+        file_path = upload_dir / unique_filename
+        
+        # Save file in chunks to avoid memory issues
+        bytes_written = 0
+        with file_path.open('wb') as f:
+            while True:
+                chunk = file.read(8192)  # 8KB chunks
+                if not chunk:
+                    break
+                f.write(chunk)
+                bytes_written += len(chunk)
+        
+        # Get MIME type
+        mime_type, _ = mimetypes.guess_type(str(file_path))
+        
+        # Determine file kind
+        if not kind:
+            kind = _get_file_kind(mime_type or '', unique_filename)
+        
+        # Create relative path for storage
+        path_rel = str(file_path.relative_to(sessions_dir))
+        
+        # Log upload
+        logger.info(f"File upload saved: session_id={session_id}, filename={unique_filename}, mime={mime_type}, size={bytes_written}")
+        
+        return jsonify({
+            "ok": True,
+            "session_id": session_id,
+            "file": {
+                "filename": unique_filename,
+                "path_rel": path_rel,
+                "mime": mime_type or "application/octet-stream",
+                "size_bytes": bytes_written,
+                "kind": kind
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"File upload failed: {e}")
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+
+
+# Message endpoint with attachments support
+@app.route("/api/messages", methods=["POST"])
+def create_message():
+    """Create a new message with optional attachments."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid JSON payload"}), 400
+        
+        # Required fields
+        session_id = data.get("session_id")
+        message = data.get("message")
+        
+        if not session_id:
+            return jsonify({"error": "session_id is required"}), 400
+        
+        if not message:
+            return jsonify({"error": "message is required"}), 400
+        
+        # Optional attachments
+        attachments = data.get("attachments", [])
+        
+        # Set session context
+        set_current_session_id(session_id)
+        
+        # Track message with attachments in payload
+        from spds.session_tracking import track_message
+        
+        payload = {
+            "content": message,
+            "message_type": "user",
+            "attachments": attachments
+        }
+        
+        # Create a session event directly
+        from spds.session_store import SessionEvent
+        from datetime import datetime
+        
+        event = SessionEvent(
+            event_id=str(uuid.uuid4()),
+            session_id=session_id,
+            ts=datetime.utcnow(),
+            actor="user",
+            type="message",
+            payload=payload
+        )
+        
+        # Save event
+        store = get_default_session_store()
+        store.save_event(event)
+        
+        logger.info(f"Message created with {len(attachments)} attachments for session {session_id}")
+        
+        return jsonify({
+            "ok": True,
+            "message_id": event.event_id,
+            "attachments_count": len(attachments)
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Message creation failed: {e}")
+        return jsonify({"error": f"Message creation failed: {str(e)}"}), 500
 
 
 if __name__ == "__main__":

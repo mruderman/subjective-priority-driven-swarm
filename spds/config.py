@@ -1,8 +1,9 @@
 # spds/config.py
 
 import logging
-from logging.handlers import RotatingFileHandler
 import os
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -12,16 +13,17 @@ load_dotenv()
 
 # --- Logging Configuration ---
 
+
 def setup_logging():
     """
     Configure the root logger to emit to the console and to a rotating file.
-    
+
     This function:
     - Reads LOG_LEVEL from the environment (default "INFO") and applies it to the root logger.
     - Ensures a "logs" directory exists and writes logs to "logs/spds.log".
     - Clears any existing handlers on the root logger to avoid duplicate outputs.
     - Attaches a console StreamHandler and a RotatingFileHandler (10 MB per file, 5 backups) with distinct formatters.
-    
+
     Side effects:
     - Creates the "logs" directory if missing.
     - Mutates the global logging configuration (root logger and module logger).
@@ -53,7 +55,7 @@ def setup_logging():
 
     # Create rotating file handler
     file_handler = RotatingFileHandler(
-        log_file, maxBytes=10*1024*1024, backupCount=5  # 10MB per file, 5 backups
+        log_file, maxBytes=10 * 1024 * 1024, backupCount=5  # 10MB per file, 5 backups
     )
     file_handler.setLevel(log_level)
     file_formatter = logging.Formatter(
@@ -62,7 +64,10 @@ def setup_logging():
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
-    logging.getLogger(__name__).info("Logging configured successfully with console and file output.")
+    logging.getLogger(__name__).info(
+        "Logging configured successfully with console and file output."
+    )
+
 
 # Initialize logging when the module is loaded (can be disabled for tests/embedding)
 if os.getenv("SPDS_INIT_LOGGING", "1") == "1":
@@ -81,6 +86,44 @@ LETTA_BASE_URL = os.getenv("LETTA_BASE_URL", "http://localhost:8283")
 # Environment: e.g. "SELF_HOSTED", "LETTA_CLOUD", "PRODUCTION" (fallback
 # is SELF_HOSTED for local dev). Keep the value explicit in production.
 LETTA_ENVIRONMENT = os.getenv("LETTA_ENVIRONMENT", "SELF_HOSTED")
+
+
+def get_letta_password() -> str:
+    """
+    Get the Letta server password with proper precedence between LETTA_PASSWORD and LETTA_SERVER_PASSWORD.
+
+    This function implements a centralized accessor for Letta server authentication that:
+    - Prefers LETTA_PASSWORD if both variables are set
+    - Falls back to LETTA_SERVER_PASSWORD if LETTA_PASSWORD is not set
+    - Logs deprecation warning when using LETTA_SERVER_PASSWORD
+    - Logs preference information when both are set
+
+    Returns:
+        str: The password to use for Letta server authentication, or empty string if neither is set
+    """
+    letta_password = os.getenv("LETTA_PASSWORD")
+    letta_server_password = os.getenv("LETTA_SERVER_PASSWORD")
+
+    if letta_password and letta_server_password:
+        # Both are set, prefer LETTA_PASSWORD
+        logger.info(
+            "Preferring LETTA_PASSWORD over LETTA_SERVER_PASSWORD for authentication"
+        )
+        return letta_password
+    elif letta_password:
+        # Only LETTA_PASSWORD is set
+        return letta_password
+    elif letta_server_password:
+        # Only LETTA_SERVER_PASSWORD is set, log deprecation warning
+        logger.warning(
+            "Using deprecated LETTA_SERVER_PASSWORD environment variable. "
+            "Please migrate to LETTA_PASSWORD for future compatibility."
+        )
+        return letta_server_password
+    else:
+        # Neither is set
+        return ""
+
 
 # Tool execution (Docker/self-hosted)
 TOOL_EXEC_DIR = os.getenv("TOOL_EXEC_DIR", "/app/tools")
@@ -200,6 +243,10 @@ DEFAULT_EXPORT_DIRECTORY = os.getenv("EXPORT_DIRECTORY", "./exports")
 DEFAULT_EXPORT_FORMAT = (
     "minutes"  # "minutes", "casual", "transcript", "actions", "summary", "all"
 )
+
+# Import agent profile validation
+from spds.profiles_schema import get_agent_profiles_validated
+
 AUTO_EXPORT_ON_END = bool(os.getenv("AUTO_EXPORT_ON_END", "False"))
 
 # Organization Settings for Formal Minutes
@@ -215,3 +262,118 @@ EXPORT_FILE_TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 SECRETARY_AUTO_DETECT_DECISIONS = True
 SECRETARY_AUTO_DETECT_ACTION_ITEMS = True
 SECRETARY_INTERVENTION_LEVEL = "minimal"  # "none", "minimal", "active", "full"
+
+# Letta API Timeout and Retry Configuration
+LETTA_TIMEOUT_SECONDS = int(os.getenv("LETTA_TIMEOUT_SECONDS", "30"))
+LETTA_MAX_RETRIES = int(os.getenv("LETTA_MAX_RETRIES", "3"))
+LETTA_RETRY_BASE_DELAY = float(os.getenv("LETTA_RETRY_BASE_DELAY", "0.5"))
+LETTA_RETRY_FACTOR = float(os.getenv("LETTA_RETRY_FACTOR", "2.0"))
+LETTA_RETRY_JITTER = float(os.getenv("LETTA_RETRY_JITTER", "0.1"))
+LETTA_RETRY_MAX_BACKOFF = float(os.getenv("LETTA_RETRY_MAX_BACKOFF", "5.0"))
+
+
+def get_letta_timeout_seconds() -> int:
+    """
+    Get the configured timeout for Letta API calls in seconds.
+    
+    Returns:
+        int: Timeout value in seconds (default: 30)
+    """
+    return LETTA_TIMEOUT_SECONDS
+
+
+def get_letta_max_retries() -> int:
+    """
+    Get the maximum number of retries for Letta API calls.
+    
+    Returns:
+        int: Maximum retry count (default: 3)
+    """
+    return LETTA_MAX_RETRIES
+
+
+def get_letta_retry_base_delay() -> float:
+    """
+    Get the base delay for exponential backoff in seconds.
+    
+    Returns:
+        float: Base delay in seconds (default: 0.5)
+    """
+    return LETTA_RETRY_BASE_DELAY
+
+
+def get_letta_retry_factor() -> float:
+    """
+    Get the exponential backoff factor.
+    
+    Returns:
+        float: Backoff multiplier (default: 2.0)
+    """
+    return LETTA_RETRY_FACTOR
+
+
+def get_letta_retry_jitter() -> float:
+    """
+    Get the jitter range for retry delays in seconds.
+    
+    Returns:
+        float: Jitter range in seconds (default: 0.1)
+    """
+    return LETTA_RETRY_JITTER
+
+
+def get_letta_retry_max_backoff() -> float:
+    """
+    Get the maximum backoff delay in seconds.
+    
+    Returns:
+        float: Maximum backoff in seconds (default: 5.0)
+    """
+    return LETTA_RETRY_MAX_BACKOFF
+
+
+def get_sessions_dir() -> Path:
+    """
+    Get the directory for storing session data.
+    
+    Returns:
+        Path: Directory path for sessions (default: "exports/sessions")
+    """
+    return Path(os.getenv("SESSIONS_DIR", "exports/sessions"))
+
+
+def get_session_autoflush_events() -> int:
+    """
+    Get the number of events to batch before flushing to disk.
+    
+    Returns:
+        int: Number of events to batch (default: 1, flush every event)
+    """
+    return int(os.getenv("SESSION_AUTOFLUSH_EVENTS", "1"))
+
+
+# Integrations Configuration
+def get_integrations_enabled() -> bool:
+    """
+    Get whether integrations are enabled.
+    
+    Returns:
+        bool: True if integrations are enabled (default: False)
+    """
+    return os.getenv("SPDS_ENABLE_INTEGRATIONS", "false").lower() == "true"
+
+
+def get_integrations_allow_fake_providers() -> bool:
+    """
+    Get whether fake providers are allowed for testing.
+    
+    Returns:
+        bool: True if fake providers are allowed (default: False)
+    """
+    allow_fake = os.getenv("SPDS_ALLOW_FAKE_PROVIDERS", "false").lower() == "true"
+    if allow_fake:
+        logger.warning(
+            "Fake providers are enabled via SPDS_ALLOW_FAKE_PROVIDERS. "
+            "This should only be used for testing and development."
+        )
+    return allow_fake

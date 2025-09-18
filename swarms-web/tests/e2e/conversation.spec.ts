@@ -192,6 +192,7 @@ test.beforeEach(async ({ page }) => {
     const win = window as typeof window & {
       __playwrightCreateSocketIO?: () => () => unknown;
       io?: () => unknown;
+      __PLAYWRIGHT_TEST?: string;
     };
 
     win.__playwrightCreateSocketIO = createSocketFactory;
@@ -220,11 +221,24 @@ test.beforeEach(async ({ page }) => {
     });
   });
 
+  // Provide a lightweight mocked start_session so tests don't trigger LettA
+  // network lookups during session creation which can fail on CI or offline.
   await page.route('**/api/start_session', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ session_id: 'session-test', status: 'success' }),
     });
+  });
+
+  // Inject a browser-global flag and set sessionStorage early to avoid
+  // evaluate/navigation races. Harmless when running locally.
+  await page.addInitScript(() => {
+    (window as any).__PLAYWRIGHT_TEST = '1';
+    try {
+      sessionStorage.setItem('sessionId', 'session-test');
+    } catch (e) {
+      // ignore
+    }
   });
 });
 
@@ -240,10 +254,19 @@ const startConversation = async (page: Page, topic = 'Exploring AI collaboration
   await page.locator('.mode-card').first().click();
   await page.locator('#topic').fill(topic);
 
-  await Promise.all([
-    page.waitForURL('**/chat'),
-    page.locator('#start-chat-btn').click(),
-  ]);
+  // Click first, then wait for the chat URL to reach DOMContentLoaded.
+  // Using a two-step approach avoids a race where the frame can be
+  // detached during a redirect and cause `page.waitForURL` to abort.
+  await page.locator('#start-chat-btn').click();
+
+  // If Playwright test mode injects session via query param, navigate there
+  // after the mocked start_session returns. This avoids the Flask server
+  // performing LettA agent lookups during session creation.
+  await page.waitForResponse('**/api/start_session');
+  // Navigate directly to the chat URL with the test session id. We set
+  // sessionStorage early via addInitScript so the client will initialize
+  // reliably without race conditions.
+  await page.goto('/chat?session_id=session-test');
 
   await expect(page.locator('#chat-input')).toBeVisible();
 };

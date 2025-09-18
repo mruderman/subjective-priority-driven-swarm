@@ -95,10 +95,12 @@ def test_main_cloud_api_key():
         assert kwargs["base_url"] == "http://x"
 
 
-def test_main_no_auth_baseurl_only():
+def test_main_no_auth_baseurl_only(monkeypatch):
+    monkeypatch.delenv("LETTA_PASSWORD", raising=False)
+    monkeypatch.delenv("LETTA_SERVER_PASSWORD", raising=False)
     with patch("spds.main.config.LETTA_ENVIRONMENT", "SELF_HOSTED"), patch(
-        "spds.main.config.LETTA_SERVER_PASSWORD", ""
-    ), patch("spds.main.config.LETTA_API_KEY", ""), patch(
+        "spds.main.config.LETTA_API_KEY", ""
+    ), patch(
         "spds.main.config.LETTA_BASE_URL", "http://x"
     ), patch(
         "spds.main.SwarmManager"

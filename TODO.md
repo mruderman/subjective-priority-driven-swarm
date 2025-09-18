@@ -1,198 +1,98 @@
 # TODO - SWARMS Project
 
-## Phase 1: Live Testing - COMPLETED! 🎉
+This document tracks the progress and future direction of the SWARMS project.
+Last updated: 2025-09-18
+
+## Phase 1: Live Testing — COMPLETED
 
 ### Completed Tasks ✓
-- [x] Create missing `__init__.py` file in spds/ directory
-- [x] Implement environment variable support for API keys
-- [x] Fix tool creation method (use `create_from_function` instead of `upsert_from_function`)
-- [x] Implement intelligent subjective assessment logic in tools.py
-- [x] Clean up all backup files (~) in the project
-- [x] Complete the README.md file
-- [x] Create creative_swarm.json example file
-- [x] Connect to Letta server (https://app.letta.com)
-- [x] Test default agent creation with AGENT_PROFILES
-- [x] Update model endpoints for all supported providers
-- [x] Create diverse model swarms (creative_swarm.json, tool_swarm.json, vision_swarm.json)
-- [x] Test live conversations with priority-based turn-taking
+- [x] Create missing `__init__.py` in `spds/`
+- [x] Environment variable support for API keys
+- [x] Fix tool creation method (`create_from_function`)
+- [x] Implement subjective assessment logic in `tools.py`
+- [x] Clean up backup files (~)
+- [x] Complete `README.md`
+- [x] Provide example swarm configs (`creative_swarm.json`, etc.)
+- [x] Connect to Letta server and validate
+- [x] Test default agent creation with `AGENT_PROFILES`
+- [x] Update model endpoints for supported providers
+- [x] Create diverse model swarms
+- [x] Live conversations with priority-based turn-taking
 - [x] Validate assessment logic with real agents
-- [x] Fix tool call issues for agents with default Letta tools
-- [x] Successfully test 6 different AI providers:
-  - Anthropic (Claude 3.5 Sonnet)
-  - OpenAI (GPT-4.1)
-  - Meta/Together (Llama 3.3 70B)
-  - Qwen/Together (Coder 480B)
-  - Moonshot/Together (Kimi K2)
-  - Mistral/Together (Small 24B)
+- [x] Fix tool call use with default Letta tools
+- [x] Verify across providers (Anthropic, OpenAI, Together models, etc.)
 
-## Phase 2: Comprehensive Logging System 🔴
+## Phase 2: Logging & Observability — COMPLETED
 
-### High Priority Tasks
+Implemented centralized, configurable logging in `spds/config.py` and added performance/timing instrumentation across `spds/swarm_manager.py`.
 
-### High Priority Tasks
-- [ ] Implement Python logging module with configurable levels
-  - [ ] Set up basic logger configuration in config.py
-  - [ ] Add environment variable support for log levels
-  - [ ] Create formatters for console and file output
-  
-- [ ] Add structured logging with timestamps and agent identification
-  - [ ] Log agent creation and initialization
-  - [ ] Log assessment calculations with scores
-  - [ ] Log conversation flow and speaker selection
-  - [ ] Log API calls to Letta server
-  
-- [ ] Create rotating log files
-  - [ ] Configure RotatingFileHandler
-  - [ ] Set appropriate file size and backup count
-  - [ ] Add logs/ directory to .gitignore
-  
-- [ ] Add performance timing for API calls and assessments
-  - [ ] Time agent creation
-  - [ ] Time assessment calculations
-  - [ ] Time LLM response generation
-  - [ ] Log slow operations (>5 seconds)
+### Completed Tasks ✓
+- [x] Python logging module with env-configurable level (`LOG_LEVEL`)
+- [x] Console and rotating file handlers (`logs/spds.log`)
+- [x] Structured formats with timestamps/module/line
+- [x] Agent identification in log messages (names in messages)
+- [x] Performance timing for agent creation, assessments, LLM responses
+- [x] Slow-operation warnings (e.g., >5s)
+- [x] `logs/` ignored via `.gitignore`
 
-### Tasks Deferred (Custom Tools Complex)
-- [ ] Re-enable custom tool attachment with proper JSON schemas
-  - Currently using simplified assessment logic
-  - Need to implement proper Letta tool schemas
+## Next Up (High Priority) — Optimized Order
 
-## Medium Priority Tasks 🟡
-- [ ] Implement proper error handling and recovery mechanisms
-  - Network failure recovery
-  - Timeout handling for LLM calls
-  - Graceful degradation when agents fail
-  - Retry logic with exponential backoff
+1) Environment variable alignment (quick win, unblocks docs/UX)
+   - [ ] Unify `LETTA_PASSWORD` and `LETTA_SERVER_PASSWORD` (support both; prefer `LETTA_PASSWORD`)
+   - [ ] Update docs (`README.md`, `.env.example`) and add code shim
 
-- [ ] Add comprehensive logging system
-  - Configure Python logging module
-  - Add debug logs for agent assessments
-  - Log conversation flow and priority calculations
-  - Create rotating log files
+2) Agent profile schema validation (stability before features)
+   - [ ] Define Pydantic model for `AGENT_PROFILES`
+   - [ ] Validate on startup with clear error messages
+   - [ ] Tests for invalid/missing fields
 
-- [x] Set up test framework
-  - [x] Add pytest configuration
-  - [x] Write unit tests for SubjectiveAssessment model
-  - [x] Test agent creation and tool attachment
-  - [x] Test swarm orchestration logic
-  - [x] Add integration tests
+3) Error/timeout handling consolidation (foundation for reliability)
+   - [ ] Central wrapper for Letta calls (timeouts, retry/backoff, logging)
+   - [ ] Apply across agents/secretary paths
+   - [ ] Unit tests for transient failures and timeouts
 
-## Low Priority Tasks 🟢
-- [x] Set up linting configuration
-  - [x] Configure flake8 for style checking
-  - [x] Set up black for code formatting
-  - [x] Configure pylint for code quality
-  - [x] Add pre-commit hooks
+4) Conversation persistence and resume (build on #3)
+   - [ ] Add session IDs; persist conversation state (JSON/DB)
+   - [ ] CLI/Web: list sessions and resume
+   - [ ] Export/restore secretary state (minutes, actions, decisions)
 
-- [ ] Create detailed API documentation
-  - Document all public methods
-  - Add usage examples
-  - Create architecture diagrams
-  - Document the SPDS framework
+## Medium Priority — After High Priority
 
-## Future Enhancements 💡
-- [ ] Add support for custom assessment dimensions
-- [ ] Implement agent learning from conversation outcomes
-- [ ] Add visualization of agent participation patterns
-- [ ] Support for saving/loading conversation sessions
-- [ ] Web interface for swarm management
-- [ ] Integration with other Letta tools (MCP servers, Composio)
-- [ ] Support for multi-modal conversations (images, documents)
-- [ ] Agent performance analytics and reporting
-- [ ] Dynamic agent creation based on conversation needs
-- [ ] Support for agent collaboration on specific tasks
+- [ ] Web UI enhancements (depends on persistence)
+  - [ ] Session list/resume and exports from UI
+  - [ ] Configure conversation modes and secretary options
+  - [ ] Minor UX polish; loading/error states
 
-## Known Issues 🐛
-- [ ] Assessment tool needs to be called through agent message API
+- [ ] Multi‑modal support
+  - [ ] Image/document inputs; display and routing
+
+- [ ] Integrations
+  - [ ] MCP servers / Composio-based tools
+
+## Low Priority
+
+- [ ] Documentation improvements
+  - [ ] Public API reference and examples
+  - [ ] Architecture diagrams and SPDS overview
+  - [ ] Document logging/env vars (`LOG_LEVEL`, `SPDS_INIT_LOGGING`)
+
+- [x] Lint/format tooling
+  - [x] flake8, black, pylint, pre‑commit
+
+## Future Enhancements
+
+- [ ] Custom assessment dimensions
+- [ ] Agent learning from outcomes
+- [ ] Participation visualization/analytics
+- [ ] Dynamic agent creation based on needs
+- [ ] Collaborative subtasking workflows
+
+## Known Issues / Gaps
+
 - [ ] No validation for agent profile JSON schema
-- [ ] Missing handling for agent creation failures
 - [ ] No support for resuming interrupted conversations
+- [ ] Minor env var naming mismatch in docs vs code (`LETTA_PASSWORD` vs `LETTA_SERVER_PASSWORD`)
 
-## Notes 📝
-- The project uses Letta's stateful agent framework
-- Agents maintain their own conversation history
-- Tool execution happens server-side in Letta
-- Current implementation uses placeholder assessment logic that should be replaced with actual LLM calls through the agent
-
----
-This document tracks the progress and future direction of the SWARMS project.
-Last updated: 2025-07-27
-  
-- [ ] Add structured logging with timestamps and agent identification
-  - [ ] Log agent creation and initialization
-  - [ ] Log assessment calculations with scores
-  - [ ] Log conversation flow and speaker selection
-  - [ ] Log API calls to Letta server
-  
-- [ ] Create rotating log files
-  - [ ] Configure RotatingFileHandler
-  - [ ] Set appropriate file size and backup count
-  - [ ] Add logs/ directory to .gitignore
-  
-- [ ] Add performance timing for API calls and assessments
-  - [ ] Time agent creation
-  - [ ] Time assessment calculations
-  - [ ] Time LLM response generation
-  - [ ] Log slow operations (>5 seconds)
-
-### Tasks Deferred (Custom Tools Complex)
-- [ ] Re-enable custom tool attachment with proper JSON schemas
-  - Currently using simplified assessment logic
-  - Need to implement proper Letta tool schemas
-
-## Medium Priority Tasks 🟡
-- [ ] Implement proper error handling and recovery mechanisms
-  - Network failure recovery
-  - Timeout handling for LLM calls
-  - Graceful degradation when agents fail
-  - Retry logic with exponential backoff
-
-- [ ] Add comprehensive logging system
-  - Configure Python logging module
-  - Add debug logs for agent assessments
-  - Log conversation flow and priority calculations
-  - Create rotating log files
-
-- [ ] Set up test framework
-  - Add pytest configuration
-  - Write unit tests for SubjectiveAssessment model
-  - Test agent creation and tool attachment
-  - Test swarm orchestration logic
-  - Add integration tests
-
-## Low Priority Tasks 🟢
-- [ ] Set up linting configuration
-  - Configure flake8 for style checking
-  - Set up black for code formatting
-  - Configure pylint for code quality
-  - Add pre-commit hooks
-
-- [ ] Create detailed API documentation
-  - Document all public methods
-  - Add usage examples
-  - Create architecture diagrams
-  - Document the SPDS framework
-
-## Future Enhancements 💡
-- [ ] Add support for custom assessment dimensions
-- [ ] Implement agent learning from conversation outcomes
-- [ ] Add visualization of agent participation patterns
-- [ ] Support for saving/loading conversation sessions
-- [ ] Web interface for swarm management
-- [ ] Integration with other Letta tools (MCP servers, Composio)
-- [ ] Support for multi-modal conversations (images, documents)
-- [ ] Agent performance analytics and reporting
-- [ ] Dynamic agent creation based on conversation needs
-- [ ] Support for agent collaboration on specific tasks
-
-## Known Issues 🐛
-- [ ] Assessment tool needs to be called through agent message API
-- [ ] No validation for agent profile JSON schema
-- [ ] Missing handling for agent creation failures
-- [ ] No support for resuming interrupted conversations
-
-## Notes 📝
-- The project uses Letta's stateful agent framework
-- Agents maintain their own conversation history
-- Tool execution happens server-side in Letta
-- Current implementation uses placeholder assessment logic that should be replaced with actual LLM calls through the agent
+Resolved from prior list:
+- [x] Assessment via agent message API and tool usage (implemented in `spds/spds_agent.py`)
+- [x] Handling for agent creation failures (logged and continued)

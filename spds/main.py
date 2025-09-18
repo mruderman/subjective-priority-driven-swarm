@@ -2,13 +2,19 @@
 
 import argparse
 import json
+import logging
 import sys
+from typing import Optional
 
 import questionary
-from letta_client import Letta, LettaEnvironment
+from letta_client import Letta
 
 from . import config
+from .session_context import set_current_session_id
+from .session_store import SessionMeta, get_default_session_store
 from .swarm_manager import SwarmManager
+
+logger = logging.getLogger(__name__)
 
 
 def load_swarm_from_file(filepath: str):
@@ -157,6 +163,116 @@ def interactive_agent_selection(client: Letta):
     )
 
 
+def format_session_table(sessions: list[SessionMeta]) -> str:
+    """Format session metadata as a human-readable table."""
+    if not sessions:
+        return "No sessions found."
+
+    # Header
+    lines = [
+        f"{'ID':<12} {'Created':<20} {'Updated':<20} {'Title':<30} {'Tags'}",
+        "-" * 95,
+    ]
+
+    for session in sessions:
+        # Shorten ID for display (first 8 chars + ...)
+        display_id = session.id[:8] + "..." if len(session.id) > 8 else session.id
+
+        # Format timestamps
+        created_str = session.created_at.strftime("%Y-%m-%d %H:%M")
+        updated_str = session.last_updated.strftime("%Y-%m-%d %H:%M")
+
+        # Format title (truncate if too long)
+        title = session.title or ""
+        display_title = title[:27] + "..." if len(title) > 27 else title
+
+        # Format tags
+        tags_str = ", ".join(session.tags) if session.tags else ""
+
+        lines.append(
+            f"{display_id:<12} {created_str:<20} {updated_str:<20} {display_title:<30} {tags_str}"
+        )
+
+    return "\n".join(lines)
+
+
+def list_sessions_command(args):
+    """Handle the 'sessions list' command."""
+    store = get_default_session_store()
+    sessions = store.list_sessions()
+
+    if args.json:
+        # Output as JSON array
+        import json as json_lib
+
+        sessions_data = [
+            {
+                "id": session.id,
+                "created_at": session.created_at.isoformat(),
+                "last_updated": session.last_updated.isoformat(),
+                "title": session.title,
+                "tags": session.tags,
+            }
+            for session in sessions
+        ]
+        print(json_lib.dumps(sessions_data, indent=2))
+    else:
+        # Output as table
+        print(format_session_table(sessions))
+
+    return 0
+
+
+def resume_session_command(args):
+    """Handle the 'sessions resume' command."""
+    store = get_default_session_store()
+    session_id = args.session_id
+
+    try:
+        # Verify session exists
+        store.load(session_id)
+
+        # Set current session context
+        set_current_session_id(session_id)
+
+        print(f"Session resumed: {session_id}")
+        return 0
+    except ValueError:
+        print(f"Error: Session '{session_id}' not found", file=sys.stderr)
+        return 2
+
+
+def setup_session_context(args) -> Optional[str]:
+    """Set up session context based on CLI arguments."""
+    store = get_default_session_store()
+
+    if args.session_id:
+        # Resume existing session
+        try:
+            store.load(args.session_id)
+            set_current_session_id(args.session_id)
+            logger.info(f"Resumed session: {args.session_id}")
+            return args.session_id
+        except ValueError:
+            print(f"Error: Session '{args.session_id}' not found", file=sys.stderr)
+            sys.exit(2)
+
+    elif args.new_session is not None:
+        # Create new session (with optional title)
+        title = args.new_session if isinstance(args.new_session, str) else None
+        session_state = store.create(title=title)
+        session_id = session_state.meta.id
+        set_current_session_id(session_id)
+        logger.info(
+            f"Created new session: {session_id}"
+            + (f" with title: {title}" if title else "")
+        )
+        return session_id
+
+    # No session management requested - return None
+    return None
+
+
 def main(argv=None):
     """Initializes the Letta client and starts the swarm chat."""
 
@@ -165,6 +281,24 @@ def main(argv=None):
         "Specify agents by ID, name, or a config file.",
         formatter_class=argparse.RawTextHelpFormatter,
     )
+
+    # Session management arguments
+    session_group = parser.add_argument_group("Session Management")
+    session_group.add_argument(
+        "--session-id",
+        type=str,
+        metavar="SESSION_ID",
+        help="Resume an existing session by ID. If provided, no new session is created.",
+    )
+    session_group.add_argument(
+        "--new-session",
+        nargs="?",
+        const=True,
+        metavar="TITLE",
+        help="Create a new session. Optionally provide a title for the session.",
+    )
+
+    # Agent selection group (existing)
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--agent-ids",
@@ -189,8 +323,44 @@ def main(argv=None):
         action="store_true",
         help="Use interactive agent selection and setup (overrides default ephemeral mode).",
     )
+
+    # Subcommands for session management
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Sessions subcommand
+    sessions_parser = subparsers.add_parser("sessions", help="Manage sessions")
+    sessions_subparsers = sessions_parser.add_subparsers(dest="sessions_command")
+
+    # sessions list
+    list_parser = sessions_subparsers.add_parser("list", help="List all sessions")
+    list_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output sessions as JSON instead of table format",
+    )
+
+    # sessions resume
+    resume_parser = sessions_subparsers.add_parser("resume", help="Resume a session")
+    resume_parser.add_argument(
+        "session_id",
+        help="The ID of the session to resume",
+    )
+
     # Allow passing argv for testing; default to sys.argv[1:]
     args = parser.parse_args(argv)
+
+    # Handle session management subcommands
+    if args.command == "sessions":
+        if args.sessions_command == "list":
+            return list_sessions_command(args)
+        elif args.sessions_command == "resume":
+            return resume_session_command(args)
+        else:
+            sessions_parser.print_help()
+            return 1
+
+    # Set up session context for main commands (before any swarm operations)
+    session_id = setup_session_context(args)
 
     agent_profiles = None
     agent_ids = None
@@ -199,10 +369,9 @@ def main(argv=None):
     # --- Client Initialization ---
     # Use configuration from environment variables
     # For self-hosted servers with password protection, use the password as token
-    if config.LETTA_ENVIRONMENT == "SELF_HOSTED" and config.LETTA_SERVER_PASSWORD:
-        client = Letta(
-            token=config.LETTA_SERVER_PASSWORD, base_url=config.LETTA_BASE_URL
-        )
+    letta_password = config.get_letta_password()
+    if config.LETTA_ENVIRONMENT == "SELF_HOSTED" and letta_password:
+        client = Letta(token=letta_password, base_url=config.LETTA_BASE_URL)
     elif config.LETTA_API_KEY:
         client = Letta(token=config.LETTA_API_KEY, base_url=config.LETTA_BASE_URL)
     else:
@@ -219,13 +388,13 @@ def main(argv=None):
         print(f"Mode: Creating temporary swarm from config: {args.swarm_config}")
         agent_profiles = load_swarm_from_file(args.swarm_config)
         if not agent_profiles:
-            sys.exit(1)  # Exit if the config file is invalid or not found
+            return 1  # Exit if the config file is invalid or not found
     elif args.interactive:
         # Interactive setup explicitly requested
         print("Mode: Interactive agent selection")
         result = interactive_agent_selection(client)
         if not result or len(result) < 6:
-            sys.exit(1)  # User cancelled or no agents selected
+            return 1  # User cancelled or no agents selected
         (
             selected_agent_ids,
             topic,
@@ -246,7 +415,15 @@ def main(argv=None):
             print("\nExiting.")
             return
         print("Creating swarm from temporary agent profiles...")
-        agent_profiles = config.AGENT_PROFILES
+        # Validate agent profiles before use
+        try:
+            validated_config = config.get_agent_profiles_validated()
+            agent_profiles = [agent.dict() for agent in validated_config.agents]
+            print(f"Validated {len(agent_profiles)} agent profiles successfully.")
+        except Exception as e:
+            print(f"Error: Invalid agent profiles configuration: {e}")
+            print("Please check your agent profiles configuration and try again.")
+            return
 
     try:
         # Set conversation mode - default to sequential for non-interactive flows
@@ -277,8 +454,15 @@ def main(argv=None):
             swarm.start_chat()
     except ValueError as e:
         print(f"Error initializing swarm: {e}")
-        sys.exit(1)
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    # Configure logging for CLI
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    sys.exit(main())

@@ -7,6 +7,8 @@ from letta_client.types import AgentState
 from pydantic import BaseModel
 
 from . import config, tools
+from .letta_api import letta_call
+from .session_tracking import track_message, track_tool_call, track_decision
 
 
 class SPDSAgent:
@@ -45,7 +47,9 @@ class SPDSAgent:
         agent_model = model if model else config.DEFAULT_AGENT_MODEL
         agent_embedding = embedding if embedding else config.DEFAULT_EMBEDDING_MODEL
 
-        agent_state = client.agents.create(
+        agent_state = letta_call(
+            "agent.create",
+            client.agents.create,
             name=name,
             system=system_prompt,
             model=agent_model,
@@ -84,7 +88,9 @@ class SPDSAgent:
             pass
 
         # Create from our local function and Pydantic model
-        self.assessment_tool = self.client.tools.create_from_function(
+        self.assessment_tool = letta_call(
+            "tools.create_from_function",
+            self.client.tools.create_from_function,
             function=tools.perform_subjective_assessment,
             return_model=tools.SubjectiveAssessment,
             name=tool_name,
@@ -92,7 +98,9 @@ class SPDSAgent:
         )
         # Attach to agent
         try:
-            attached = self.client.agents.tools.attach(
+            attached = letta_call(
+                "agents.tools.attach",
+                self.client.agents.tools.attach,
                 agent_id=self.agent.id,
                 tool_id=self.assessment_tool.id,
             )
@@ -169,7 +177,21 @@ IMPORTANCE_TO_GROUP: X
 
         try:
             print(f"  [Getting real assessment from {self.name}...]")
-            response = self.client.agents.messages.create(
+            
+            # Track the assessment request
+            track_action(
+                actor=self.name,
+                action_type="assessment_request",
+                details={
+                    "topic": topic,
+                    "has_conversation_history": bool(conversation_history),
+                    "has_tools": has_tools
+                }
+            )
+            
+            response = letta_call(
+                "agents.messages.create.assessment",
+                self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[
                     {
@@ -178,6 +200,22 @@ IMPORTANCE_TO_GROUP: X
                     }
                 ],
             )
+            
+            # Track tool calls in the response
+            for msg in response.messages:
+                if hasattr(msg, "tool_calls") and getattr(msg, "tool_calls"):
+                    for tool_call in msg.tool_calls:
+                        if (
+                            hasattr(tool_call, "function")
+                            and getattr(tool_call.function, "name", None)
+                            == "send_message"
+                        ):
+                            track_tool_call(
+                                actor=self.name,
+                                tool_name="send_message",
+                                arguments={"message": "assessment_response"},
+                                result="success"
+                            )
 
             # Extract candidate response texts (tool call payloads, tool returns, or assistant content)
             candidate_texts = []
@@ -316,6 +354,54 @@ IMPORTANCE_TO_GROUP: X
 
         return scores
 
+    def _extract_response_text(self, response) -> str:
+        """Extract response text from agent messages, handling tool calls properly."""
+        response_text = ""
+        try:
+            for msg in response.messages:
+                # Check for tool calls (send_message)
+                if hasattr(msg, "tool_calls") and msg.tool_calls:
+                    for tool_call in msg.tool_calls:
+                        if (
+                            hasattr(tool_call, "function")
+                            and tool_call.function.name == "send_message"
+                        ):
+                            try:
+                                import json
+                                args = json.loads(tool_call.function.arguments)
+                                response_text = args.get("message", "")
+                                break
+                            except:
+                                pass
+                
+                # Check for tool return messages
+                if not response_text and hasattr(msg, "tool_return") and msg.tool_return:
+                    continue
+                
+                # Check assistant messages (direct responses)
+                if (
+                    not response_text
+                    and hasattr(msg, "message_type")
+                    and msg.message_type == "assistant_message"
+                ):
+                    if hasattr(msg, "content") and msg.content:
+                        content_val = msg.content
+                        if isinstance(content_val, str):
+                            response_text = content_val
+                        elif isinstance(content_val, list) and content_val:
+                            item0 = content_val[0]
+                            if hasattr(item0, "text"):
+                                response_text = item0.text
+                            elif isinstance(item0, dict) and "text" in item0:
+                                response_text = item0["text"]
+                            elif isinstance(item0, str):
+                                response_text = item0
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to extract response text: {e}")
+        
+        return response_text
+
     def assess_motivation_and_priority(self, topic: str):
         """Performs the full assessment and calculates motivation and priority scores."""
         self._get_full_assessment(topic)
@@ -335,11 +421,75 @@ IMPORTANCE_TO_GROUP: X
             )
         else:
             self.priority_score = 0
+            
+            # Track the assessment decision
+            track_decision(
+                actor=self.name,
+                decision_type="motivation_assessment",
+                details={
+                    "topic": topic,
+                    "motivation_score": self.motivation_score,
+                    "priority_score": self.priority_score,
+                    "participation_threshold": config.PARTICIPATION_THRESHOLD,
+                    "will_participate": self.motivation_score >= config.PARTICIPATION_THRESHOLD,
+                    "assessment": assessment.model_dump()
+                }
+            )
+    
+    def _select_mode_for_message(self, message: str, attachments: list = None) -> str:
+        """Select processing mode based on message content and attachments.
+
+        Returns:
+            str: "vision" if any image attachments are present, "text" otherwise.
+                 Returns "doc" for document-only attachments (future enhancement).
+        """
+        attachments = attachments or []
+
+        # Check for image attachments
+        has_images = any(
+            attachment.get('kind') == 'image'
+            for attachment in attachments
+        )
+
+        # Check for document attachments
+        has_documents = any(
+            attachment.get('kind') == 'document'
+            for attachment in attachments
+        )
+
+        if has_images:
+            return "vision"
+        elif has_documents and not has_images:
+            # For now, default to text mode for documents
+            # Future enhancement: implement document processing mode
+            return "text"
+        else:
+            return "text"
 
     def speak(
-        self, conversation_history: str = "", mode: str = "initial", topic: str = ""
+        self, conversation_history: str = "", mode: str = "initial", topic: str = "", attachments: list = None
     ):
         """Generates a response from the agent with conversation context."""
+        # Select processing mode based on attachments
+        selected_mode = self._select_mode_for_message(conversation_history, attachments)
+
+        # Log mode selection for scaffolding
+        print(f"[DEBUG] Agent {self.name} selected mode: {selected_mode} for message with {len(attachments or [])} attachments")
+
+        # Track the mode selection in session events
+        if attachments:
+            track_decision(
+                actor=self.name,
+                decision_type="mode_selection",
+                details={
+                    "selected_mode": selected_mode,
+                    "attachments_count": len(attachments),
+                    "has_images": any(att.get('kind') == 'image' for att in attachments),
+                    "has_documents": any(att.get('kind') == 'document' for att in attachments),
+                    "message_preview": conversation_history[:100] if conversation_history else topic[:100]
+                }
+            )
+
         # Check if agent has tools (Letta default agents require using send_message tool)
         has_tools = hasattr(self.agent, "tools") and len(self.agent.tools) > 0
 
@@ -368,7 +518,9 @@ Based on this conversation, I want to contribute. Please use the send_message to
                     )
 
         try:
-            return self.client.agents.messages.create(
+            response = letta_call(
+                "agents.messages.create.speak",
+                self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[
                     {
@@ -377,6 +529,17 @@ Based on this conversation, I want to contribute. Please use the send_message to
                     }
                 ],
             )
+            
+            # Track the agent's response
+            response_text = self._extract_response_text(response)
+            if response_text:
+                track_message(
+                    actor=self.name,
+                    content=response_text,
+                    message_type="assistant"
+                )
+            
+            return response
         except Exception as e:
             # If tool call fails, try a more direct approach
             if "No tool calls found" in str(e) and has_tools:
@@ -384,7 +547,9 @@ Based on this conversation, I want to contribute. Please use the send_message to
                     f"[Debug: {self.name} didn't use tools, trying direct instruction]"
                 )
                 direct_prompt = "Please use the send_message tool to share your thoughts on the topic we've been discussing."
-                return self.client.agents.messages.create(
+                response = letta_call(
+                    "agents.messages.create.direct",
+                    self.client.agents.messages.create,
                     agent_id=self.agent.id,
                     messages=[
                         {
@@ -393,5 +558,16 @@ Based on this conversation, I want to contribute. Please use the send_message to
                         }
                     ],
                 )
+                
+                # Track the agent's response from direct prompt
+                response_text = self._extract_response_text(response)
+                if response_text:
+                    track_message(
+                        actor=self.name,
+                        content=response_text,
+                        message_type="assistant"
+                    )
+                
+                return response
             else:
                 raise

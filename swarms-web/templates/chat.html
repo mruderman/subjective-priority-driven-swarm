@@ -73,32 +73,47 @@
             <!-- Chat Input -->
             <div class="card-footer bg-light">
                 <div class="chat-input-container">
+                    <!-- File Attachments Area -->
+                    <div id="attachment-preview" class="mb-2" style="display: none;">
+                        <div class="d-flex flex-wrap gap-2" id="attachment-chips"></div>
+                    </div>
+                    
                     <div class="input-group">
-                        <textarea id="chat-input" class="form-control chat-input" 
+                        <div class="input-group-prepend">
+                            <button class="btn btn-outline-secondary" type="button" id="attach-button"
+                                    title="Attach files" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
+                                <i class="bi bi-paperclip"></i>
+                            </button>
+                        </div>
+                        <textarea id="chat-input" class="form-control chat-input"
                                   placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-                                  rows="2"></textarea>
+                                  rows="2" style="border-top-left-radius: 0; border-bottom-left-radius: 0;"></textarea>
                         <button class="btn btn-primary" type="button" id="send-button">
                             <i class="bi bi-send"></i>
                         </button>
                     </div>
                     
+                    <!-- Hidden file input -->
+                    <input type="file" id="file-input" multiple accept=".png,.jpg,.jpeg,.gif,.pdf,.docx,.txt"
+                           style="display: none;">
+                    
                     <!-- Secretary Commands Quick Access -->
                     <div class="mt-2">
                         <small class="text-muted">Secretary commands:</small>
                         <div class="btn-group btn-group-sm ms-2" role="group">
-                            <button type="button" class="btn btn-outline-secondary secretary-command" 
+                            <button type="button" class="btn btn-outline-secondary secretary-command"
                                     data-command="/minutes" title="Generate Minutes">
                                 <i class="bi bi-file-text"></i>
                             </button>
-                            <button type="button" class="btn btn-outline-secondary secretary-command" 
+                            <button type="button" class="btn btn-outline-secondary secretary-command"
                                     data-command="/export minutes" title="Export Minutes">
                                 <i class="bi bi-download"></i>
                             </button>
-                            <button type="button" class="btn btn-outline-secondary secretary-command" 
+                            <button type="button" class="btn btn-outline-secondary secretary-command"
                                     data-command="/formal" title="Switch to Formal Mode">
                                 <i class="bi bi-briefcase"></i>
                             </button>
-                            <button type="button" class="btn btn-outline-secondary secretary-command" 
+                            <button type="button" class="btn btn-outline-secondary secretary-command"
                                     data-command="/casual" title="Switch to Casual Mode">
                                 <i class="bi bi-chat-heart"></i>
                             </button>
@@ -267,6 +282,7 @@ class SimpleChat {
         this.sessionId = null;
         this.isConnected = false;
         this.agents = [];
+        this.pendingAttachments = []; // Store uploaded attachments before sending
         
         this.init();
     }
@@ -390,6 +406,8 @@ class SimpleChat {
     setupChatInterface() {
         const chatInput = document.getElementById('chat-input');
         const sendButton = document.getElementById('send-button');
+        const attachButton = document.getElementById('attach-button');
+        const fileInput = document.getElementById('file-input');
         
         if (chatInput && sendButton) {
             // Handle Enter key
@@ -409,6 +427,33 @@ class SimpleChat {
             chatInput.addEventListener('input', function() {
                 this.style.height = 'auto';
                 this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+        }
+        
+        // Setup file attachment functionality
+        if (attachButton && fileInput) {
+            // Attach button click handler
+            attachButton.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            // File input change handler
+            fileInput.addEventListener('change', (e) => {
+                const files = Array.from(e.target.files);
+                
+                if (files.length > 3) {
+                    this.showToast('Maximum 3 files allowed', 'warning');
+                    e.target.value = ''; // Clear selection
+                    return;
+                }
+                
+                // Upload each file
+                files.forEach(file => {
+                    this.uploadFile(file);
+                });
+                
+                // Clear input after processing
+                e.target.value = '';
             });
         }
         
@@ -442,12 +487,110 @@ class SimpleChat {
         }
     }
     
+    async uploadFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        // Add session_id if available
+        if (this.sessionId) {
+            formData.append('session_id', this.sessionId);
+        }
+        
+        try {
+            const response = await fetch('/api/uploads', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Upload failed: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.ok) {
+                this.pendingAttachments.push(data.file);
+                this.renderAttachments();
+                this.showToast(`File uploaded: ${data.file.filename}`, 'success');
+                return data.file;
+            } else {
+                throw new Error(data.error || 'Upload failed');
+            }
+        } catch (error) {
+            console.error('File upload error:', error);
+            this.showToast(`Upload failed: ${error.message}`, 'error');
+            return null;
+        }
+    }
+
+    renderAttachments() {
+        const container = document.getElementById('attachment-chips');
+        const preview = document.getElementById('attachment-preview');
+        
+        if (!container || !preview) return;
+        
+        if (this.pendingAttachments.length === 0) {
+            preview.style.display = 'none';
+            return;
+        }
+        
+        preview.style.display = 'block';
+        
+        container.innerHTML = this.pendingAttachments.map((attachment, index) => {
+            let previewHtml = '';
+            
+            if (attachment.kind === 'image') {
+                // Create object URL for image preview
+                const blob = new Blob([`data:${attachment.mime};base64,placeholder`], {type: attachment.mime});
+                const url = URL.createObjectURL(blob);
+                previewHtml = `<img src="${url}" alt="${attachment.filename}" class="attachment-preview-img" style="max-width: 50px; max-height: 50px; border-radius: 4px;">`;
+            } else {
+                // Document preview
+                previewHtml = `<i class="bi bi-file-earmark-text" style="font-size: 1.2em; color: #6c757d;"></i>`;
+            }
+            
+            return `
+                <div class="attachment-chip badge bg-light text-dark d-flex align-items-center gap-1 p-2" data-index="${index}">
+                    ${previewHtml}
+                    <span class="small">${attachment.filename}</span>
+                    <button type="button" class="btn-close btn-close-sm ms-1" style="flex-shrink: 0;" onclick="simpleChat.removeAttachment(${index})"></button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    removeAttachment(index) {
+        this.pendingAttachments.splice(index, 1);
+        this.renderAttachments();
+        
+        if (this.pendingAttachments.length === 0) {
+            document.getElementById('attachment-preview').style.display = 'none';
+        }
+    }
+
+    clearAttachments() {
+        this.pendingAttachments = [];
+        this.renderAttachments();
+        document.getElementById('attachment-preview').style.display = 'none';
+    }
+
     sendMessage(message = null) {
         const chatInput = document.getElementById('chat-input');
         if (!chatInput && !message) return;
         
         const messageText = message || chatInput.value.trim();
-        if (!messageText) return;
+        if (!messageText && this.pendingAttachments.length === 0) return;
+        
+        // Prepare message data
+        const messageData = {
+            session_id: this.sessionId,
+            message: messageText || ""
+        };
+        
+        // Include attachments if any
+        if (this.pendingAttachments.length > 0) {
+            messageData.attachments = this.pendingAttachments;
+        }
         
         // Clear input if it was from the input field
         if (!message && chatInput) {
@@ -455,13 +598,53 @@ class SimpleChat {
             chatInput.style.height = 'auto';
         }
         
-        // Send via WebSocket
+        // Send via WebSocket (for real-time chat) or API (for attachments)
         if (this.socket && this.sessionId) {
-            console.log('Sending message:', messageText);
-            this.socket.emit('user_message', {
-                session_id: this.sessionId,
-                message: messageText
+            if (this.pendingAttachments.length > 0) {
+                // For messages with attachments, use the API endpoint
+                this.sendMessageWithAttachments(messageData);
+            } else {
+                // For text-only messages, use WebSocket
+                console.log('Sending text message:', messageText);
+                this.socket.emit('user_message', messageData);
+            }
+        }
+        
+        // Clear attachments after sending
+        this.clearAttachments();
+    }
+
+    async sendMessageWithAttachments(messageData) {
+        try {
+            // First send via API to record with attachments
+            const response = await fetch('/api/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(messageData)
             });
+            
+            if (!response.ok) {
+                throw new Error(`Message send failed: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.ok) {
+                this.showToast(`Message sent with ${data.attachments_count} attachment(s)`, 'success');
+                
+                // Also emit via WebSocket for real-time UI update
+                this.socket.emit('user_message', {
+                    session_id: this.sessionId,
+                    message: messageData.message
+                });
+            } else {
+                throw new Error(data.error || 'Message send failed');
+            }
+        } catch (error) {
+            console.error('Message with attachments error:', error);
+            this.showToast(`Failed to send message: ${error.message}`, 'error');
         }
     }
     
