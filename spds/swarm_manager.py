@@ -408,8 +408,7 @@ class SwarmManager:
 
     def _agent_turn(self, topic: str):
         """
-        Assess agents' motivation for a turn and dispatch the speaking step according to the current conversation mode.
-        
+                message_text = "I have some thoughts but I'm having trouble phrasing them."
         Evaluate motivation and priority for each agent with respect to the provided topic, build an ordered list of motivated agents (priority_score > 0), and invoke the mode-specific turn handler (_hybrid_turn, _all_speak_turn, _sequential_turn, or _pure_priority_turn). If no agents are motivated the method returns without further action. The method updates agent internal scores and triggers side-effectful turn handlers which append to the shared conversation state and notify the secretary when present.
         
         Parameters:
