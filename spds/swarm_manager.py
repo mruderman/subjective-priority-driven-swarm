@@ -660,8 +660,7 @@ class SwarmManager:
         logger.info("\n=== 💬 RESPONSE ROUND ===")
         logger.info("Agents now respond to each other's initial thoughts...")
 
-        # Send instruction to all agents about response phase
-        for agent in self.agents:
+            self.secretary.meeting_metadata["conversation_mode"] = self.conversation_mode
             try:
                 self.client.agents.messages.create(
                     agent_id=agent.agent.id,
