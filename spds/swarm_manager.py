@@ -639,7 +639,7 @@ class SwarmManager:
                         f"Error in initial response attempt {attempt+1} - {e}]")
                     if attempt < max_attempts - 1:
                         time.sleep(0.5)
-
+            logger.error(f"Error in pure priority response - {e}")
             # Use the response or a more specific fallback
             if message_text and len(message_text.strip()) > 10:
                 initial_responses.append((agent, message_text))
