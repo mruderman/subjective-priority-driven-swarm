@@ -32,6 +32,17 @@ def test_list_available_agents_success():
     assert list_available_agents(client) == [1, 2]
 
 
+def test_list_available_agents_failure(capsys):
+    client = Mock()
+    client.agents.list.side_effect = RuntimeError("server down")
+
+    agents = list_available_agents(client)
+
+    captured = capsys.readouterr()
+    assert agents == []
+    assert "Error fetching agents" in captured.out
+
+
 def test_interactive_agent_selection_flow(monkeypatch):
     # Build fake agents
     agents = [
@@ -79,3 +90,49 @@ def test_interactive_agent_selection_no_agents():
     client = Mock()
     with patch("spds.main.list_available_agents", return_value=[]):
         assert interactive_agent_selection(client) == (None, None)
+
+
+def test_interactive_agent_selection_no_choice(monkeypatch):
+    client = Mock()
+    agents = [SimpleNamespace(id="a1", name="Agent", model=None, created_at=None)]
+    with patch("spds.main.list_available_agents", return_value=agents):
+        import spds.main as m
+
+        monkeypatch.setattr(
+            m.questionary,
+            "checkbox",
+            lambda *a, **k: SimpleNamespace(ask=lambda: []),
+        )
+        selected = interactive_agent_selection(client)
+        assert selected == (None, None)
+
+
+def test_interactive_agent_selection_missing_topic(monkeypatch):
+    client = Mock()
+    agents = [SimpleNamespace(id="a1", name="Agent", model=None, created_at=None)]
+    with patch("spds.main.list_available_agents", return_value=agents):
+        import spds.main as m
+
+        monkeypatch.setattr(
+            m.questionary,
+            "checkbox",
+            lambda *a, **k: SimpleNamespace(ask=lambda: ["a1"]),
+        )
+        monkeypatch.setattr(
+            m.questionary,
+            "select",
+            lambda *a, **k: SimpleNamespace(ask=lambda: "🔀 Sequential (one speaker per turn with fairness)"),
+        )
+        monkeypatch.setattr(
+            m.questionary,
+            "confirm",
+            lambda *a, **k: SimpleNamespace(ask=lambda: False),
+        )
+        monkeypatch.setattr(
+            m.questionary,
+            "text",
+            lambda *a, **k: SimpleNamespace(ask=lambda: ""),
+        )
+
+        result = interactive_agent_selection(client)
+        assert result == (None, None, None, None, None)

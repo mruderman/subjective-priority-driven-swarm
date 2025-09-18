@@ -179,10 +179,9 @@ IMPORTANCE_TO_GROUP: X
                 ],
             )
 
-            # Extract response text or JSON (handle tool return or direct content)
-            response_text = ""
+            # Extract candidate response texts (tool call payloads, tool returns, or assistant content)
+            candidate_texts = []
             for msg in response.messages:
-                # Tool call flow (send_message)
                 if hasattr(msg, "tool_calls") and getattr(msg, "tool_calls"):
                     for tool_call in msg.tool_calls:
                         if (
@@ -194,65 +193,75 @@ IMPORTANCE_TO_GROUP: X
                                 import json as _json
 
                                 args = _json.loads(tool_call.function.arguments)
-                                response_text = args.get("message", "")
-                                break
+                                candidate_texts.append(args.get("message", ""))
                             except Exception:
-                                pass
-                # Tool return message payload
-                if (
-                    not response_text
-                    and hasattr(msg, "tool_return")
-                    and getattr(msg, "tool_return")
-                ):
-                    response_text = getattr(msg, "tool_return")
-                # Generic content field
-                if not response_text and hasattr(msg, "content"):
+                                candidate_texts.append("")
+                if hasattr(msg, "tool_return") and getattr(msg, "tool_return"):
+                    candidate_texts.append(getattr(msg, "tool_return"))
+                if hasattr(msg, "content"):
                     content_val = getattr(msg, "content")
                     if isinstance(content_val, str):
-                        response_text = content_val
+                        candidate_texts.append(content_val)
                     elif isinstance(content_val, list) and content_val:
                         item0 = content_val[0]
                         if hasattr(item0, "text"):
-                            response_text = item0.text
+                            candidate_texts.append(item0.text)
                         elif isinstance(item0, dict) and "text" in item0:
-                            response_text = item0["text"]
+                            candidate_texts.append(item0["text"])
                         elif isinstance(item0, str):
-                            response_text = item0
-                if response_text:
+                            candidate_texts.append(item0)
+
+            response_text = ""
+            assessment_keys = [
+                "IMPORTANCE_TO_SELF",
+                "PERCEIVED_GAP",
+                "UNIQUE_PERSPECTIVE",
+                "EMOTIONAL_INVESTMENT",
+                "EXPERTISE_RELEVANCE",
+                "URGENCY",
+                "IMPORTANCE_TO_GROUP",
+            ]
+            parsed_dict = None
+            parsed_scores = None
+
+            for candidate in candidate_texts:
+                if not isinstance(candidate, str):
+                    continue
+                candidate = candidate.strip()
+                if not candidate:
+                    continue
+                response_text = candidate
+                if candidate.startswith("{"):
+                    try:
+                        import json as _json
+
+                        parsed = _json.loads(candidate)
+                    except Exception:
+                        continue
+                    if isinstance(parsed, dict):
+                        parsed_dict = parsed
+                        break
+                    continue
+
+                scores = self._parse_assessment_response(candidate)
+                if any(key in candidate.upper() for key in assessment_keys):
+                    parsed_scores = scores
                     break
 
-            # Try JSON first (supports tests/e2e + unit JSON content), else parse lines
-            parsed = None
-            if isinstance(response_text, str) and response_text.strip().startswith("{"):
-                try:
-                    import json as _json
-
-                    parsed = _json.loads(response_text)
-                except Exception:
-                    parsed = None
-            if isinstance(parsed, dict):
-                self.last_assessment = tools.SubjectiveAssessment(**parsed)
+            if parsed_dict is not None:
+                self.last_assessment = tools.SubjectiveAssessment(**parsed_dict)
+            elif parsed_scores is not None:
+                self.last_assessment = tools.SubjectiveAssessment(**parsed_scores)
+            elif response_text and any(
+                key in (response_text.upper()) for key in assessment_keys
+            ):
+                scores = self._parse_assessment_response(response_text)
+                self.last_assessment = tools.SubjectiveAssessment(**scores)
             else:
-                # Try to parse labeled scores; if not present, fall back to local tool
-                scores = self._parse_assessment_response(response_text or "")
-                if not response_text or not any(
-                    k in (response_text.upper())
-                    for k in [
-                        "IMPORTANCE_TO_SELF",
-                        "PERCEIVED_GAP",
-                        "UNIQUE_PERSPECTIVE",
-                        "EMOTIONAL_INVESTMENT",
-                        "EXPERTISE_RELEVANCE",
-                        "URGENCY",
-                        "IMPORTANCE_TO_GROUP",
-                    ]
-                ):
-                    # Fallback to local subjective assessment
-                    self.last_assessment = tools.perform_subjective_assessment(
-                        topic, conversation_history, self.persona, self.expertise
-                    )
-                else:
-                    self.last_assessment = tools.SubjectiveAssessment(**scores)
+                # Fallback to local subjective assessment
+                self.last_assessment = tools.perform_subjective_assessment(
+                    topic, conversation_history, self.persona, self.expertise
+                )
 
         except Exception as e:
             print(f"  [Error getting assessment from {self.name}: {e}]")

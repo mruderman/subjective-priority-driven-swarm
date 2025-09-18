@@ -125,3 +125,23 @@ def test_main_auth_selection_self_hosted_password():
         args, kwargs = L.call_args
         assert kwargs["token"] == "pw"
         assert kwargs["base_url"] == "http://x"
+
+
+def test_main_handles_swarm_initialization_error(monkeypatch, capsys):
+    class FailingSwarm:
+        def __init__(self, **kwargs):
+            raise ValueError("bad swarm config")
+
+    with patch("spds.main.config.LETTA_ENVIRONMENT", "SELF_HOSTED"), patch(
+        "spds.main.config.LETTA_SERVER_PASSWORD", ""
+    ), patch("spds.main.config.LETTA_API_KEY", ""), patch(
+        "spds.main.config.LETTA_BASE_URL", "http://x"
+    ), patch("spds.main.SwarmManager", FailingSwarm), patch("spds.main.Letta"):
+        from spds.main import main
+
+        with pytest.raises(SystemExit) as excinfo:
+            main(["--agent-ids", "ag-1"])
+
+    assert excinfo.value.code == 1
+    captured = capsys.readouterr()
+    assert "Error initializing swarm" in captured.out
