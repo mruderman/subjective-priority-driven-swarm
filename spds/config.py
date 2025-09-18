@@ -1,6 +1,7 @@
 # spds/config.py
 
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 
 from dotenv import load_dotenv
@@ -8,19 +9,82 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+
+# --- Logging Configuration ---
+
+def setup_logging():
+    """
+    Configure the root logger to emit to the console and to a rotating file.
+    
+    This function:
+    - Reads LOG_LEVEL from the environment (default "INFO") and applies it to the root logger.
+    - Ensures a "logs" directory exists and writes logs to "logs/spds.log".
+    - Clears any existing handlers on the root logger to avoid duplicate outputs.
+    - Attaches a console StreamHandler and a RotatingFileHandler (10 MB per file, 5 backups) with distinct formatters.
+    
+    Side effects:
+    - Creates the "logs" directory if missing.
+    - Mutates the global logging configuration (root logger and module logger).
+    """
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_dir = "logs"
+    log_file = os.path.join(log_dir, "spds.log")
+
+    # Create log directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Get the root logger
+    logger = logging.getLogger()
+
+    # Prevent duplicate handlers if called multiple times
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    logger.setLevel(log_level)
+
+    # Create console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level)
+    console_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+
+    # Create rotating file handler
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=10*1024*1024, backupCount=5  # 10MB per file, 5 backups
+    )
+    file_handler.setLevel(log_level)
+    file_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"
+    )
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+
+    logging.getLogger(__name__).info("Logging configured successfully with console and file output.")
+
+# Initialize logging when the module is loaded (can be disabled for tests/embedding)
+if os.getenv("SPDS_INIT_LOGGING", "1") == "1":
+    setup_logging()
 logger = logging.getLogger(__name__)
+
 
 # Letta ADE Server Configuration
 # Read sensitive values from environment. For local development we provide a
 # non-sensitive localhost fallback so the app works out of the box. Production
 # deployments should set real environment variables or use a secrets manager.
 LETTA_API_KEY = os.getenv("LETTA_API_KEY", "")
-LETTA_SERVER_PASSWORD = os.getenv("LETTA_PASSWORD", "")
+LETTA_SERVER_PASSWORD = os.getenv("LETTA_SERVER_PASSWORD", "")
 # Default to localhost for self-hosted development convenience
 LETTA_BASE_URL = os.getenv("LETTA_BASE_URL", "http://localhost:8283")
 # Environment: e.g. "SELF_HOSTED", "LETTA_CLOUD", "PRODUCTION" (fallback
 # is SELF_HOSTED for local dev). Keep the value explicit in production.
 LETTA_ENVIRONMENT = os.getenv("LETTA_ENVIRONMENT", "SELF_HOSTED")
+
+# Tool execution (Docker/self-hosted)
+TOOL_EXEC_DIR = os.getenv("TOOL_EXEC_DIR", "/app/tools")
+TOOL_EXEC_VENV_NAME = os.getenv("TOOL_EXEC_VENV_NAME", "venv")
 
 
 def validate_letta_config(check_connectivity: bool = False, timeout: int = 5) -> bool:
@@ -84,7 +148,7 @@ def validate_letta_config(check_connectivity: bool = False, timeout: int = 5) ->
 
 # Default Model Configuration (fallback values)
 DEFAULT_AGENT_MODEL = "openai/gpt-4"
-DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-ada-002"
+DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 # Default Swarm Configuration
 # This list of agent profiles is used if no other configuration is provided.
@@ -96,28 +160,28 @@ AGENT_PROFILES = [
         "persona": "A pragmatic and analytical project manager who values clarity and efficiency.",
         "expertise": ["risk management", "scheduling", "budgeting"],
         "model": "openai/gpt-4",
-        "embedding": "openai/text-embedding-ada-002",
+        "embedding": "openai/text-embedding-3-small",
     },
     {
         "name": "Jordan",
         "persona": "A creative and user-focused designer with a passion for intuitive interfaces.",
         "expertise": ["UX/UI design", "user research", "prototyping"],
         "model": "anthropic/claude-3-5-sonnet-20241022",
-        "embedding": "openai/text-embedding-ada-002",
+        "embedding": "openai/text-embedding-3-small",
     },
     {
         "name": "Casey",
         "persona": "A detail-oriented and meticulous engineer who prioritizes code quality and stability.",
         "expertise": ["backend systems", "database architecture", "API development"],
         "model": "openai/gpt-4",
-        "embedding": "openai/text-embedding-ada-002",
+        "embedding": "openai/text-embedding-3-small",
     },
     {
         "name": "Morgan",
         "persona": "A strategic and forward-thinking product owner focused on market fit and business goals.",
         "expertise": ["market analysis", "product strategy", "roadmapping"],
         "model": "together/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF",
-        "embedding": "openai/text-embedding-ada-002",
+        "embedding": "openai/text-embedding-3-small",
     },
 ]
 
