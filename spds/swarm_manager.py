@@ -254,7 +254,7 @@ class SwarmManager:
                 human_input = input("\nYou: ")
             except EOFError:
                 logger.info("Exiting chat.")
-                break
+            logger.info(f"Successfully reset messages for agent {agent_id}")
 
             if human_input.lower() == "quit":
                 logger.info("Exiting chat.")
