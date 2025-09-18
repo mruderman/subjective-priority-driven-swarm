@@ -28,34 +28,6 @@
 ## Phase 2: Comprehensive Logging System 🔴
 
 ### High Priority Tasks
-# TODO - SWARMS Project
-
-## Phase 1: Live Testing - COMPLETED! 🎉
-
-### Completed Tasks ✓
-- [x] Create missing `__init__.py` file in spds/ directory
-- [x] Implement environment variable support for API keys
-- [x] Fix tool creation method (use `create_from_function` instead of `upsert_from_function`)
-- [x] Implement intelligent subjective assessment logic in tools.py
-- [x] Clean up all backup files (~) in the project
-- [x] Complete the README.md file
-- [x] Create creative_swarm.json example file
-- [x] Connect to Letta server (https://app.letta.com)
-- [x] Test default agent creation with AGENT_PROFILES
-- [x] Update model endpoints for all supported providers
-- [x] Create diverse model swarms (creative_swarm.json, tool_swarm.json, vision_swarm.json)
-- [x] Test live conversations with priority-based turn-taking
-- [x] Validate assessment logic with real agents
-- [x] Fix tool call issues for agents with default Letta tools
-- [x] Successfully test 6 different AI providers:
-  - Anthropic (Claude 3.5 Sonnet)
-  - OpenAI (GPT-4.1)
-  - Meta/Together (Llama 3.3 70B)
-  - Qwen/Together (Coder 480B)
-  - Moonshot/Together (Kimi K2)
-  - Mistral/Together (Small 24B)
-
-## Phase 2: Comprehensive Logging System 🔴
 
 ### High Priority Tasks
 - [ ] Implement Python logging module with configurable levels
