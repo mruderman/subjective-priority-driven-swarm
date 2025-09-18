@@ -13,7 +13,19 @@ load_dotenv()
 # --- Logging Configuration ---
 
 def setup_logging():
-    """Sets up a configurable logging system with console and rotating file output."""
+    """
+    Configure the root logger to emit to the console and to a rotating file.
+    
+    This function:
+    - Reads LOG_LEVEL from the environment (default "INFO") and applies it to the root logger.
+    - Ensures a "logs" directory exists and writes logs to "logs/spds.log".
+    - Clears any existing handlers on the root logger to avoid duplicate outputs.
+    - Attaches a console StreamHandler and a RotatingFileHandler (10 MB per file, 5 backups) with distinct formatters.
+    
+    Side effects:
+    - Creates the "logs" directory if missing.
+    - Mutates the global logging configuration (root logger and module logger).
+    """
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     log_dir = "logs"
     log_file = os.path.join(log_dir, "spds.log")
