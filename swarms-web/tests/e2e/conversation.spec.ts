@@ -202,7 +202,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/socket.io.min.js*', async (route) => {
     await route.fulfill({
       contentType: 'application/javascript',
-      body: 'window.io = window.__playwrightCreateSocketIO ? window.__playwrightCreateSocketIO() : window.io;',
+      body: 'window.io = window.io || (window.__playwrightCreateSocketIO && window.__playwrightCreateSocketIO());',
     });
   });
 
