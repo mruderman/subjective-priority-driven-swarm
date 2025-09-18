@@ -566,7 +566,7 @@ class SwarmManager:
     def _hybrid_turn(self, motivated_agents: list, topic: str):
         """
         Run a two-phase hybrid turn where motivated agents first give independent initial thoughts and then respond to each other's ideas.
-        
+                logger.error(f"Error in all-speak response - {e}")
         Phase 1 (initial responses): Each agent in `motivated_agents` is asked to produce an independent short response using the current conversation history. Responses are validated for basic quality; if an agent fails to produce usable text a fallback message based on the agent's expertise is used. Initial replies are appended to the manager's conversation_history and forwarded to the secretary (if present).
         
         Phase 2 (response round): All agents are given a brief instruction to react to the group's initial thoughts. Each motivated agent is then asked to produce a follow-up response that considers others' inputs; those replies are appended to conversation_history and sent to the secretary.
