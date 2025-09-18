@@ -611,7 +611,7 @@ class SwarmManager:
                         logger.warning(f"Slow LLM response from {agent.name}: {duration:.2f} seconds.")
                     message_text = self._extract_agent_response(response)
 
-                    # Validate response quality
+            logger.error(f"Error in sequential response - {e}")
                     if (
                         message_text
                         and len(message_text.strip()) > 10
