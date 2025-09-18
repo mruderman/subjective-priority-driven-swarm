@@ -315,6 +315,12 @@ def test_export_complete_package_skips_transcript_when_no_log(tmp_path):
     assert not any("transcript" in path for path in exported_paths)
 
 
+def test_list_exports_handles_missing_directory(tmp_path):
+    manager = ExportManager(export_directory=str(tmp_path / "missing"))
+
+    assert manager.list_exports() == []
+
+
 def test_list_exports_returns_sorted_paths(tmp_path):
     manager = ExportManager(export_directory=str(tmp_path))
     filenames = ["z_file.txt", "a_file.txt", "m_file.txt"]
