@@ -4,6 +4,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -377,3 +378,28 @@ def get_integrations_allow_fake_providers() -> bool:
             "This should only be used for testing and development."
         )
     return allow_fake
+
+
+# Ephemeral agent policy and secretary reuse configuration
+def get_allow_ephemeral_agents() -> bool:
+    """
+    Whether the app may create new (ephemeral) agents.
+
+    Defaults to False to prioritize continuity and reuse of existing agents.
+    Set SPDS_ALLOW_EPHEMERAL_AGENTS=true explicitly to allow creation from
+    profiles or to create a new secretary when one is not provided.
+    """
+    return os.getenv("SPDS_ALLOW_EPHEMERAL_AGENTS", "false").lower() in ("1", "true", "yes")
+
+
+def get_secretary_agent_id() -> Optional[str]:
+    """Optional fixed secretary agent ID to reuse instead of creating a new one."""
+    return os.getenv("SECRETARY_AGENT_ID") or None
+
+
+def get_secretary_agent_name() -> Optional[str]:
+    """
+    Optional secretary agent name to search for and reuse if present. If both
+    ID and name are set, ID takes precedence.
+    """
+    return os.getenv("SECRETARY_AGENT_NAME") or None

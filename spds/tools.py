@@ -1,5 +1,6 @@
 # spds/tools.py
 
+import inspect
 import json
 import logging
 from typing import Any, Callable, Dict, Optional
@@ -8,6 +9,59 @@ from pydantic import BaseModel, Field
 
 
 logger = logging.getLogger(__name__)
+
+
+def build_tool_create_kwargs(
+    create_fn: Callable,
+    func_callable: Callable,
+    *,
+    name: str,
+    description: Optional[str] = None,
+    return_model: Optional[type] = None,
+) -> Dict[str, Any]:
+    """Prepare kwargs for Letta's tools.create_from_function across SDK versions."""
+
+    def _normalized_param_names(fn: Callable) -> set[str]:
+        try:
+            params = inspect.signature(fn).parameters
+        except (TypeError, ValueError):
+            return set()
+        filtered = set()
+        for param_name in params.keys():
+            if param_name in {"self", "args", "kwargs"}:
+                continue
+            if param_name.startswith("*"):
+                continue
+            filtered.add(param_name)
+        return filtered
+
+    param_names = _normalized_param_names(create_fn)
+
+    def _with_common_kwargs(target_kw: str) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            target_kw: func_callable,
+            "name": name,
+        }
+        if description is not None:
+            payload["description"] = description
+        return payload
+
+    if "func" in param_names:
+        return _with_common_kwargs("func")
+
+    if "function" in param_names:
+        payload = _with_common_kwargs("function")
+        if return_model is not None and "return_model" in param_names:
+            payload["return_model"] = return_model
+        return payload
+
+    # Fallback when signature is not introspectable (e.g. mocks, builtins)
+    fallback_payload = _with_common_kwargs("func")
+    if return_model is not None and "function" in param_names:
+        # Edge case: signature hiding param names but still indicating legacy style
+        fallback_payload = _with_common_kwargs("function")
+        fallback_payload["return_model"] = return_model
+    return fallback_payload
 
 
 class SubjectiveAssessment(BaseModel):
@@ -260,12 +314,13 @@ def load_and_register_external_tools(client_or_agent, create_fn) -> None:
         registered_count = 0
         for tool_name, tool_func in external_tools.items():
             try:
-                # Create tool using provided create function
-                create_fn(
-                    function=tool_func,
+                kwargs = build_tool_create_kwargs(
+                    create_fn,
+                    tool_func,
                     name=tool_name,
-                    description=f"External tool from integration: {tool_name}"
+                    description=f"External tool from integration: {tool_name}",
                 )
+                create_fn(**kwargs)
                 registered_count += 1
                 logger.debug(f"Registered external tool: {tool_name}")
                 

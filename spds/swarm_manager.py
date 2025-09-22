@@ -7,6 +7,7 @@ from letta_client import Letta
 from letta_client.errors import NotFoundError
 
 from .config import logger
+from . import config
 from .export_manager import ExportManager
 from .letta_api import letta_call
 from .memory_awareness import create_memory_awareness_for_agent
@@ -62,7 +63,13 @@ class SwarmManager:
         elif agent_names:
             self._load_agents_by_name(agent_names)
         elif agent_profiles:
-            self._create_agents_from_profiles(agent_profiles)
+            if config.get_allow_ephemeral_agents():
+                self._create_agents_from_profiles(agent_profiles)
+            else:
+                logger.error(
+                    "Ephemeral agent creation is disabled (SPDS_ALLOW_EPHEMERAL_AGENTS=false). "
+                    "Provide existing agent IDs or names instead of profiles."
+                )
 
         if not self.agents:
             logger.error("Swarm manager initialized with no agents.")
@@ -158,6 +165,10 @@ class SwarmManager:
             None
         """
         logger.info("Creating swarm from temporary agent profiles...")
+        if not config.get_allow_ephemeral_agents():
+            raise ValueError(
+                "Ephemeral agent creation is disabled by policy. Supply agent_ids or agent_names instead."
+            )
         for profile in agent_profiles:
             start_time = time.time()
             logger.info(f"Creating agent: {profile['name']}")

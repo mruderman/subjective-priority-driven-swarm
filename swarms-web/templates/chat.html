@@ -401,6 +401,11 @@ class SimpleChat {
         this.socket.on('secretary_activity', (data) => {
             this.handleSecretaryActivity(data);
         });
+
+        // Minutes payload with rendered text from secretary
+        this.socket.on('secretary_minutes', (data) => {
+            this.updateSecretaryMinutes(data.minutes);
+        });
     }
     
     setupChatInterface() {
@@ -884,6 +889,26 @@ class SimpleChat {
                     }
                 }, 3000);
             }
+        }
+    }
+
+    updateSecretaryMinutes(minutes) {
+        const minutesEl = document.getElementById('secretary-minutes');
+        const contentEl = document.getElementById('secretary-content');
+        if (minutesEl) {
+            // Prefer plain text to avoid HTML injections; support simple newlines
+            minutesEl.textContent = '';
+            const pre = document.createElement('pre');
+            pre.style.whiteSpace = 'pre-wrap';
+            pre.style.margin = '0';
+            pre.textContent = minutes || '';
+            minutesEl.innerHTML = '';
+            minutesEl.appendChild(pre);
+            minutesEl.style.display = 'block';
+        }
+        if (contentEl) {
+            // Keep a small status panel, but deprioritize it visually when minutes are shown
+            // No-op: leave existing content; optionally could clear if needed
         }
     }
     

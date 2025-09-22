@@ -61,12 +61,17 @@ pre-commit run --all-files
 ### Core Components
 1. **SPDSAgent** (`spds_agent.py`): Individual agent implementation with real LLM-based subjective assessment
 2. **SwarmManager** (`swarm_manager.py`): Orchestrates multi-agent conversations with 4 conversation modes
-3. **SecretaryAgent** (`secretary_agent.py`): Neutral observer for meeting minutes and export features
+3. **SecretaryAgent** (`secretary_agent.py`): AI-powered meeting documentation using real Letta agent intelligence
 4. **MeetingTemplates** (`meeting_templates.py`): Formal board minutes and casual group discussion formats
 5. **ExportManager** (`export_manager.py`): Multi-format export system for conversations and minutes
-6. **Tools** (`tools.py`): Defines the SubjectiveAssessment model for agent decision-making
-7. **Config** (`config.py`): Contains API keys, agent profiles, conversation parameters, and secretary settings
-8. **Interactive Selection** (`main.py`): User-friendly agent selection, conversation modes, and meeting types
+6. **Tools** (`tools.py`): Defines the SubjectiveAssessment Pydantic model for agent decision-making
+7. **Config** (`config.py`): Environment variables, logging setup, Letta client configuration, and validation
+8. **Interactive Selection** (`main.py`): CLI entry point with agent selection, conversation modes, and session management
+9. **Session Management** (`session_store.py`, `session_context.py`, `session_tracking.py`): Persistent session tracking and context
+10. **Letta API Wrapper** (`letta_api.py`): Simplified Letta client interface with error handling
+11. **Integration System** (`integrations/`): External tool integrations (Composio, MCP) with registry management
+12. **Agent Profiles** (`profiles_schema.py`): Pydantic schemas for agent profile validation
+13. **Memory Awareness** (`memory_awareness.py`): Agent memory management utilities respecting autonomy
 
 ### Key Design Patterns
 - **Agent-based Architecture**: Each agent has unique persona, expertise, and state
@@ -80,9 +85,15 @@ pre-commit run --all-files
 - **PARTICIPATION_THRESHOLD**: Minimum priority score (default: 30) for agent to speak
 - **URGENCY_WEIGHT**: Weight for urgency in priority calculation (default: 0.6)
 - **IMPORTANCE_WEIGHT**: Weight for importance in priority calculation (default: 0.4)
-- **Model Diversity**: Supports per-agent model configuration from multiple providers
-- **Default Models**: `DEFAULT_AGENT_MODEL` and `DEFAULT_EMBEDDING_MODEL` as fallback values
+- **Model Diversity**: Supports per-agent model configuration from multiple providers. Models are defined on the Letta server per agent and are not overridden by this app at runtime.
+- **Default Models**: `DEFAULT_AGENT_MODEL` and `DEFAULT_EMBEDDING_MODEL` in `spds/config.py` act only as fallbacks when this app creates ephemeral agents (e.g., demo profiles, secretary). They are not environment variables and do not change existing agents’ models.
 - **Model Providers**: OpenAI, Anthropic, Meta, Google, Alibaba, and others supported by Letta
+
+### Continuity Over Ephemerality
+This project prioritizes continuity of agent experience over disposable workflows:
+- Prefer using existing agents by ID or name; avoid creating new agents where possible.
+- Control ephemeral creation with `SPDS_ALLOW_EPHEMERAL_AGENTS` (default false; explicitly set to true only for demos or development).
+- For the secretary, configure `SECRETARY_AGENT_ID` or `SECRETARY_AGENT_NAME` to reuse an existing agent. New secretary creation will respect the ephemeral policy flag.
 
 ## Development Notes
 
@@ -134,29 +145,64 @@ python app.py  # Runs on http://localhost:5002
    - `TOOL_EXEC_VENV_NAME`
 
 ### Project Structure
-The project structure for imports and testing:
+The complete project structure for imports and testing:
 ```
 spds/
 ├── __init__.py
-├── config.py
-├── tools.py
-├── spds_agent.py
-├── swarm_manager.py
-├── secretary_agent.py
-├── meeting_templates.py
-├── export_manager.py
-└── main.py
+├── config.py                  # Configuration and environment management
+├── tools.py                   # SubjectiveAssessment Pydantic model
+├── spds_agent.py              # Individual agent implementation
+├── swarm_manager.py           # Multi-agent conversation orchestration
+├── secretary_agent.py         # AI-powered meeting documentation
+├── meeting_templates.py       # Meeting minute formatting
+├── export_manager.py          # Multi-format export system
+├── main.py                    # CLI entry point and interactive selection
+├── letta_api.py               # Letta client wrapper and utilities
+├── session_store.py           # Session persistence
+├── session_context.py         # Session context handling
+├── session_tracking.py        # Session lifecycle tracking
+├── profiles_schema.py         # Agent profile validation schemas
+├── memory_awareness.py        # Memory management utilities
+├── setup.sh                   # Docker setup script
+└── integrations/              # External tool integrations
+    ├── __init__.py
+    ├── registry.py            # Integration registry management
+    ├── composio.py            # Composio tools integration
+    └── mcp.py                 # Model Context Protocol integration
+
+swarms-web/
+├── app.py                     # Flask web server with WebSocket support
+├── run.py                     # Web interface startup script
+├── requirements.txt           # Web-specific dependencies
+├── templates/                 # Jinja2 HTML templates
+│   ├── base.html
+│   ├── index.html
+│   ├── setup.html
+│   ├── chat.html
+│   └── sessions.html
+├── static/                    # CSS, JS, assets (Bootstrap 5)
+│   ├── css/
+│   └── js/
+└── tests/                     # Playwright E2E tests
+    ├── test_sessions_endpoints.py
+    └── test_sessions_exports.py
 
 tests/
-├── unit/
+├── unit/                      # Unit tests for individual components
 │   ├── test_tools.py
 │   ├── test_spds_agent.py
-│   └── test_swarm_manager.py
-├── integration/
-│   └── test_model_diversity.py
-├── e2e/
+│   ├── test_swarm_manager.py
+│   ├── test_secretary_agent.py
+│   ├── test_export_manager.py
+│   ├── test_session_store.py
+│   ├── test_integrations_registry.py
+│   └── [many more unit tests]
+├── integration/               # Integration tests
+│   ├── test_model_diversity.py
+│   └── test_config_connectivity.py
+├── e2e/                       # End-to-end user scenario tests
 │   └── test_user_scenarios.py
-├── conftest.py
+├── conftest.py                # Pytest configuration and fixtures
 └── __init__.py
 ```
 
@@ -244,6 +290,25 @@ self.agent = self.client.agents.create(
 )
 ```
 
+### Troubleshooting note
+
+If you encounter an installation error when trying to install `letta-flask`
+from GitHub (for example: "No matching distribution found for
+typing>=3.10.0.0"), see the `Troubleshooting` section in `README.md`.
+
+Practical quick workarounds include:
+
+- Use the repository's local `letta_flask` shim (recommended for local
+    development) — run the web server from the repo root and Python will
+    import the local package.
+- Install the upstream package without dependencies:
+
+    ```bash
+    pip install --no-deps git+https://github.com/letta-ai/letta-flask.git
+    ```
+
+If you'd like, I can also prepare a temporary wheel with corrected metadata
+for your environment.
 #### Active Message Processing
 ```python
 def observe_message(self, speaker: str, message: str, metadata: Optional[Dict] = None):
@@ -310,7 +375,12 @@ See `AGENT_MEMORY_AUTONOMY.md` for comprehensive documentation on memory managem
 ## Secrets and Environment Variables
 
 ### Server Credentials
-- Our self-hosted Letta ADE server secure password env var is => LETTA_SERVER_PASSWORD=TWIJftq/ufbbxo8w51m/BQ1wBNrZb/JTlmnop
+- Do not commit secrets. Use a local `.env` file and reference variables in code. Example:
+    - `LETTA_API_KEY=<your_letta_api_key>`
+    - `LETTA_PASSWORD=<your_server_password>`
+    - `LETTA_BASE_URL=http://localhost:8283`
+    - `LETTA_ENVIRONMENT=SELF_HOSTED`
+    See `.env.example` for the full list and guidance.
 
 ## Context and Resources
 

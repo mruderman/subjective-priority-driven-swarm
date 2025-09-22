@@ -9,7 +9,7 @@ from letta_client.types import AgentState
 
 from . import config
 from .letta_api import letta_call
-from .session_tracking import track_message, track_action, track_system_event
+from .session_tracking import track_message, track_action, track_system_event, track_decision
 
 # spds/secretary_agent.py
 
@@ -47,7 +47,7 @@ class SecretaryAgent:
         self._create_secretary_agent()
 
     def _create_secretary_agent(self):
-        """Creates or retrieves a specialized secretary agent using proper Letta patterns."""
+        """Creates or retrieves a specialized secretary agent using reuse-first policy."""
 
         # Generate unique name with timestamp to avoid conflicts
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -79,8 +79,40 @@ class SecretaryAgent:
             )
             name = f"Adaptive Secretary {timestamp}"
 
-        # Skip checking for existing agents - always create new to avoid problematic ones
-        # This ensures we don't reuse any broken secretary agents
+        # Reuse-first policy: check configured ID or name before creating a new agent
+        sec_id = config.get_secretary_agent_id()
+        sec_name = config.get_secretary_agent_name()
+        if sec_id:
+            try:
+                self.agent = letta_call(
+                    "secretary.agent.retrieve",
+                    self.client.agents.retrieve,
+                    agent_id=sec_id,
+                )
+                print(f"✅ Reusing secretary agent by ID: {sec_id}")
+                return
+            except Exception as e:
+                print(f"⚠️ Failed to retrieve secretary by ID {sec_id}: {e}")
+        if sec_name:
+            try:
+                found = letta_call(
+                    "secretary.agent.list",
+                    self.client.agents.list,
+                    name=sec_name,
+                    limit=1,
+                )
+                if found:
+                    self.agent = found[0]
+                    print(f"✅ Reusing secretary agent by name: {sec_name}")
+                    return
+            except Exception as e:
+                print(f"⚠️ Failed to find secretary by name {sec_name}: {e}")
+
+        # If ephemeral creation is disabled by policy, do not create a new secretary
+        if not config.get_allow_ephemeral_agents():
+            raise RuntimeError(
+                "Ephemeral creation disabled (SPDS_ALLOW_EPHEMERAL_AGENTS=false); set SECRETARY_AGENT_ID or SECRETARY_AGENT_NAME to reuse an existing secretary agent."
+            )
 
         # Create new agent using proper Letta memory blocks pattern
         try:

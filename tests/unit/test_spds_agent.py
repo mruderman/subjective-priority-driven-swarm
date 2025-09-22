@@ -257,11 +257,17 @@ class TestSPDSAgent:
 
         agent = SPDSAgent(agent_state, mock_letta_client)
 
-        mock_letta_client.tools.create_from_function.assert_called_once_with(
-            function=tools.perform_subjective_assessment,
-            return_model=tools.SubjectiveAssessment,
-            name="perform_subjective_assessment",
-            description="Perform a holistic subjective assessment of the conversation",
+        # Accept both new (func=) and legacy (function=, return_model=) signatures
+        mock_letta_client.tools.create_from_function.assert_called_once()
+        _, kwargs = mock_letta_client.tools.create_from_function.call_args
+        assert kwargs.get("name") == "perform_subjective_assessment"
+        assert (
+            kwargs.get("description")
+            == "Perform a holistic subjective assessment of the conversation"
+        )
+        assert (
+            kwargs.get("func") == tools.perform_subjective_assessment
+            or kwargs.get("function") == tools.perform_subjective_assessment
         )
         mock_letta_client.agents.tools.attach.assert_called_once_with(
             agent_id="ag-test-999", tool_id="tool-assessment-999"
@@ -271,6 +277,7 @@ class TestSPDSAgent:
         assert agent.agent == agent_state
 
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
+    @patch("spds.spds_agent.track_action", Mock())
     def test_get_full_assessment_with_tool_return(
         self,
         mock_assessment_func,
@@ -305,6 +312,7 @@ class TestSPDSAgent:
         assert agent.last_assessment.expertise_relevance == 9
 
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
+    @patch("spds.spds_agent.track_action", Mock())
     def test_get_full_assessment_parses_tool_call_arguments(
         self,
         mock_assessment_func,
@@ -342,6 +350,7 @@ class TestSPDSAgent:
         assert agent.last_assessment.importance_to_group == 7
 
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
+    @patch("spds.spds_agent.track_action", Mock())
     def test_get_full_assessment_fallback(
         self,
         mock_assessment_func,
@@ -374,6 +383,7 @@ class TestSPDSAgent:
         assert agent.last_assessment == sample_assessment
 
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
+    @patch("spds.spds_agent.track_action", Mock())
     def test_get_full_assessment_tool_call_without_scores_uses_local_fallback(
         self,
         mock_assessment_func,

@@ -455,12 +455,13 @@ def build_session_summary(
     else:
         session_state = session_state_or_id
 
-    # Extract events by type
+    # Extract events by type (chronologically)
     actions = []
     decisions = []
     messages = []
 
-    for event in session_state.events:
+    # Ensure chronological order regardless of append order in store
+    for event in sorted(session_state.events, key=lambda e: e.ts):
         if event.type == "action":
             actions.append(
                 {"ts": event.ts.isoformat(), "actor": event.actor, **event.payload}

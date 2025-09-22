@@ -22,6 +22,8 @@ export default defineConfig({
     cwd: projectRoot,
     timeout: 120000,
     env: {
+      // Ensure Flask app enables test-mode behavior for deterministic navigation
+      PLAYWRIGHT_TEST: '1',
       PORT: new URL(baseURL).port || '5002',
       PYTHONUNBUFFERED: '1',
     },

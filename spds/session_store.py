@@ -78,14 +78,30 @@ class JsonSessionStore(SessionStore):
     def __init__(self, sessions_dir: Path):
         self.sessions_dir = sessions_dir
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
-        self._locks: Dict[str, threading.Lock] = {}
+        # Use reentrant locks for per-session locking to avoid deadlocks when
+        # a method (e.g., save_event) calls another method (e.g., load) that
+        # also attempts to acquire the same session lock within the same thread.
+        self._locks: Dict[str, threading.RLock] = {}
         self._global_lock = threading.Lock()
+        # If no default store has been initialized yet, set this instance as the default.
+        # This makes helpers that call get_default_session_store() work seamlessly in tests
+        # that construct their own JsonSessionStore pointing at a temp directory.
+        try:
+            from .session_store import _default_session_store  # type: ignore
+            # Only assign if not yet set to avoid clobbering an explicitly configured store
+            if _default_session_store is None:
+                # Assigning via globals to avoid circular import issues
+                globals().setdefault('_default_session_store', self)
+                globals()['_default_session_store'] = self
+        except Exception:
+            # Best-effort; safe to ignore if globals are not yet available
+            pass
     
-    def _get_session_lock(self, session_id: str) -> threading.Lock:
+    def _get_session_lock(self, session_id: str) -> threading.RLock:
         """Get or create a lock for a specific session."""
         with self._global_lock:
             if session_id not in self._locks:
-                self._locks[session_id] = threading.Lock()
+                self._locks[session_id] = threading.RLock()
             return self._locks[session_id]
     
     def _get_session_dir(self, session_id: str) -> Path:

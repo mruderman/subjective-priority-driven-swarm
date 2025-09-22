@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from . import config, tools
 from .letta_api import letta_call
-from .session_tracking import track_message, track_tool_call, track_decision
+from .session_tracking import track_message, track_tool_call, track_decision, track_action
 
 
 class SPDSAgent:
@@ -87,14 +87,19 @@ class SPDSAgent:
             # If tools enumeration fails, proceed to attach
             pass
 
-        # Create from our local function and Pydantic model
-        self.assessment_tool = letta_call(
-            "tools.create_from_function",
-            self.client.tools.create_from_function,
-            function=tools.perform_subjective_assessment,
-            return_model=tools.SubjectiveAssessment,
+        # Create from our local function, adapting to the installed letta-client signature.
+        create_fn = self.client.tools.create_from_function
+        create_kwargs = tools.build_tool_create_kwargs(
+            create_fn,
+            tools.perform_subjective_assessment,
             name=tool_name,
             description="Perform a holistic subjective assessment of the conversation",
+            return_model=tools.SubjectiveAssessment,
+        )
+        self.assessment_tool = letta_call(
+            "tools.create_from_function",
+            create_fn,
+            **create_kwargs,
         )
         # Attach to agent
         try:
