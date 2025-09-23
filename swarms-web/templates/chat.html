@@ -106,7 +106,7 @@
                                 <i class="bi bi-file-text"></i>
                             </button>
                             <button type="button" class="btn btn-outline-secondary secretary-command"
-                                    data-command="/export minutes" title="Export Minutes">
+                                    data-command="/export formal" title="Export Minutes">
                                 <i class="bi bi-download"></i>
                             </button>
                             <button type="button" class="btn btn-outline-secondary secretary-command"
@@ -193,8 +193,8 @@
                     </div>
                     <div class="card-body">
                         <div class="d-grid gap-2">
-                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command" 
-                                    data-command="/export minutes">
+                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command"
+                                    data-command="/export formal">
                                 <i class="bi bi-file-earmark-text"></i> Board Minutes
                             </button>
                             <button type="button" class="btn btn-outline-primary btn-sm secretary-command" 
@@ -283,7 +283,8 @@ class SimpleChat {
         this.isConnected = false;
         this.agents = [];
         this.pendingAttachments = []; // Store uploaded attachments before sending
-        
+        this.latestExportEntries = [];
+
         this.init();
     }
     
@@ -828,10 +829,240 @@ class SimpleChat {
     }
     
     handleExportComplete(data) {
-        if (data.files) {
-            this.showToast(`Export complete: ${data.count} files generated`, 'success');
-        } else if (data.file) {
-            this.showToast(`Export complete: ${data.format}`, 'success');
+        const entries = this.normalizeExportEntries(data);
+
+        if (entries.length === 0) {
+            this.showToast('Export finished but no files were reported.', 'warning');
+            return;
+        }
+
+        this.latestExportEntries = entries;
+        this.renderExportResults(entries);
+        this.showExportModal();
+
+        if (entries.length === 1) {
+            const label = this.formatExportLabel(entries[0].format);
+            this.showToast(`Export complete: ${label}`, 'success');
+        } else {
+            this.showToast(`Export complete: ${entries.length} files ready to download`, 'success');
+        }
+    }
+
+    normalizeExportEntries(payload) {
+        if (!payload) {
+            return [];
+        }
+
+        const entries = [];
+        const seen = new Set();
+
+        const maybeAddEntry = (rawEntry, formatHint = null) => {
+            const normalized = this.normalizeExportEntry(rawEntry, formatHint);
+            if (normalized && !seen.has(normalized.filename)) {
+                seen.add(normalized.filename);
+                entries.push(normalized);
+            }
+        };
+
+        if (Array.isArray(payload.files)) {
+            payload.files.forEach((item) => maybeAddEntry(item));
+        }
+
+        if (payload.file) {
+            maybeAddEntry(payload.file, payload.format || null);
+        }
+
+        return entries;
+    }
+
+    normalizeExportEntry(rawEntry, formatHint = null) {
+        if (!rawEntry) {
+            return null;
+        }
+
+        let filename = '';
+        let format = this.normalizeExportFormat(formatHint);
+        let size = null;
+
+        if (typeof rawEntry === 'string') {
+            filename = this.extractFilename(rawEntry);
+        } else if (typeof rawEntry === 'object') {
+            const candidate = rawEntry.filename || rawEntry.name || rawEntry.path;
+            if (candidate) {
+                filename = this.extractFilename(candidate);
+            }
+            if (!format && rawEntry.format) {
+                format = this.normalizeExportFormat(rawEntry.format);
+            }
+            if (!format && rawEntry.kind) {
+                format = this.normalizeExportFormat(rawEntry.kind);
+            }
+            if (typeof rawEntry.size_bytes === 'number') {
+                size = rawEntry.size_bytes;
+            } else if (typeof rawEntry.size === 'number') {
+                size = rawEntry.size;
+            }
+        }
+
+        if (!filename) {
+            return null;
+        }
+
+        const inferredFormat = format || this.inferFormatFromFilename(filename);
+
+        return {
+            filename,
+            format: inferredFormat,
+            size,
+            url: this.buildExportDownloadUrl(filename),
+        };
+    }
+
+    extractFilename(value) {
+        if (!value || typeof value !== 'string') {
+            return '';
+        }
+        const parts = value.split(/\\|\//);
+        return parts[parts.length - 1];
+    }
+
+    normalizeExportFormat(value) {
+        if (!value) {
+            return '';
+        }
+        const normalized = value.toString().trim().toLowerCase();
+        if (normalized === 'minutes') {
+            return 'formal';
+        }
+        if (normalized === 'action-items' || normalized === 'action_items') {
+            return 'actions';
+        }
+        return normalized;
+    }
+
+    inferFormatFromFilename(filename) {
+        const lower = filename.toLowerCase();
+        if (lower.includes('board_minutes') || lower.includes('formal')) {
+            return 'formal';
+        }
+        if (lower.includes('meeting_notes') || lower.includes('casual')) {
+            return 'casual';
+        }
+        if (lower.includes('transcript')) {
+            return 'transcript';
+        }
+        if (lower.includes('action')) {
+            return 'actions';
+        }
+        if (lower.includes('summary')) {
+            return 'summary';
+        }
+        if (lower.includes('data') || lower.endsWith('.json')) {
+            return 'data';
+        }
+        return 'download';
+    }
+
+    buildExportDownloadUrl(filename) {
+        try {
+            return `/exports/${encodeURIComponent(filename)}`;
+        } catch (error) {
+            console.warn('Failed to encode export filename', filename, error);
+            return `/exports/${filename}`;
+        }
+    }
+
+    formatExportLabel(format) {
+        const labels = {
+            formal: 'Formal Minutes',
+            casual: 'Casual Notes',
+            transcript: 'Conversation Transcript',
+            actions: 'Action Items',
+            summary: 'Executive Summary',
+            data: 'Structured Data',
+            download: 'Download',
+        };
+
+        const key = format && labels[format] ? format : 'download';
+        return labels[key];
+    }
+
+    renderExportResults(entries) {
+        const container = document.getElementById('export-results');
+        if (!container) {
+            return;
+        }
+
+        if (!entries || entries.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-warning" role="alert">
+                    No exports are available yet. Try requesting an export from the secretary.
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = entries
+            .map((entry) => {
+                const label = this.formatExportLabel(entry.format);
+                const description = entry.filename;
+                const sizeText = entry.size ? ` <span class="text-muted">(${this.formatFileSize(entry.size)})</span>` : '';
+                return `
+                    <div class="border rounded p-3 mb-2 export-result" data-export-format="${entry.format}" data-export-filename="${entry.filename}">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                            <div>
+                                <div class="fw-semibold">${label}</div>
+                                <div class="small text-muted">${description}${sizeText}</div>
+                            </div>
+                            <div>
+                                <a class="btn btn-sm btn-outline-primary download-export"
+                                   href="${entry.url}"
+                                   target="_blank"
+                                   rel="noopener"
+                                   data-filename="${entry.filename}">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            })
+            .join('');
+    }
+
+    formatFileSize(size) {
+        if (!size || size <= 0) {
+            return '';
+        }
+
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let unitIndex = 0;
+        let value = size;
+
+        while (value >= 1024 && unitIndex < units.length - 1) {
+            value /= 1024;
+            unitIndex += 1;
+        }
+
+        return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unitIndex]}`;
+    }
+
+    showExportModal() {
+        const modalElement = document.getElementById('exportModal');
+        if (!modalElement) {
+            return;
+        }
+
+        const bootstrapLib = window.bootstrap;
+        if (bootstrapLib && bootstrapLib.Modal) {
+            const modalInstance = typeof bootstrapLib.Modal.getOrCreateInstance === 'function'
+                ? bootstrapLib.Modal.getOrCreateInstance(modalElement)
+                : new bootstrapLib.Modal(modalElement);
+            modalInstance.show();
+        } else {
+            modalElement.classList.add('show');
+            modalElement.style.display = 'block';
+            modalElement.removeAttribute('aria-hidden');
         }
     }
     

@@ -28,13 +28,31 @@ const mockAgents: MockAgent[] = [
   },
 ];
 
+const exportFixtures = {
+  formal: 'exports/board_minutes_formal.md',
+  casual: 'exports/meeting_notes_casual.md',
+  transcript: 'exports/conversation_transcript.txt',
+  actions: 'exports/action_items.md',
+  summary: 'exports/executive_summary.md',
+  data: 'exports/structured_data.json',
+  all: [
+    'exports/board_minutes_formal.md',
+    'exports/meeting_notes_casual.md',
+    'exports/conversation_transcript.txt',
+    'exports/action_items.md',
+    'exports/executive_summary.md',
+    'exports/structured_data.json',
+  ],
+} as const;
+
 let currentAgents: MockAgent[] = [...mockAgents];
 
 test.beforeEach(async ({ page }) => {
   currentAgents = [...mockAgents];
 
-  await page.addInitScript(({ agents }) => {
+  await page.addInitScript(({ agents, exports: exportData }) => {
     const mockAgentsData = agents as MockAgent[];
+    const exportFixturesData = exportData as Record<string, unknown>;
 
     class BootstrapToastStub {
       element: HTMLElement;
@@ -55,12 +73,54 @@ test.beforeEach(async ({ page }) => {
       }
     }
 
+    class BootstrapModalStub {
+      element: HTMLElement;
+
+      constructor(element: HTMLElement) {
+        this.element = element;
+        (this.element as any).__modalInstance = this;
+      }
+
+      show() {
+        this.element.classList.add('show');
+        this.element.style.display = 'block';
+        this.element.removeAttribute('aria-hidden');
+      }
+
+      hide() {
+        this.element.classList.remove('show');
+        this.element.style.display = 'none';
+        this.element.setAttribute('aria-hidden', 'true');
+      }
+
+      static getInstance(element: HTMLElement) {
+        return (element as any).__modalInstance ?? null;
+      }
+
+      static getOrCreateInstance(element: HTMLElement) {
+        return (
+          (element as any).__modalInstance ??
+          new BootstrapModalStub(element)
+        );
+      }
+    }
+
     const ensureBootstrap = () => {
       const win = window as typeof window & {
-        bootstrap?: { Toast: typeof BootstrapToastStub };
+        bootstrap?: {
+          Toast?: typeof BootstrapToastStub;
+          Modal?: typeof BootstrapModalStub;
+        };
       };
       if (!win.bootstrap) {
-        win.bootstrap = { Toast: BootstrapToastStub };
+        win.bootstrap = { Toast: BootstrapToastStub, Modal: BootstrapModalStub };
+      } else {
+        if (!win.bootstrap.Toast) {
+          win.bootstrap.Toast = BootstrapToastStub;
+        }
+        if (!win.bootstrap.Modal) {
+          win.bootstrap.Modal = BootstrapModalStub;
+        }
       }
     };
 
@@ -164,6 +224,68 @@ test.beforeEach(async ({ page }) => {
                       message: '✅ Meeting minutes generated!',
                     });
                   }, 120);
+                } else if (trimmedMessage === '/formal' || trimmedMessage === '/casual') {
+                  const mode = trimmedMessage.slice(1);
+                  setTimeout(() => {
+                    emitEvent('secretary_status', {
+                      status: 'active',
+                      agent_name: 'Avery Secretary',
+                      mode,
+                      message:
+                        mode === 'formal'
+                          ? 'Secretary switched to formal minutes mode.'
+                          : 'Secretary switched to casual notes mode.',
+                    });
+                  }, 80);
+                  return socketInstance;
+                } else if (trimmedMessage.startsWith('/export')) {
+                  const parts = trimmedMessage.split(/\s+/, 2);
+                  const requestedFormat = (parts[1] || 'formal').toLowerCase();
+                  const normalizedFormat =
+                    requestedFormat === 'minutes' ? 'formal' : requestedFormat;
+
+                  setTimeout(() => {
+                    if (
+                      normalizedFormat === 'all' &&
+                      Array.isArray(exportFixturesData.all)
+                    ) {
+                      emitEvent('export_complete', {
+                        files: exportFixturesData.all,
+                        count: (exportFixturesData.all as unknown[]).length,
+                      });
+                    } else {
+                      const fixture =
+                        exportFixturesData[normalizedFormat] ??
+                        exportFixturesData.formal;
+
+                      if (typeof fixture === 'string') {
+                        emitEvent('export_complete', {
+                          file: fixture,
+                          format: normalizedFormat,
+                        });
+                      } else if (Array.isArray(fixture)) {
+                        emitEvent('export_complete', {
+                          files: fixture,
+                          count: fixture.length,
+                        });
+                      } else if (fixture && typeof fixture === 'object') {
+                        const pathValue =
+                          (fixture as { path?: string; filename?: string }).path ??
+                          (fixture as { path?: string; filename?: string }).filename;
+                        emitEvent('export_complete', {
+                          file: pathValue ?? `exports/${normalizedFormat}.md`,
+                          format: normalizedFormat,
+                        });
+                      } else {
+                        emitEvent('export_complete', {
+                          file: `exports/${normalizedFormat}_mock.txt`,
+                          format: normalizedFormat,
+                        });
+                      }
+                    }
+                  }, 80);
+
+                  return socketInstance;
                 }
               } else {
                 setTimeout(() => {
@@ -202,7 +324,7 @@ test.beforeEach(async ({ page }) => {
     win.__playwrightCreateSocketIO = createSocketFactory;
     const socketFactory = createSocketFactory();
     win.io = () => socketFactory();
-  }, { agents: mockAgents });
+  }, { agents: mockAgents, exports: exportFixtures });
 
   await page.route('**/socket.io.min.js*', async (route) => {
     await route.fulfill({
@@ -214,7 +336,47 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js*', async (route) => {
     await route.fulfill({
       contentType: 'application/javascript',
-      body: 'window.bootstrap = window.bootstrap || { Toast: function ToastStub(){ this.show = function(){}; } };',
+      body: `
+        (function(){
+          if (!window.bootstrap) {
+            const toastStub = function ToastStub(element) {
+              this.element = element;
+            };
+            toastStub.prototype.show = function show() {};
+
+            class ModalStub {
+              constructor(element) {
+                this.element = element;
+                ModalStub._instances.set(element, this);
+              }
+
+              show() {
+                this.element.classList.add('show');
+                this.element.style.display = 'block';
+                this.element.removeAttribute('aria-hidden');
+              }
+
+              hide() {
+                this.element.classList.remove('show');
+                this.element.style.display = 'none';
+                this.element.setAttribute('aria-hidden', 'true');
+              }
+
+              static getInstance(element) {
+                return ModalStub._instances.get(element) || null;
+              }
+
+              static getOrCreateInstance(element) {
+                return ModalStub.getInstance(element) || new ModalStub(element);
+              }
+            }
+
+            ModalStub._instances = new WeakMap();
+
+            window.bootstrap = { Toast: toastStub, Modal: ModalStub };
+          }
+        })();
+      `,
     });
   });
 
@@ -336,4 +498,168 @@ test('should show a warning when no agents are returned from the server', async 
   const noAgentsAlert = page.locator('#no-agents');
   await expect(noAgentsAlert).toBeVisible();
   await expect(page.locator('#agent-count')).toHaveText('None Available');
+});
+
+test('should trigger secretary exports and surface downloadable links', async ({ page }) => {
+  await startConversation(page, 'Automated export verification');
+
+  await page.route('**/exports/**', async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const filename = decodeURIComponent(requestUrl.pathname.split('/').pop() || 'export.txt');
+
+    let contentType = 'application/octet-stream';
+    if (filename.endsWith('.md')) {
+      contentType = 'text/markdown; charset=utf-8';
+    } else if (filename.endsWith('.txt')) {
+      contentType = 'text/plain; charset=utf-8';
+    } else if (filename.endsWith('.json')) {
+      contentType = 'application/json';
+    }
+
+    await route.fulfill({
+      status: 200,
+      body: `Mock content for ${filename}`,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
+  });
+
+  const exportVariants = [
+    {
+      format: 'formal',
+      trigger: async () => {
+        await page
+          .locator('button.secretary-command[data-command="/export formal"]').first()
+          .click();
+      },
+    },
+    {
+      format: 'casual',
+      trigger: async () => {
+        await page
+          .locator('button.secretary-command[data-command="/export casual"]').first()
+          .click();
+      },
+    },
+    {
+      format: 'transcript',
+      trigger: async () => {
+        await page
+          .locator('button.secretary-command[data-command="/export transcript"]').first()
+          .click();
+      },
+    },
+    {
+      format: 'actions',
+      trigger: async () => {
+        await page
+          .locator('button.secretary-command[data-command="/export actions"]').first()
+          .click();
+      },
+    },
+    {
+      format: 'summary',
+      trigger: async () => {
+        await page
+          .locator('button.secretary-command[data-command="/export summary"]').first()
+          .click();
+      },
+    },
+    {
+      format: 'all',
+      trigger: async () => {
+        await page
+          .locator('button.secretary-command[data-command="/export all"]').first()
+          .click();
+      },
+    },
+  ] as const;
+
+  const testedDownloads = new Map<string, string>();
+
+  for (const variant of exportVariants) {
+    await variant.trigger();
+
+    const exportModal = page.locator('#exportModal');
+    await expect(exportModal).toBeVisible();
+
+    const results = page.locator('#export-results [data-export-format]');
+    const expectedCount = variant.format === 'all' ? 6 : 1;
+    await expect(results).toHaveCount(expectedCount);
+
+    if (variant.format === 'all') {
+      const expectedFormats = ['formal', 'casual', 'transcript', 'actions', 'summary', 'data'];
+      for (const expectedFormat of expectedFormats) {
+        await expect(
+          page.locator(`#export-results [data-export-format="${expectedFormat}"]`)
+        ).toBeVisible();
+      }
+
+      const hrefs = await page.locator('#export-results .download-export').evaluateAll((elements) =>
+        elements
+          .map((element) => element.getAttribute('href'))
+          .filter((href): href is string => typeof href === 'string')
+      );
+
+      for (const href of hrefs) {
+        const absoluteUrl = new URL(href, page.url()).toString();
+        const response = await page.request.get(absoluteUrl);
+        expect(response.status()).toBe(200);
+        const headers = response.headers();
+        const filename = decodeURIComponent(href.split('/').pop() || '');
+        expect(headers['content-disposition']).toContain(filename);
+
+        const expectedContentType = href.endsWith('.md')
+          ? 'text/markdown'
+          : href.endsWith('.txt')
+          ? 'text/plain'
+          : href.endsWith('.json')
+          ? 'application/json'
+          : 'application/octet-stream';
+        expect(headers['content-type']).toContain(expectedContentType);
+      }
+    } else {
+      const entry = page
+        .locator(`#export-results [data-export-format="${variant.format}"]`)
+        .first();
+      await expect(entry).toBeVisible();
+
+      const href = await entry.locator('a.download-export').getAttribute('href');
+      expect(href).not.toBeNull();
+
+      const absoluteUrl = new URL(href!, page.url()).toString();
+      const response = await page.request.get(absoluteUrl);
+      expect(response.status()).toBe(200);
+      const headers = response.headers();
+      const filename = decodeURIComponent(href!.split('/').pop() || '');
+      expect(headers['content-disposition']).toContain(filename);
+
+      const expectedContentType = href!.endsWith('.md')
+        ? 'text/markdown'
+        : href!.endsWith('.txt')
+        ? 'text/plain'
+        : href!.endsWith('.json')
+        ? 'application/json'
+        : 'application/octet-stream';
+      expect(headers['content-type']).toContain(expectedContentType);
+
+      testedDownloads.set(variant.format, href!);
+    }
+  }
+
+  expect(testedDownloads.size).toBe(5);
+});
+
+test('should reflect secretary mode toggles in the sidebar', async ({ page }) => {
+  await startConversation(page, 'Secretary mode toggles');
+
+  const secretaryContent = page.locator('#secretary-content');
+
+  await page.locator('button.secretary-command[data-command="/formal"]').first().click();
+  await expect(secretaryContent).toContainText('Mode: formal');
+
+  await page.locator('button.secretary-command[data-command="/casual"]').first().click();
+  await expect(secretaryContent).toContainText('Mode: casual');
 });
