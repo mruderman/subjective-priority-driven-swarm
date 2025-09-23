@@ -93,7 +93,9 @@ def fix_agent_token_limits(client, agent_id: str, agent_name: str, model: str) -
                 print(f"   ✅ Agent can respond normally - token limits appear OK")
                 return True
             else:
-                print(f"   ⚠️  Agent response test failed - may have token limit issues")
+                print(
+                    f"   ⚠️  Agent response test failed - may have token limit issues"
+                )
                 return False
 
         except Exception as e:

@@ -254,9 +254,9 @@ def test_get_conversation_stats_combines_agent_summary(fixed_datetime):
     secretary = SecretaryAgent(client)
 
     secretary.start_meeting("Product Sync", ["Ada", "Lin"], meeting_type="sync")
-    secretary.meeting_metadata["start_time"] = (
-        secretary_module.datetime.now() - timedelta(minutes=5)
-    )
+    secretary.meeting_metadata[
+        "start_time"
+    ] = secretary_module.datetime.now() - timedelta(minutes=5)
 
     stats = secretary.get_conversation_stats()
 

@@ -1,0 +1,54 @@
+{
+  "pr_number": 17,
+  "head_branch": "codex/add-test-fixtures-for-playwright-support",
+  "url": "https://github.com/mruderman/subjective-priority-driven-swarm/pull/17",
+  "author": "mruderman",
+  "reviewDecision": "",
+  "relevant_reviews": [],
+  "relevant_comments": [
+    {
+      "author": "coderabbitai",
+      "body": "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->\n\n> [!WARNING]\n> ## Rate limit exceeded\n> \n> @mruderman has exceeded the limit for the number of commits or files that can be reviewed per hour. Please wait **21 minutes and 45 seconds** before requesting another review.\n> \n> <details>\n> <summary>\u231b How to resolve this issue?</summary>\n> \n> After the wait time has elapsed, a review can be triggered using the `@coderabbitai review` command as a PR comment. Alternatively, push new commits to this PR.\n> \n> We recommend that you space out your commits to avoid hitting the rate limit.\n> \n> </details>\n> \n> \n> <details>\n> <summary>\ud83d\udea6 How do rate limits work?</summary>\n> \n> CodeRabbit enforces hourly rate limits for each developer per organization.\n> \n> Our paid plans have higher rate limits than the trial, open-source and free plans. In all cases, we re-allow further reviews after a brief timeout.\n> \n> Please see our [FAQ](https://docs.coderabbit.ai/faq) for further information.\n> \n> </details>\n> \n> <details>\n> <summary>\ud83d\udce5 Commits</summary>\n> \n> Reviewing files that changed from the base of the PR and between b645998a773244ed0f89ae988ef85e31a164cb18 and f7d37d7c6b09f702db0f2f55a81e6a4fce09e652.\n> \n> </details>\n> \n> <details>\n> <summary>\ud83d\udcd2 Files selected for processing (7)</summary>\n> \n> * `swarms-web/app.py` (2 hunks)\n> * `swarms-web/playwright_fixtures.py` (1 hunks)\n> * `swarms-web/tests/e2e/conversation.spec.ts` (3 hunks)\n> * `swarms-web/tests/e2e/fixtures.ts` (1 hunks)\n> * `swarms-web/tests/e2e/mock-data.json` (1 hunks)\n> * `swarms-web/tests/e2e/mockData.ts` (1 hunks)\n> * `swarms-web/tests/e2e/mockedLetta.ts` (1 hunks)\n> \n> </details>\n\n<!-- end of auto-generated comment: rate limited by coderabbit.ai -->\n\n\n<!-- finishing_touch_checkbox_start -->\n\n<details>\n<summary>\u2728 Finishing touches</summary>\n\n- [ ] <!-- {\"checkboxId\": \"7962f53c-55bc-4827-bfbf-6a18da830691\"} --> \ud83d\udcdd Docstrings were successfully generated. (\ud83d\udd04  Check again to generate docstrings again)\n<details>\n<summary>\ud83e\uddea Generate unit tests</summary>\n\n- [ ] <!-- {\"checkboxId\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\", \"radioGroupId\": \"utg-output-choice-group-unknown_comment_id\"} -->   Create PR with unit tests\n- [ ] <!-- {\"checkboxId\": \"07f1e7d6-8a8e-4e23-9900-8731c2c87f58\", \"radioGroupId\": \"utg-output-choice-group-unknown_comment_id\"} -->   Post copyable unit tests in a comment\n- [ ] <!-- {\"checkboxId\": \"6ba7b810-9dad-11d1-80b4-00c04fd430c8\", \"radioGroupId\": \"utg-output-choice-group-unknown_comment_id\"} -->   Commit unit tests in branch `codex/add-test-fixtures-for-playwright-support`\n\n</details>\n\n</details>\n\n<!-- finishing_touch_checkbox_end -->\n\n<!-- tips_start -->\n\n---\n\nThanks for using CodeRabbit! It's free for OSS, and your support helps us grow. If you like it, consider giving us a shout-out.\n\n<details>\n<summary>\u2764\ufe0f Share</summary>\n\n- [X](https://twitter.com/intent/tweet?text=I%20just%20used%20%40coderabbitai%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20the%20proprietary%20code.%20Check%20it%20out%3A&url=https%3A//coderabbit.ai)\n- [Mastodon](https://mastodon.social/share?text=I%20just%20used%20%40coderabbitai%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20the%20proprietary%20code.%20Check%20it%20out%3A%20https%3A%2F%2Fcoderabbit.ai)\n- [Reddit](https://www.reddit.com/submit?title=Great%20tool%20for%20code%20review%20-%20CodeRabbit&text=I%20just%20used%20CodeRabbit%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20proprietary%20code.%20Check%20it%20out%3A%20https%3A//coderabbit.ai)\n- [LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fcoderabbit.ai&mini=true&title=Great%20tool%20for%20code%20review%20-%20CodeRabbit&summary=I%20just%20used%20CodeRabbit%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20proprietary%20code)\n\n</details>\n\n<sub>Comment `@coderabbitai help` to get the list of available commands and usage tips.</sub>\n\n<!-- tips_end -->",
+      "path": null,
+      "position": null,
+      "createdAt": "2025-09-23T21:53:56Z"
+    },
+    {
+      "author": "coderabbitai",
+      "body": "> [!NOTE]\n> Generated docstrings for this pull request at https://github.com/mruderman/subjective-priority-driven-swarm/pull/19",
+      "path": null,
+      "position": null,
+      "createdAt": "2025-09-23T22:05:26Z"
+    },
+    {
+      "author": "chatgpt-codex-connector",
+      "body": "Codex Review: Didn't find any major issues. Keep it up!\n\n<details> <summary>About Codex in GitHub</summary>\n\n[Your team has set up Codex to review pull requests in this repo](http://chatgpt.com/codex/settings/general). Reviews are triggered when you open a pull request for review, mark a draft as ready, or comment \"@codex review\". If Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\nCodex can also answer questions or update the PR. Try commenting \"@codex fix this CI failure\" or \"@codex address that feedback\".\n</details>",
+      "path": null,
+      "position": null,
+      "createdAt": "2025-09-23T22:07:46Z"
+    }
+  ],
+  "actionable_items": [
+    {
+      "source": "comment",
+      "author": "coderabbitai",
+      "file": null,
+      "text": "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->\n\n> [!WARNING]\n> ## Rate limit exceeded\n> \n> @mruderman has exceeded the limit for the number of commits or files that can be reviewed per hour. Please wait **21 minutes and 45 seconds** before requesting another review.\n> \n> <details>\n> <summary>\u231b How to ",
+      "suggested_action": "Review and implement the requested change or reply explaining why current behavior is correct."
+    },
+    {
+      "source": "comment",
+      "author": "coderabbitai",
+      "file": null,
+      "text": "> [!NOTE]\n> Generated docstrings for this pull request at https://github.com/mruderman/subjective-priority-driven-swarm/pull/19",
+      "suggested_action": "Review and implement the requested change or reply explaining why current behavior is correct."
+    },
+    {
+      "source": "comment",
+      "author": "chatgpt-codex-connector",
+      "file": null,
+      "text": "Codex Review: Didn't find any major issues. Keep it up!\n\n<details> <summary>About Codex in GitHub</summary>\n\n[Your team has set up Codex to review pull requests in this repo](http://chatgpt.com/codex/settings/general). Reviews are triggered when you open a pull request for review, mark a draft as ready, or comment \"@codex review\". If Codex has suggestions, it will comment; otherwise it will react ",
+      "suggested_action": "Review and implement the requested change or reply explaining why current behavior is correct."
+    }
+  ]
+}

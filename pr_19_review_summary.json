@@ -1,0 +1,26 @@
+{
+  "pr_number": 19,
+  "head_branch": "coderabbitai/docstrings/f7d37d7",
+  "url": "https://github.com/mruderman/subjective-priority-driven-swarm/pull/19",
+  "author": "coderabbitai",
+  "reviewDecision": "",
+  "relevant_reviews": [],
+  "relevant_comments": [
+    {
+      "author": "coderabbitai",
+      "body": "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n<!-- This is an auto-generated comment: skip review by coderabbit.ai -->\n\n> [!IMPORTANT]\n> ## Review skipped\n> \n> CodeRabbit bot authored PR detected.\n> \n> To trigger a single review, invoke the `@coderabbitai review` command.\n> \n> You can disable this status message by setting the `reviews.review_status` to `false` in the CodeRabbit configuration file.\n\n<!-- end of auto-generated comment: skip review by coderabbit.ai -->\n\n\n<!-- tips_start -->\n\n---\n\n\n\n<sub>Comment `@coderabbitai help` to get the list of available commands and usage tips.</sub>\n\n<!-- tips_end -->",
+      "path": null,
+      "position": null,
+      "createdAt": "2025-09-23T22:05:27Z"
+    }
+  ],
+  "actionable_items": [
+    {
+      "source": "comment",
+      "author": "coderabbitai",
+      "file": null,
+      "text": "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n<!-- This is an auto-generated comment: skip review by coderabbit.ai -->\n\n> [!IMPORTANT]\n> ## Review skipped\n> \n> CodeRabbit bot authored PR detected.\n> \n> To trigger a single review, invoke the `@coderabbitai review` command.\n> \n> You can disable this status message by setting the `reviews.review_status` to `false` in the Code",
+      "suggested_action": "Review and implement the requested change or reply explaining why current behavior is correct."
+    }
+  ]
+}

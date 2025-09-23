@@ -138,9 +138,9 @@ class WebSwarmManager:
                 participants=participant_names,
                 meeting_type=self.swarm.meeting_type,
             )
-            self.swarm.secretary.meeting_metadata["conversation_mode"] = (
-                self.swarm.conversation_mode
-            )
+            self.swarm.secretary.meeting_metadata[
+                "conversation_mode"
+            ] = self.swarm.conversation_mode
 
             # Notify about secretary initialization
             self.emit_message(
