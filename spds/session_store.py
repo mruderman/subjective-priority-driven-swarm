@@ -185,6 +185,10 @@ class JsonSessionStore(SessionStore):
         lock = self._get_session_lock(session_id)
         
         with lock:
+            # Ensure session directory exists
+            session_dir = self._get_session_dir(session_id)
+            session_dir.mkdir(parents=True, exist_ok=True)
+
             # Append to events file
             events_file = self._get_events_file(session_id)
             event_json = event.model_dump_json() + "\n"
@@ -198,6 +202,16 @@ class JsonSessionStore(SessionStore):
                 session_state = self.load(session_id)
                 session_state.events.append(event)
                 session_state.meta.last_updated = event.ts
+                self._save_session_state(session_state)
+            except ValueError: # Catches "Session not found"
+                # If session.json doesn't exist, create a new one
+                now = datetime.utcnow()
+                meta = SessionMeta(
+                    id=session_id,
+                    created_at=now,
+                    last_updated=now,
+                )
+                session_state = SessionState(meta=meta, events=[event])
                 self._save_session_state(session_state)
             except Exception as e:
                 logger.warning(f"Failed to update session.json for {session_id}, but event saved to events.jsonl: {e}")

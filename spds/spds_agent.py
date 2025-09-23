@@ -426,20 +426,20 @@ IMPORTANCE_TO_GROUP: X
             )
         else:
             self.priority_score = 0
-            
-            # Track the assessment decision
-            track_decision(
-                actor=self.name,
-                decision_type="motivation_assessment",
-                details={
-                    "topic": topic,
-                    "motivation_score": self.motivation_score,
-                    "priority_score": self.priority_score,
-                    "participation_threshold": config.PARTICIPATION_THRESHOLD,
-                    "will_participate": self.motivation_score >= config.PARTICIPATION_THRESHOLD,
-                    "assessment": assessment.model_dump()
-                }
-            )
+
+        # Track the assessment decision
+        track_decision(
+            actor=self.name,
+            decision_type="motivation_assessment",
+            details={
+                "topic": topic,
+                "motivation_score": self.motivation_score,
+                "priority_score": self.priority_score,
+                "participation_threshold": config.PARTICIPATION_THRESHOLD,
+                "will_participate": self.motivation_score >= config.PARTICIPATION_THRESHOLD,
+                "assessment": assessment.model_dump(),
+            },
+        )
     
     def _select_mode_for_message(self, message: str, attachments: list = None) -> str:
         """Select processing mode based on message content and attachments.

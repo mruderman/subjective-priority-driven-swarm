@@ -35,15 +35,15 @@
                                 <p class="mt-2 text-muted">Discovering available agents...</p>
                             </div>
                             
-                            <div id="agent-cards" class="row" style="display: none;">
+                            <div id="agent-cards" class="row hidden-by-default">
                                 <!-- Agent cards will be dynamically populated -->
                             </div>
                             
-                            <div id="no-agents" class="alert alert-warning" style="display: none;">
+                            <div id="no-agents" class="alert alert-warning hidden-by-default">
                                 <i class="bi bi-exclamation-triangle"></i>
                                 <strong>No agents found!</strong> 
                                 Please create some agents first using the 
-                                <a href="https://app.letta.com" target="_blank" class="alert-link">Letta ADE</a> 
+                                <a href="https://app.letta.com" target="_blank" class="alert-link" rel="noopener noreferrer">Letta ADE</a> 
                                 or agent creation scripts.
                             </div>
                         </div>
@@ -140,7 +140,7 @@
                                 </label>
                             </div>
                             
-                            <div id="secretary-options" class="ms-4" style="display: none;">
+                            <div id="secretary-options" class="ms-4 hidden-by-default">
                                 <div class="row g-3">
                                     <div class="col-md-6">
                                         <label for="secretary_mode" class="form-label">Secretary Mode</label>
@@ -179,9 +179,8 @@
                             </p>
                             
                             <div class="form-floating">
-                                <textarea class="form-control" id="topic" name="topic" 
-                                          placeholder="What would you like to discuss?" 
-                                          style="height: 100px" required></textarea>
+                                <textarea class="form-control topic-textarea" id="topic" name="topic" 
+                                          placeholder="What would you like to discuss?" required></textarea>
                                 <label for="topic">Topic or agenda</label>
                             </div>
                             <div class="form-text">
@@ -192,10 +191,9 @@
 
                         <!-- Submit Button -->
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <button type="button" class="btn btn-outline-secondary me-md-2" 
-                                    onclick="window.location.href='{{ url_for('index') }}'">
+                            <a role="button" class="btn btn-outline-secondary me-md-2" href="{{ url_for('index') }}">
                                 <i class="bi bi-arrow-left"></i> Back
-                            </button>
+                            </a>
                             <button type="submit" class="btn btn-primary btn-lg" id="start-chat-btn">
                                 <i class="bi bi-play-circle"></i> Start Chat Session
                             </button>

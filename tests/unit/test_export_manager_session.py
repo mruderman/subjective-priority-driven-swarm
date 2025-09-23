@@ -70,15 +70,12 @@ def create_test_session_with_events(tmp_path):
         },
     )
 
-    return session_id, store
+    return store.load(session_id), store
 
 
 def test_build_session_summary_with_full_data(tmp_path):
     """Test building session summary with all event types."""
-    session_id, store = create_test_session_with_events(tmp_path)
-
-    # Load session state
-    session_state = store.load(session_id)
+    session_state, store = create_test_session_with_events(tmp_path)
 
     # Build summary
     summary = build_session_summary(session_state)
@@ -97,7 +94,7 @@ def test_build_session_summary_with_full_data(tmp_path):
 
     # Verify meta data
     meta = summary["meta"]
-    assert meta["session_id"] == session_id
+    assert meta["session_id"] == session_state.meta.id
     assert meta["title"] == "Test Session"
     assert "total_events" in meta
     assert meta["total_events"] >= 6  # At least the events we added
@@ -113,13 +110,13 @@ def test_build_session_summary_with_full_data(tmp_path):
 
 def test_build_session_summary_with_session_id_string(tmp_path):
     """Test building session summary using session ID string."""
-    session_id, store = create_test_session_with_events(tmp_path)
+    session_state, store = create_test_session_with_events(tmp_path)
 
     # Build summary using session ID string
-    summary = build_session_summary(session_id)
+    summary = build_session_summary(session_state.meta.id)
 
     # Verify it works the same as with session state
-    assert summary["meta"]["session_id"] == session_id
+    assert summary["meta"]["session_id"] == session_state.meta.id
     assert len(summary["messages"]) >= 3
 
 
@@ -168,16 +165,16 @@ def test_build_session_summary_long_message_content(tmp_path):
 
 def test_export_session_to_markdown(tmp_path):
     """Test exporting session to markdown file."""
-    session_id, store = create_test_session_with_events(tmp_path)
+    session_state, store = create_test_session_with_events(tmp_path)
 
     # Export to markdown
     export_dir = tmp_path / "exports"
-    filepath = export_session_to_markdown(session_id, dest_dir=export_dir)
+    filepath = export_session_to_markdown(session_state.meta.id, dest_dir=export_dir)
 
     # Verify file exists
     assert filepath.exists()
     assert filepath.suffix == ".md"
-    assert session_id in filepath.name
+    assert session_state.meta.id in filepath.name
     assert "minutes" in filepath.name
 
     # Verify content
@@ -193,16 +190,16 @@ def test_export_session_to_markdown(tmp_path):
 
 def test_export_session_to_json(tmp_path):
     """Test exporting session to JSON file."""
-    session_id, store = create_test_session_with_events(tmp_path)
+    session_state, store = create_test_session_with_events(tmp_path)
 
     # Export to JSON
     export_dir = tmp_path / "exports"
-    filepath = export_session_to_json(session_id, dest_dir=export_dir)
+    filepath = export_session_to_json(session_state.meta.id, dest_dir=export_dir)
 
     # Verify file exists
     assert filepath.exists()
     assert filepath.suffix == ".json"
-    assert session_id in filepath.name
+    assert session_state.meta.id in filepath.name
     assert "summary" in filepath.name
 
     # Verify JSON structure
@@ -216,7 +213,7 @@ def test_export_session_to_json(tmp_path):
     assert "meta" in exported_summary
 
     # Verify content matches original
-    original_summary = build_session_summary(session_id)
+    original_summary = build_session_summary(session_state.meta.id)
     assert (
         exported_summary["meta"]["session_id"] == original_summary["meta"]["session_id"]
     )
@@ -226,17 +223,17 @@ def test_export_session_to_json(tmp_path):
 def test_restore_session_from_json_new_session(tmp_path):
     """Test restoring from JSON to a new session."""
     # Create original session with events
-    original_session_id, store = create_test_session_with_events(tmp_path)
+    original_session_state, store = create_test_session_with_events(tmp_path)
 
     # Export to JSON
     export_dir = tmp_path / "exports"
-    json_path = export_session_to_json(original_session_id, dest_dir=export_dir)
+    json_path = export_session_to_json(original_session_state.meta.id, dest_dir=export_dir)
 
     # Restore to new session
     new_session_id = restore_session_from_json(json_path)
 
     # Verify new session is different
-    assert new_session_id != original_session_id
+    assert new_session_id != original_session_state.meta.id
 
     # Load new session
     new_session = store.load(new_session_id)
@@ -265,11 +262,11 @@ def test_restore_session_from_json_new_session(tmp_path):
 def test_restore_session_from_json_existing_session(tmp_path):
     """Test restoring from JSON to an existing session."""
     # Create original session with events
-    original_session_id, store = create_test_session_with_events(tmp_path)
+    original_session_state, store = create_test_session_with_events(tmp_path)
 
     # Export to JSON
     export_dir = tmp_path / "exports"
-    json_path = export_session_to_json(original_session_id, dest_dir=export_dir)
+    json_path = export_session_to_json(original_session_state.meta.id, dest_dir=export_dir)
 
     # Create target session
     target_session = store.create(title="Target Session")
@@ -350,11 +347,11 @@ def test_export_default_directories(tmp_path):
     )
 
     try:
-        session_id, store = create_test_session_with_events(tmp_path)
+        session_state, store = create_test_session_with_events(tmp_path)
 
         # Export without specifying dest_dir (should use default)
-        markdown_path = export_session_to_markdown(session_id)
-        json_path = export_session_to_json(session_id)
+        markdown_path = export_session_to_markdown(session_state.meta.id)
+        json_path = export_session_to_json(session_state.meta.id)
 
         # Verify files were created in default location
         assert markdown_path.exists()
@@ -362,7 +359,7 @@ def test_export_default_directories(tmp_path):
 
         # Verify paths contain expected structure
         assert "sessions" in str(markdown_path)
-        assert session_id in str(markdown_path)
+        assert session_state.meta.id in str(markdown_path)
 
     finally:
         # Restore original config
@@ -371,12 +368,12 @@ def test_export_default_directories(tmp_path):
 
 def test_export_atomic_writes(tmp_path):
     """Test that exports use atomic writes."""
-    session_id, store = create_test_session_with_events(tmp_path)
+    session_state, store = create_test_session_with_events(tmp_path)
 
     export_dir = tmp_path / "exports"
 
     # Export and verify atomic write behavior
-    markdown_path = export_session_to_markdown(session_id, dest_dir=export_dir)
+    markdown_path = export_session_to_markdown(session_state.meta.id, dest_dir=export_dir)
 
     # File should exist and be complete
     assert markdown_path.exists()
@@ -385,7 +382,7 @@ def test_export_atomic_writes(tmp_path):
     assert "Transcript" in content
 
     # JSON export should also work
-    json_path = export_session_to_json(session_id, dest_dir=export_dir)
+    json_path = export_session_to_json(session_state.meta.id, dest_dir=export_dir)
     assert json_path.exists()
 
     # Verify JSON is valid
@@ -470,11 +467,11 @@ def test_edge_case_empty_payloads(tmp_path):
 def test_restore_preserves_original_metadata(tmp_path):
     """Test that restore preserves original metadata in events."""
     # Create original session
-    session_id, store = create_test_session_with_events(tmp_path)
+    session_state, store = create_test_session_with_events(tmp_path)
 
     # Export to JSON
     export_dir = tmp_path / "exports"
-    json_path = export_session_to_json(session_id, dest_dir=export_dir)
+    json_path = export_session_to_json(session_state.meta.id, dest_dir=export_dir)
 
     # Restore to new session
     new_session_id = restore_session_from_json(json_path)
@@ -489,4 +486,4 @@ def test_restore_preserves_original_metadata(tmp_path):
         if "original_ts" in event.payload:
             assert isinstance(event.payload["original_ts"], str)
         if "imported_from" in event.payload:
-            assert event.payload["imported_from"] == session_id
+            assert event.payload["imported_from"] == session_state.meta.id

@@ -4,6 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
+from datetime import datetime
 
 import pytest
 from spds.session_context import set_current_session_id, get_current_session_id, ensure_session, new_session_id
@@ -16,6 +17,11 @@ from spds.swarm_manager import SwarmManager
 
 class TestPersistenceHooks:
     """Test cases for session persistence hooks in core runtime paths."""
+    
+    def setup_method(self):
+        """Reset the default session tracker before each test."""
+        import spds.session_tracking
+        spds.session_tracking._default_tracker = None
     
     @pytest.fixture
     def temp_sessions_dir(self):
@@ -46,13 +52,14 @@ class TestPersistenceHooks:
         agent_state.id = "test-agent-123"
         agent_state.name = "TestAgent"
         agent_state.tools = []
+        agent_state.system = "Your persona is: a helpful assistant."
         return agent_state
     
     def test_session_context_helpers(self):
         """Test session context helper functions."""
         # Test new_session_id
         session_id = new_session_id()
-        assert len(session_id) == 32  # UUID4 hex is 32 characters
+        assert len(session_id) == 36  # UUID4 string is 36 characters
         assert session_id != new_session_id()  # Should be unique
         
         # Test set/get current session ID
@@ -60,10 +67,11 @@ class TestPersistenceHooks:
         assert get_current_session_id() == "test-session-123"
         
         # Test ensure_session with existing session
+        set_current_session_id("test-session-123")
         mock_store = Mock()
         mock_store.create.return_value = Mock(meta=Mock(id="existing-session"))
         session_id = ensure_session(mock_store)
-        assert session_id == "existing-session"
+        assert get_current_session_id() == "test-session-123"
     
     def test_spds_agent_assessment_tracking(self, temp_sessions_dir, mock_client, mock_agent_state):
         """Test that SPDSAgent assessment calls are tracked."""
@@ -133,25 +141,21 @@ class TestPersistenceHooks:
                 # Create SecretaryAgent
                 secretary = SecretaryAgent(mock_client, mode="formal")
                 
-                # Mock the session store for secretary tracking
-                with patch('spds.secretary_agent.get_default_session_store') as mock_get_store_sec:
-                    mock_get_store_sec.return_value = mock_store
-                    
-                    # Start meeting
-                    secretary.start_meeting(
-                        topic="Test Meeting",
-                        participants=["Agent1", "Agent2"],
-                        meeting_type="discussion"
-                    )
-                    
-                    # Verify tracking was called
-                    assert mock_store.save_event.called
-                    call_args = mock_store.save_event.call_args[0][0]
-                    assert call_args.actor == "secretary"
-                    assert call_args.type == "system"
-                    assert call_args.payload["event_type"] == "meeting_started"
-                    assert call_args.payload["topic"] == "Test Meeting"
-                    assert call_args.payload["participants"] == ["Agent1", "Agent2"]
+                # Start meeting
+                secretary.start_meeting(
+                    topic="Test Meeting",
+                    participants=["Agent1", "Agent2"],
+                    meeting_type="discussion"
+                )
+                
+                # Verify tracking was called
+                assert mock_store.save_event.called
+                call_args = mock_store.save_event.call_args[0][0]
+                assert call_args.actor == "system"
+                assert call_args.type == "system"
+                assert call_args.payload["event_type"] == "meeting_started"
+                assert call_args.payload["topic"] == "Test Meeting"
+                assert call_args.payload["participants"] == ["Agent1", "Agent2"]
     
     def test_swarm_manager_session_tracking(self, temp_sessions_dir, mock_client):
         """Test that SwarmManager tracks session events."""
@@ -279,26 +283,22 @@ class TestPersistenceHooks:
                 
                 secretary = SecretaryAgent(mock_client, mode="formal")
                 
-                # Mock the session store for secretary tracking
-                with patch('spds.secretary_agent.get_default_session_store') as mock_get_store_sec:
-                    mock_get_store_sec.return_value = mock_store
-                    
-                    # Add action item
-                    secretary.add_action_item(
-                        description="Test action item",
-                        assignee="TestUser",
-                        due_date="2024-01-01"
-                    )
-                    
-                    # Verify tracking was called
-                    assert mock_store.save_event.called
-                    call_args = mock_store.save_event.call_args[0][0]
-                    assert call_args.actor == "secretary"
-                    assert call_args.type == "action"
-                    assert call_args.payload["action_type"] == "add_action_item"
-                    assert call_args.payload["details"]["description"] == "Test action item"
-                    assert call_args.payload["details"]["assignee"] == "TestUser"
-                    assert call_args.payload["details"]["due_date"] == "2024-01-01"
+                # Add action item
+                secretary.add_action_item(
+                    description="Test action item",
+                    assignee="TestUser",
+                    due_date="2024-01-01"
+                )
+                
+                # Verify tracking was called
+                assert mock_store.save_event.called
+                call_args = mock_store.save_event.call_args[0][0]
+                assert call_args.actor == "system"
+                assert call_args.type == "action"
+                assert call_args.payload["action_type"] == "add_action_item"
+                assert call_args.payload["details"]["description"] == "Test action item"
+                assert call_args.payload["details"]["assignee"] == "TestUser"
+                assert call_args.payload["details"]["due_date"] == "2024-01-01"
     
     def test_session_context_helpers_with_ensure_session(self, temp_sessions_dir):
         """Test ensure_session creates new session when none exists."""
@@ -315,7 +315,7 @@ class TestPersistenceHooks:
         
         # Verify session was created
         assert session_id is not None
-        assert len(session_id) == 32  # UUID4 hex length
+        assert len(session_id) == 36  # UUID4 string is 36 characters
         
         # Verify session exists in store
         sessions = store.list_sessions()

@@ -64,7 +64,7 @@ def new_session_id() -> str:
     Returns:
         A new UUID4-based session ID
     """
-    return uuid4().hex
+    return str(uuid4())
 
 
 def clear_session_context() -> None:

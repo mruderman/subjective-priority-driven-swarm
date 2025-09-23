@@ -63,9 +63,9 @@ cd swarms-web && python run.py   # http://localhost:5002
 
 ### CLI
 ```bash
-python -m venv .venv && . .venv/bin/activate
+python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
-python -m spds.main
+python3 -m spds.main
 ```
 
 ## Minimal Config

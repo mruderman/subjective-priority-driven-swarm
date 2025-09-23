@@ -40,8 +40,24 @@ def test_assess_motivation_and_priority_uses_last_assessment(monkeypatch):
     agent = SPDSAgent(state, client=client)
 
     # Inject a last_assessment object with known fields
-    Dummy = SimpleNamespace
-    agent.last_assessment = Dummy(importance_to_self=8, perceived_gap=7, unique_perspective=6, emotional_investment=5, expertise_relevance=4, urgency=9, importance_to_group=8)
+    assessment_mock = Mock()
+    assessment_mock.importance_to_self = 8
+    assessment_mock.perceived_gap = 7
+    assessment_mock.unique_perspective = 6
+    assessment_mock.emotional_investment = 5
+    assessment_mock.expertise_relevance = 4
+    assessment_mock.urgency = 9
+    assessment_mock.importance_to_group = 8
+    assessment_mock.model_dump.return_value = {
+        "importance_to_self": 8,
+        "perceived_gap": 7,
+        "unique_perspective": 6,
+        "emotional_investment": 5,
+        "expertise_relevance": 4,
+        "urgency": 9,
+        "importance_to_group": 8,
+    }
+    agent.last_assessment = assessment_mock
 
     # Monkeypatch _get_full_assessment so it doesn't call external
     monkeypatch.setattr(agent, "_get_full_assessment", lambda *a, **k: None)

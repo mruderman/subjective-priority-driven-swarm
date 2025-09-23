@@ -200,6 +200,16 @@ body {
     padding: 1rem;
 }
 
+/* Utility to hide elements by default (replaces inline display:none) */
+.hidden-by-default {
+    display: none !important;
+}
+
+/* Topic textarea fixed height moved from inline style */
+.topic-textarea {
+    height: 100px;
+}
+
 .chat-input {
     border: 1px solid var(--border-color);
     border-radius: 0.5rem;
