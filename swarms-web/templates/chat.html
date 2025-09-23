@@ -412,7 +412,8 @@ class SimpleChat {
         });
 
         this.socket.on('secretary_stats', (data) => {
-            this.updateSecretaryStats(data.stats);
+            const payload = (data && (data.stats ?? data)) || {};
+            this.updateSecretaryStats(payload);
         });
     }
     
