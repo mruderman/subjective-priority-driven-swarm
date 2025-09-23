@@ -340,15 +340,15 @@ body {
     .chat-container {
         height: calc(100vh - 150px);
     }
-    
+
     .message {
         max-width: 95%;
     }
-    
+
     .agent-card {
         margin-bottom: 1rem;
     }
-    
+
     .secretary-panel {
         height: auto;
         margin-top: 1rem;

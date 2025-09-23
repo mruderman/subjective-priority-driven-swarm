@@ -78,40 +78,40 @@ EXTENDED_MODEL_TOKEN_LIMITS = {
     # Anthropic Claude 4 (2025)
     "anthropic/claude-4-sonnet": {"max_tokens": 64000, "safe_max": 32000},
     "anthropic/claude-4-opus": {"max_tokens": 32000, "safe_max": 16000},
-    
+
     # Anthropic Claude 3.5 (Legacy)
     "anthropic/claude-3-5-sonnet-20241022": {"max_tokens": 8192, "safe_max": 4000},
     "anthropic/claude-3-5-haiku": {"max_tokens": 8192, "safe_max": 4000},
-    
+
     # Google Gemini 2.5
     "google/gemini-2.5-pro": {"max_tokens": 64000, "safe_max": 32000},
     "google/gemini-2.0-flash": {"max_tokens": 8192, "safe_max": 4000},
-    
+
     # Google Gemma 3 (Open Source)
     "google/gemma-3-27b": {"max_tokens": 8192, "safe_max": 4000},
     "google/gemma-3-9b": {"max_tokens": 8192, "safe_max": 4000},
     "google/gemma-3-2b": {"max_tokens": 8192, "safe_max": 4000},
-    
+
     # Moonshot AI Kimi K2
     "moonshot/kimi-k2": {"max_tokens": 16000, "safe_max": 8000},
     "moonshot/kimi-k2-instruct": {"max_tokens": 16000, "safe_max": 8000},
-    
+
     # Local Ollama Models - Meta Llama
     "ollama/llama3.3": {"max_tokens": 16384, "safe_max": 8000},
     "ollama/llama3.1:70b": {"max_tokens": 16384, "safe_max": 8000},
     "ollama/llama3.1:8b": {"max_tokens": 16384, "safe_max": 8000},
     "ollama/llama3.1:405b": {"max_tokens": 16384, "safe_max": 8000},
-    
+
     # Local Ollama Models - CodeLlama
     "ollama/codellama:34b": {"max_tokens": 16384, "safe_max": 8000},
     "ollama/codellama:13b": {"max_tokens": 16384, "safe_max": 8000},
     "ollama/codellama:7b": {"max_tokens": 16384, "safe_max": 8000},
-    
+
     # Local Ollama Models - Mistral
     "ollama/mistral:7b": {"max_tokens": 8192, "safe_max": 4000},
     "ollama/mistral-large": {"max_tokens": 8192, "safe_max": 4000},
     "ollama/mixtral:8x7b": {"max_tokens": 8192, "safe_max": 4000},
-    
+
     # Local Ollama Models - Other Popular Models
     "ollama/deepseek-r1": {"max_tokens": 8192, "safe_max": 4000},
     "ollama/deepseek-coder": {"max_tokens": 8192, "safe_max": 4000},
@@ -128,7 +128,7 @@ MODEL_TOKEN_LIMITS.update(EXTENDED_MODEL_TOKEN_LIMITS)
 
 ### **For Server-Side Context Window Settings:**
 
-1. **High-Capacity Models** (Claude 4 Sonnet, Gemini 2.5 Pro): 
+1. **High-Capacity Models** (Claude 4 Sonnet, Gemini 2.5 Pro):
    - Max: 32,000 tokens (safe)
    - Conservative: 16,000 tokens
 
@@ -144,7 +144,7 @@ MODEL_TOKEN_LIMITS.update(EXTENDED_MODEL_TOKEN_LIMITS)
 
 ### **Memory Requirements by Model Size:**
 - **7B models**: 8GB RAM minimum
-- **13B models**: 16GB RAM minimum  
+- **13B models**: 16GB RAM minimum
 - **27B-34B models**: 32GB RAM minimum
 - **70B+ models**: 64GB+ RAM recommended
 

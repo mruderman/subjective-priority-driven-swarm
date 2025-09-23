@@ -1,0 +1,54 @@
+[
+  {
+    "id": 1,
+    "source": "review",
+    "author": "chatgpt-codex-connector",
+    "text_snippet": "Codex Review: Here are some suggestions.\n\nReply with `@codex fix comments` to fix any unresolved comments.\n\n<details> <summary>About Codex in GitHub</summary>\n\n[Your team has set up Codex to review pull requests in this repo](http://chatgpt.com/codex/settings/general). Reviews are triggered when you open a pull request for review, mark a draft as ready, or comment \"@codex review\". If Codex has sug",
+    "detected_files": [],
+    "suggested_change": "Review and implement the requested change or reply explaining why current behavior is correct.",
+    "applied": false,
+    "files_changed": [],
+    "error_message": "No specific code changes identified in the review. This appears to be a general notification about Codex review capabilities rather than specific actionable feedback.",
+    "priority": "Low",
+    "risk": "Low"
+  },
+  {
+    "id": 2,
+    "source": "review",
+    "author": "chatgpt-codex-connector",
+    "text_snippet": "",
+    "detected_files": [],
+    "suggested_change": "Review and implement the requested change or reply explaining why current behavior is correct.",
+    "applied": false,
+    "files_changed": [],
+    "error_message": "Empty review body - no actionable changes specified.",
+    "priority": "Low",
+    "risk": "Low"
+  },
+  {
+    "id": 3,
+    "source": "comment",
+    "author": "coderabbitai",
+    "text_snippet": "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->\n\n> [!WARNING]\n> ## Rate limit exceeded\n> \n> @mruderman has exceeded the limit for the number of commits or files that can be reviewed per hour. Please wait **21 minutes and 9 seconds** before requesting another review.\n> \n> <details>\n> <summary>\u231b How to r",
+    "detected_files": [],
+    "suggested_change": "Review and implement the requested change or reply explaining why current behavior is correct.",
+    "applied": false,
+    "files_changed": [],
+    "error_message": "Rate limit warning from CodeRabbit - no code changes to apply. This is informational only.",
+    "priority": "Low",
+    "risk": "Low"
+  },
+  {
+    "id": 4,
+    "source": "comment",
+    "author": "chatgpt-codex-connector",
+    "text_snippet": "**Summary**\n* Added a page-context helper to fetch secretary export downloads so Playwright\u2019s mocked routes handle the responses before asserting status and headers. [swarms-web/tests/e2e/conversation.spec.tsL31-L71](https://github.com/mruderman/subjective-priority-driven-swarm/blob/e5b21f32512ce7edb2e0da967ffe88e63da3bc9c/swarms-web/tests/e2e/conversation.spec.ts#L31-L71) [swarms-web/tests/e2e/co",
+    "detected_files": ["swarms-web/tests/e2e/conversation.spec.ts"],
+    "suggested_change": "Review and implement the requested change or reply explaining why current behavior is correct.",
+    "applied": false,
+    "files_changed": [],
+    "error_message": "Testing failure noted (Playwright browsers not installed) but no specific code changes requested. This appears to be a summary of work completed rather than a request for changes.",
+    "priority": "Medium",
+    "risk": "Low"
+  }
+]

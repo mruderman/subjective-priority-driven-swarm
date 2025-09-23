@@ -15,7 +15,7 @@
                         Configure agents, conversation mode, and secretary settings
                     </p>
                 </div>
-                
+
                 <div class="card-body">
                     <form id="setup-form">
                         <!-- Agent Selection -->
@@ -27,23 +27,23 @@
                             <p class="text-muted mb-3">
                                 Choose computational beings from your Letta server to participate in the conversation.
                             </p>
-                            
+
                             <div id="agents-loading" class="text-center py-4">
                                 <div class="spinner-border text-primary" role="status">
                                     <span class="visually-hidden">Loading agents...</span>
                                 </div>
                                 <p class="mt-2 text-muted">Discovering available agents...</p>
                             </div>
-                            
+
                             <div id="agent-cards" class="row hidden-by-default">
                                 <!-- Agent cards will be dynamically populated -->
                             </div>
-                            
+
                             <div id="no-agents" class="alert alert-warning hidden-by-default">
                                 <i class="bi bi-exclamation-triangle"></i>
-                                <strong>No agents found!</strong> 
-                                Please create some agents first using the 
-                                <a href="https://app.letta.com" target="_blank" class="alert-link" rel="noopener noreferrer">Letta ADE</a> 
+                                <strong>No agents found!</strong>
+                                Please create some agents first using the
+                                <a href="https://app.letta.com" target="_blank" class="alert-link" rel="noopener noreferrer">Letta ADE</a>
                                 or agent creation scripts.
                             </div>
                         </div>
@@ -56,9 +56,9 @@
                             <p class="text-muted mb-3">
                                 Choose how agents will interact during the discussion.
                             </p>
-                            
+
                             <input type="hidden" id="conversation_mode" name="conversation_mode" value="">
-                            
+
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <div class="card mode-card" data-mode="hybrid">
@@ -69,13 +69,13 @@
                                                 <span class="badge bg-success ms-auto">Recommended</span>
                                             </div>
                                             <p class="card-text small">
-                                                Two-phase conversations: independent thoughts then response round 
+                                                Two-phase conversations: independent thoughts then response round
                                                 with rebuttals, agreements, and new insights.
                                             </p>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="col-md-6">
                                     <div class="card mode-card" data-mode="all_speak">
                                         <div class="card-body">
@@ -84,13 +84,13 @@
                                                 <h6 class="mb-0">All-Speak Mode</h6>
                                             </div>
                                             <p class="card-text small">
-                                                Fast-paced discussions where all motivated agents contribute 
+                                                Fast-paced discussions where all motivated agents contribute
                                                 in priority order, seeing previous responses.
                                             </p>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="col-md-6">
                                     <div class="card mode-card" data-mode="sequential">
                                         <div class="card-body">
@@ -99,13 +99,13 @@
                                                 <h6 class="mb-0">Sequential Mode</h6>
                                             </div>
                                             <p class="card-text small">
-                                                Traditional turn-taking with fairness rotation. 
+                                                Traditional turn-taking with fairness rotation.
                                                 One agent speaks per turn to prevent monopolization.
                                             </p>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div class="col-md-6">
                                     <div class="card mode-card" data-mode="pure_priority">
                                         <div class="card-body">
@@ -114,7 +114,7 @@
                                                 <h6 class="mb-0">Pure Priority Mode</h6>
                                             </div>
                                             <p class="card-text small">
-                                                Meritocratic discussions where the most motivated 
+                                                Meritocratic discussions where the most motivated
                                                 agent always speaks. Natural leader-follower dynamics.
                                             </p>
                                         </div>
@@ -131,7 +131,7 @@
                             <p class="text-muted mb-3">
                                 Enable a neutral observer to document the conversation and provide meeting minutes.
                             </p>
-                            
+
                             <div class="form-check form-switch mb-3">
                                 <input class="form-check-input" type="checkbox" id="enable_secretary">
                                 <label class="form-check-label" for="enable_secretary">
@@ -139,7 +139,7 @@
                                     <small class="text-muted d-block">Records minutes and allows export (reuses existing secretary or creates if needed)</small>
                                 </label>
                             </div>
-                            
+
                             <div id="secretary-options" class="ms-4 hidden-by-default">
                                 <div class="row g-3">
                                     <div class="col-md-6">
@@ -153,7 +153,7 @@
                                             Adaptive mode automatically chooses based on conversation tone
                                         </small>
                                     </div>
-                                    
+
                                     <div class="col-md-6">
                                         <label for="meeting_type" class="form-label">Meeting Type</label>
                                         <select class="form-select" id="meeting_type" name="meeting_type">
@@ -177,14 +177,14 @@
                             <p class="text-muted mb-3">
                                 Enter the topic or agenda for your discussion.
                             </p>
-                            
+
                             <div class="form-floating">
-                                <textarea class="form-control topic-textarea" id="topic" name="topic" 
+                                <textarea class="form-control topic-textarea" id="topic" name="topic"
                                           placeholder="What would you like to discuss?" required></textarea>
                                 <label for="topic">Topic or agenda</label>
                             </div>
                             <div class="form-text">
-                                Examples: "The future of AI in creative industries", 
+                                Examples: "The future of AI in creative industries",
                                 "Q1 marketing strategy planning", "Technical architecture review"
                             </div>
                         </div>
@@ -221,17 +221,17 @@ async function loadAgents() {
         console.log('Loading agents...');
         const response = await fetch('/api/agents');
         const data = await response.json();
-        
+
         if (data.error) {
             showToast('Error loading agents: ' + data.error, 'error');
             return;
         }
-        
+
         agents = data.agents;
         console.log('Loaded agents:', agents);
         renderAgentCards();
         updateAgentCount();
-        
+
     } catch (error) {
         console.error('Error loading agents:', error);
         showToast('Failed to load agents from server', 'error');
@@ -243,12 +243,12 @@ function renderAgentCards() {
     const container = document.getElementById('agent-cards');
     const loadingDiv = document.getElementById('agents-loading');
     const noAgentsDiv = document.getElementById('no-agents');
-    
+
     if (!container) return;
-    
+
     // Hide loading
     if (loadingDiv) loadingDiv.style.display = 'none';
-    
+
     if (agents.length === 0) {
         if (container) {
             container.style.display = 'none';
@@ -259,16 +259,16 @@ function renderAgentCards() {
         }
         return;
     }
-    
+
     if (noAgentsDiv) {
         noAgentsDiv.style.display = 'none';
     }
-    
+
     // Show agents container
     container.classList.remove('hidden-by-default');
     container.style.display = 'block';
     container.innerHTML = '';
-    
+
     agents.forEach(agent => {
         const card = document.createElement('div');
         card.className = 'col-md-6 col-lg-4 mb-3';
@@ -276,7 +276,7 @@ function renderAgentCards() {
             <div class="card agent-card h-100" data-agent-id="${agent.id}">
                 <div class="card-body">
                     <div class="form-check">
-                        <input class="form-check-input agent-checkbox" type="checkbox" 
+                        <input class="form-check-input agent-checkbox" type="checkbox"
                                value="${agent.id}" id="agent-${agent.id}">
                         <label class="form-check-label" for="agent-${agent.id}">
                             <h6 class="card-title mb-1">${agent.name}</h6>
@@ -293,7 +293,7 @@ function renderAgentCards() {
         `;
         container.appendChild(card);
     });
-    
+
     // Add click handlers
     setupAgentCardClicks();
 }
@@ -308,7 +308,7 @@ function setupAgentCardClicks() {
             }
         });
     });
-    
+
     document.querySelectorAll('.agent-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', (e) => {
             const card = e.target.closest('.agent-card');
@@ -353,7 +353,7 @@ function setupModeSelection() {
 function setupSecretaryOptions() {
     const secretaryToggle = document.getElementById('enable_secretary');
     const secretaryOptions = document.getElementById('secretary-options');
-    
+
     if (secretaryToggle && secretaryOptions) {
         const applyVisibility = (enabled) => {
             if (enabled) {
@@ -376,30 +376,30 @@ function setupSecretaryOptions() {
 function setupFormSubmission() {
     const form = document.getElementById('setup-form');
     if (!form) return;
-    
+
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const selectedAgents = Array.from(document.querySelectorAll('.agent-checkbox:checked'))
             .map(checkbox => checkbox.value);
-        
+
         if (selectedAgents.length === 0) {
             showToast('Please select at least one agent', 'warning');
             return;
         }
-        
+
         const conversationMode = document.getElementById('conversation_mode').value;
         if (!conversationMode) {
             showToast('Please select a conversation mode', 'warning');
             return;
         }
-        
+
         const topic = document.getElementById('topic').value.trim();
         if (!topic) {
             showToast('Please enter a conversation topic', 'warning');
             return;
         }
-        
+
         const formData = {
             agent_ids: selectedAgents,
             conversation_mode: conversationMode,
@@ -408,7 +408,7 @@ function setupFormSubmission() {
             meeting_type: document.getElementById('meeting_type').value,
             topic: topic
         };
-        
+
         if (window.__PLAYWRIGHT_TEST === '1') {
             formData.playwright_test = true;
         }
@@ -426,21 +426,21 @@ async function startSession(formData) {
             },
             body: JSON.stringify(formData)
         });
-        
+
         const data = await response.json();
-        
+
         if (data.error) {
             showToast('Error starting session: ' + data.error, 'error');
             return;
         }
-        
+
         // Store session data
         sessionStorage.setItem('sessionId', data.session_id);
         sessionStorage.setItem('topic', formData.topic);
-        
+
         // Redirect to chat
         window.location.href = '/chat';
-        
+
     } catch (error) {
         console.error('Error starting session:', error);
         showToast('Failed to start session', 'error');
@@ -460,7 +460,7 @@ function showToast(message, type = 'info') {
         toastContainer.style.zIndex = '1050';
         document.body.appendChild(toastContainer);
     }
-    
+
     // Map type to Bootstrap color
     const colorMap = {
         'success': 'success',
@@ -469,28 +469,28 @@ function showToast(message, type = 'info') {
         'info': 'primary'
     };
     const bgColor = colorMap[type] || 'primary';
-    
+
     // Create toast
     const toast = document.createElement('div');
     toast.className = `toast align-items-center text-white bg-${bgColor} border-0`;
     toast.setAttribute('role', 'alert');
-    
+
     toast.innerHTML = `
         <div class="d-flex">
             <div class="toast-body">
                 ${message}
             </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" 
+            <button type="button" class="btn-close btn-close-white me-2 m-auto"
                     data-bs-dismiss="toast"></button>
         </div>
     `;
-    
+
     toastContainer.appendChild(toast);
-    
+
     // Initialize and show toast
     const bsToast = new bootstrap.Toast(toast);
     bsToast.show();
-    
+
     // Remove toast element after it's hidden
     toast.addEventListener('hidden.bs.toast', () => {
         toast.remove();
@@ -505,12 +505,12 @@ document.addEventListener('DOMContentLoaded', () => {
         hybridCard.classList.add('selected');
         document.getElementById('conversation_mode').value = 'hybrid';
     }
-    
+
     // Setup all functionality
     setupModeSelection();
     setupSecretaryOptions();
     setupFormSubmission();
-    
+
     // Load agents
     loadAgents();
 });

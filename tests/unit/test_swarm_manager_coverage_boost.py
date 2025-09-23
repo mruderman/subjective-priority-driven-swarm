@@ -1,7 +1,7 @@
 import builtins
 import types
-import pytest
 
+import pytest
 from letta_client.errors import NotFoundError
 
 from spds import swarm_manager
@@ -104,14 +104,19 @@ def test_secretary_init_failure_sets_flag_false(monkeypatch):
 def test_load_agents_by_id_not_found_then_success(monkeypatch):
     monkeypatch.setattr(swarm_manager, "SPDSAgent", StubSPDSAgent)
     # First NotFoundError, then valid object
-    client = make_client_for_ids([NotFoundError("missing"), types.SimpleNamespace(id="ok2", name="B")])
-    mgr = swarm_manager.SwarmManager(client, agent_ids=["missing", "ok2"], conversation_mode="hybrid")
+    client = make_client_for_ids(
+        [NotFoundError("missing"), types.SimpleNamespace(id="ok2", name="B")]
+    )
+    mgr = swarm_manager.SwarmManager(
+        client, agent_ids=["missing", "ok2"], conversation_mode="hybrid"
+    )
     # One agent should be loaded
     assert len(mgr.agents) == 1 and mgr.agents[0].name == "B"
 
 
 def test_load_agents_by_name_warning_and_success(monkeypatch, capsys):
     monkeypatch.setattr(swarm_manager, "SPDSAgent", StubSPDSAgent)
+
     # First call returns empty, second returns one
     class Agents:
         def __init__(self):
@@ -121,7 +126,7 @@ def test_load_agents_by_name_warning_and_success(monkeypatch, capsys):
             self.calls += 1
             if self.calls == 1:
                 return []
-            return [types.SimpleNamespace(id="x", name="Found")] 
+            return [types.SimpleNamespace(id="x", name="Found")]
 
     client = types.SimpleNamespace(agents=Agents())
 
@@ -132,7 +137,7 @@ def test_load_agents_by_name_warning_and_success(monkeypatch, capsys):
     assert "not found" in out
 
     # Second: with a found agent
-    mgr = swarm_manager.SwarmManager(client, agent_names=["Found"]) 
+    mgr = swarm_manager.SwarmManager(client, agent_names=["Found"])
     assert mgr.agents and mgr.agents[0].name == "Found"
 
 
@@ -253,7 +258,9 @@ def test_check_memory_awareness_status_prints(monkeypatch, capsys):
             raise effect
         return effect
 
-    monkeypatch.setattr(swarm_manager, "create_memory_awareness_for_agent", fake_create_awareness)
+    monkeypatch.setattr(
+        swarm_manager, "create_memory_awareness_for_agent", fake_create_awareness
+    )
 
     class A:
         def __init__(self, id_, name):
@@ -270,7 +277,9 @@ def test_check_memory_awareness_status_prints(monkeypatch, capsys):
 
     mgr.check_memory_awareness_status(silent=False)
     out = capsys.readouterr().out
-    assert "Memory Awareness Information Available" in out or "Could not generate" in out
+    assert (
+        "Memory Awareness Information Available" in out or "Could not generate" in out
+    )
 
 
 def test_start_meeting_sets_metadata_and_history():
@@ -294,7 +303,13 @@ def test_init_from_profiles(monkeypatch):
     monkeypatch.setattr(swarm_manager, "SPDSAgent", StubSPDSAgent)
     client = types.SimpleNamespace()
     profiles = [
-        {"name": "P1", "persona": "p", "expertise": ["x"], "model": None, "embedding": None}
+        {
+            "name": "P1",
+            "persona": "p",
+            "expertise": ["x"],
+            "model": None,
+            "embedding": None,
+        }
     ]
     mgr = swarm_manager.SwarmManager(client, agent_profiles=profiles)
     assert mgr.agents and mgr.agents[0].name == "P1"
@@ -320,11 +335,13 @@ def test_memory_status_summary_high_memory_and_error():
             raise Exception("nope")
 
     client = types.SimpleNamespace(agents=types.SimpleNamespace(context=AgentsCtx()))
+
     class A:
         def __init__(self, id_, name):
             class Inner:
                 def __init__(self, id_):
                     self.id = id_
+
             self.agent = Inner(id_)
             self.name = name
 
@@ -398,7 +415,7 @@ def test_extract_agent_response_tool_return_and_break(monkeypatch):
     assert "trouble phrasing" in fallback
 
     # extraction_successful -> break early on second message
-    tf = TF("send_message", "{\"message\": \"X\"}")
+    tf = TF("send_message", '{"message": "X"}')
     msg_tool = Msg(tool_calls=[TC(tf)])
     msg_other = Msg(role="assistant", content="Should not be seen")
     resp2 = types.SimpleNamespace(messages=[msg_tool, msg_other])
@@ -420,9 +437,12 @@ def test_hybrid_turn_initial_exception_and_instruction_error(monkeypatch, capsys
         def speak(self, conversation_history=None):
             if self._raise:
                 raise RuntimeError("boom")
-            return types.SimpleNamespace(messages=[types.SimpleNamespace(role="assistant", content="short")])
+            return types.SimpleNamespace(
+                messages=[types.SimpleNamespace(role="assistant", content="short")]
+            )
 
     mgr = object.__new__(swarm_manager.SwarmManager)
+
     # client create will error to cover instruction error branch
     class Msgs:
         def create(self, **k):
@@ -438,7 +458,9 @@ def test_hybrid_turn_initial_exception_and_instruction_error(monkeypatch, capsys
     mgr.agents = [a1, a2]
     mgr._hybrid_turn([a1, a2], "topic")
     out = capsys.readouterr().out
-    assert "Error in initial response attempt" in out or "As someone with expertise" in out
+    assert (
+        "Error in initial response attempt" in out or "As someone with expertise" in out
+    )
 
 
 def test_handle_secretary_commands_help_without_secretary(capsys):
@@ -486,7 +508,9 @@ def test_pure_priority_turn_success():
             self.priority_score = 1.0
 
         def speak(self, conversation_history=None):
-            return types.SimpleNamespace(messages=[types.SimpleNamespace(role="assistant", content="OK")])
+            return types.SimpleNamespace(
+                messages=[types.SimpleNamespace(role="assistant", content="OK")]
+            )
 
     mgr = object.__new__(swarm_manager.SwarmManager)
     mgr.conversation_history = ""

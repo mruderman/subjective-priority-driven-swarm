@@ -1,6 +1,6 @@
-import pytest
-
 import types
+
+import pytest
 
 from spds import swarm_manager
 
@@ -32,8 +32,12 @@ class FakeAgent:
         if self.raise_on_speak:
             raise Exception("speak failed")
         if isinstance(self.text, str):
-            return types.SimpleNamespace(messages=[SimpleMsg(role="assistant", content=self.text)])
-        return types.SimpleNamespace(messages=[SimpleMsg(role="assistant", content=[{"text": self.text}])])
+            return types.SimpleNamespace(
+                messages=[SimpleMsg(role="assistant", content=self.text)]
+            )
+        return types.SimpleNamespace(
+            messages=[SimpleMsg(role="assistant", content=[{"text": self.text}])]
+        )
 
 
 class FakeExportManager:
@@ -87,7 +91,11 @@ class FakeSecretary:
 
 def make_mgr_with_agents(agent_list):
     mgr = object.__new__(swarm_manager.SwarmManager)
-    mgr.client = types.SimpleNamespace(agents=types.SimpleNamespace(messages=types.SimpleNamespace(create=lambda **k: None)))
+    mgr.client = types.SimpleNamespace(
+        agents=types.SimpleNamespace(
+            messages=types.SimpleNamespace(create=lambda **k: None)
+        )
+    )
     mgr.agents = agent_list
     mgr.enable_secretary = False
     mgr.secretary = None
@@ -108,6 +116,7 @@ def test_hybrid_turn_good_and_fallback(monkeypatch, capsys):
 
     # Provide client.agent.messages.create recording to ensure fallback path triggers
     created = []
+
     def fake_create(agent_id, messages):
         created.append((agent_id, messages))
 
@@ -129,6 +138,7 @@ def test_all_speak_updates_memory_and_history(monkeypatch):
 
     # Track update_agent_memories calls
     calls = []
+
     def fake_update(msg, speaker):
         calls.append((speaker, msg))
 
@@ -156,7 +166,10 @@ def test_sequential_turn_fairness_and_fallback(monkeypatch, capsys):
     mgr2 = make_mgr_with_agents([a3])
     mgr2._notify_secretary_agent_response = lambda n, m: None
     mgr2._sequential_turn([a3], "topic")
-    assert "having trouble" in mgr2.conversation_history or "trouble" in mgr2.conversation_history
+    assert (
+        "having trouble" in mgr2.conversation_history
+        or "trouble" in mgr2.conversation_history
+    )
 
 
 def test_pure_priority_turn_fallback_and_notify():
@@ -191,7 +204,9 @@ def test_get_memory_status_summary_success_and_error():
             f = self.funcs.pop(0)
             return f(agent_id)
 
-    client = types.SimpleNamespace(agents=types.SimpleNamespace(context=AgentsCtx([retrieve_good, retrieve_bad])))
+    client = types.SimpleNamespace(
+        agents=types.SimpleNamespace(context=AgentsCtx([retrieve_good, retrieve_bad]))
+    )
     mgr = object.__new__(swarm_manager.SwarmManager)
     mgr.client = client
     mgr.agents = [FakeAgent("id1", "A"), FakeAgent("id2", "B")]
@@ -199,7 +214,10 @@ def test_get_memory_status_summary_success_and_error():
     summary = mgr.get_memory_status_summary()
     assert summary["total_agents"] == 2
     # first agent should have numeric recall_memory, second should have error entry
-    assert any("error" in s or isinstance(s.get("recall_memory"), int) for s in summary["agents_status"])
+    assert any(
+        "error" in s or isinstance(s.get("recall_memory"), int)
+        for s in summary["agents_status"]
+    )
 
 
 def test_handle_export_command_various_formats(capsys):

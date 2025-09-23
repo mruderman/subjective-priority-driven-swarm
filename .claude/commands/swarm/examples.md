@@ -159,7 +159,7 @@ try {
 } catch (error) {
   // Check swarm health
   const status = await mcp__claude-flow__swarm_status({})
-  
+
   // Log error patterns
   await mcp__claude-flow__error_analysis({
     "logs": [error.message]

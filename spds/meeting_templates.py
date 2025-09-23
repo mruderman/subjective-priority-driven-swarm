@@ -227,9 +227,9 @@ class CasualMinutesTemplate(BaseTemplate):
         # Casual header with emoji
         minutes = f"""# 💬 Group Discussion: {metadata.get('topic', 'Team Chat')}
 
-**Date**: {start_time.strftime('%B %d, %Y')}  
-**Duration**: {self.format_duration(start_time, end_time)}  
-**Participants**: {self._format_participants_casual(metadata.get('participants', []))}  
+**Date**: {start_time.strftime('%B %d, %Y')}
+**Duration**: {self.format_duration(start_time, end_time)}
+**Participants**: {self._format_participants_casual(metadata.get('participants', []))}
 **Vibe**: {self._determine_conversation_vibe(conversation_log, decisions, action_items)}
 
 ## 🎯 What We Talked About

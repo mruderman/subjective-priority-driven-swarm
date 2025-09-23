@@ -54,7 +54,9 @@ class StubAgent:
     def speak(self, conversation_history: str = "", **_):
         topic_hint = conversation_history or "topic"
         content = [{"text": f"Responding about {topic_hint}"}]
-        return SimpleNamespace(messages=[SimpleNamespace(role="assistant", content=content)])
+        return SimpleNamespace(
+            messages=[SimpleNamespace(role="assistant", content=content)]
+        )
 
 
 class StubSecretary:
@@ -77,7 +79,10 @@ class StubSecretary:
         self.action_items.append(item)
 
     def get_conversation_stats(self) -> dict:
-        return {"messages": len(self.conversation_log), "actions": len(self.action_items)}
+        return {
+            "messages": len(self.conversation_log),
+            "actions": len(self.action_items),
+        }
 
     def observe_message(self, agent_name: str, message: str):
         self.conversation_log.append((agent_name, message))
@@ -124,15 +129,25 @@ class FakeLettaClient:
         )
 
     def _agents_retrieve(self, agent_id: str):
-        return SimpleNamespace(id=agent_id, name=f"Agent {agent_id}", system="You are...", tools=[])
+        return SimpleNamespace(
+            id=agent_id, name=f"Agent {agent_id}", system="You are...", tools=[]
+        )
 
     def _agents_list(self, name: str | None = None, limit: int = 1):
         if name == "missing":
             return []
-        return [SimpleNamespace(id=f"{name}-id", name=name or "Listed", system="You are...", tools=[])]
+        return [
+            SimpleNamespace(
+                id=f"{name}-id", name=name or "Listed", system="You are...", tools=[]
+            )
+        ]
 
     def _agents_messages_create(self, **_):
-        return SimpleNamespace(messages=[SimpleNamespace(role="assistant", content=[{"text": "Generated"}])])
+        return SimpleNamespace(
+            messages=[
+                SimpleNamespace(role="assistant", content=[{"text": "Generated"}])
+            ]
+        )
 
     def _agents_context_retrieve(self, **_):
         return {"num_recall_memory": 42, "num_archival_memory": 3}
@@ -145,11 +160,17 @@ def configured_swarm_manager(monkeypatch: pytest.MonkeyPatch):
     fake_client = FakeLettaClient()
 
     # Ensure helper functions are predictable and side-effect free.
-    monkeypatch.setattr(swarm_manager, "letta_call", lambda op, fn, **kwargs: fn(**kwargs))
+    monkeypatch.setattr(
+        swarm_manager, "letta_call", lambda op, fn, **kwargs: fn(**kwargs)
+    )
     monkeypatch.setattr(swarm_manager, "SPDSAgent", StubAgent)
     monkeypatch.setattr(swarm_manager, "SecretaryAgent", StubSecretary)
     monkeypatch.setattr(swarm_manager, "ExportManager", lambda: StubExportManager())
-    monkeypatch.setattr(swarm_manager, "create_memory_awareness_for_agent", lambda client, agent: f"Awareness for {agent.id}")
+    monkeypatch.setattr(
+        swarm_manager,
+        "create_memory_awareness_for_agent",
+        lambda client, agent: f"Awareness for {agent.id}",
+    )
     monkeypatch.setattr(swarm_manager, "track_message", lambda *_, **__: None)
     monkeypatch.setattr(swarm_manager, "track_action", lambda *_, **__: None)
     monkeypatch.setattr(swarm_manager, "track_system_event", lambda *_, **__: None)
@@ -180,17 +201,23 @@ def test_memory_status_summary(configured_swarm_manager):
     assert summary["agents_status"][0]["recall_memory"] == 42
 
 
-def test_memory_commands_with_and_without_secretary(configured_swarm_manager, monkeypatch):
+def test_memory_commands_with_and_without_secretary(
+    configured_swarm_manager, monkeypatch
+):
     # With secretary available
     assert configured_swarm_manager._handle_secretary_commands("/memory-status") is True
-    assert configured_swarm_manager._handle_secretary_commands("/memory-awareness") is True
+    assert (
+        configured_swarm_manager._handle_secretary_commands("/memory-awareness") is True
+    )
 
     # Without secretary – rebuild manager with secretary disabled for branch coverage.
     import spds.swarm_manager as swarm_manager
 
     fake_client = FakeLettaClient()
     monkeypatch.setattr(swarm_manager, "SPDSAgent", StubAgent)
-    monkeypatch.setattr(swarm_manager, "letta_call", lambda op, fn, **kwargs: fn(**kwargs))
+    monkeypatch.setattr(
+        swarm_manager, "letta_call", lambda op, fn, **kwargs: fn(**kwargs)
+    )
     manager = swarm_manager.SwarmManager(
         client=fake_client,
         agent_profiles=[{"name": "Solo", "persona": "Tester", "expertise": ["qa"]}],

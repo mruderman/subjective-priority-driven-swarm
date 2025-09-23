@@ -8,7 +8,12 @@ from pydantic import BaseModel
 
 from . import config, tools
 from .letta_api import letta_call
-from .session_tracking import track_message, track_tool_call, track_decision, track_action
+from .session_tracking import (
+    track_action,
+    track_decision,
+    track_message,
+    track_tool_call,
+)
 
 
 class SPDSAgent:
@@ -135,7 +140,7 @@ class SPDSAgent:
 
 You have access to our full conversation history in your memory. Please review what has been discussed and rate each dimension from 0-10, responding using send_message with this exact format:
 IMPORTANCE_TO_SELF: X
-PERCEIVED_GAP: X  
+PERCEIVED_GAP: X
 UNIQUE_PERSPECTIVE: X
 EMOTIONAL_INVESTMENT: X
 EXPERTISE_RELEVANCE: X
@@ -144,7 +149,7 @@ IMPORTANCE_TO_GROUP: X
 
 Where:
 1. IMPORTANCE_TO_SELF: How personally significant is this topic to you?
-2. PERCEIVED_GAP: Are there crucial points missing from the discussion? 
+2. PERCEIVED_GAP: Are there crucial points missing from the discussion?
 3. UNIQUE_PERSPECTIVE: Do you have insights others haven't shared?
 4. EMOTIONAL_INVESTMENT: How much do you care about the outcome?
 5. EXPERTISE_RELEVANCE: How applicable is your domain knowledge?
@@ -158,12 +163,12 @@ Where:
                 else ""
             )
             assessment_prompt = f"""
-{assessment_context}Based on our conversation about "{topic}", please assess your motivation to contribute. 
+{assessment_context}Based on our conversation about "{topic}", please assess your motivation to contribute.
 
 You have access to our full conversation history in your memory. Please review what has been discussed and rate each dimension from 0-10:
 
 1. IMPORTANCE_TO_SELF: How personally significant is this topic to you?
-2. PERCEIVED_GAP: Are there crucial points missing from the discussion? 
+2. PERCEIVED_GAP: Are there crucial points missing from the discussion?
 3. UNIQUE_PERSPECTIVE: Do you have insights others haven't shared?
 4. EMOTIONAL_INVESTMENT: How much do you care about the outcome?
 5. EXPERTISE_RELEVANCE: How applicable is your domain knowledge?
@@ -172,7 +177,7 @@ You have access to our full conversation history in your memory. Please review w
 
 Respond ONLY with numbers in this exact format:
 IMPORTANCE_TO_SELF: X
-PERCEIVED_GAP: X  
+PERCEIVED_GAP: X
 UNIQUE_PERSPECTIVE: X
 EMOTIONAL_INVESTMENT: X
 EXPERTISE_RELEVANCE: X
@@ -182,7 +187,7 @@ IMPORTANCE_TO_GROUP: X
 
         try:
             print(f"  [Getting real assessment from {self.name}...]")
-            
+
             # Track the assessment request
             track_action(
                 actor=self.name,
@@ -190,10 +195,10 @@ IMPORTANCE_TO_GROUP: X
                 details={
                     "topic": topic,
                     "has_conversation_history": bool(conversation_history),
-                    "has_tools": has_tools
-                }
+                    "has_tools": has_tools,
+                },
             )
-            
+
             response = letta_call(
                 "agents.messages.create.assessment",
                 self.client.agents.messages.create,
@@ -205,7 +210,7 @@ IMPORTANCE_TO_GROUP: X
                     }
                 ],
             )
-            
+
             # Track tool calls in the response
             for msg in response.messages:
                 if hasattr(msg, "tool_calls") and getattr(msg, "tool_calls"):
@@ -219,7 +224,7 @@ IMPORTANCE_TO_GROUP: X
                                 actor=self.name,
                                 tool_name="send_message",
                                 arguments={"message": "assessment_response"},
-                                result="success"
+                                result="success",
                             )
 
             # Extract candidate response texts (tool call payloads, tool returns, or assistant content)
@@ -373,16 +378,21 @@ IMPORTANCE_TO_GROUP: X
                         ):
                             try:
                                 import json
+
                                 args = json.loads(tool_call.function.arguments)
                                 response_text = args.get("message", "")
                                 break
                             except:
                                 pass
-                
+
                 # Check for tool return messages
-                if not response_text and hasattr(msg, "tool_return") and msg.tool_return:
+                if (
+                    not response_text
+                    and hasattr(msg, "tool_return")
+                    and msg.tool_return
+                ):
                     continue
-                
+
                 # Check assistant messages (direct responses)
                 if (
                     not response_text
@@ -404,7 +414,7 @@ IMPORTANCE_TO_GROUP: X
         except Exception as e:
             logger = logging.getLogger(__name__)
             logger.warning(f"Failed to extract response text: {e}")
-        
+
         return response_text
 
     def assess_motivation_and_priority(self, topic: str):
@@ -436,11 +446,12 @@ IMPORTANCE_TO_GROUP: X
                 "motivation_score": self.motivation_score,
                 "priority_score": self.priority_score,
                 "participation_threshold": config.PARTICIPATION_THRESHOLD,
-                "will_participate": self.motivation_score >= config.PARTICIPATION_THRESHOLD,
+                "will_participate": self.motivation_score
+                >= config.PARTICIPATION_THRESHOLD,
                 "assessment": assessment.model_dump(),
             },
         )
-    
+
     def _select_mode_for_message(self, message: str, attachments: list = None) -> str:
         """Select processing mode based on message content and attachments.
 
@@ -452,14 +463,12 @@ IMPORTANCE_TO_GROUP: X
 
         # Check for image attachments
         has_images = any(
-            attachment.get('kind') == 'image'
-            for attachment in attachments
+            attachment.get("kind") == "image" for attachment in attachments
         )
 
         # Check for document attachments
         has_documents = any(
-            attachment.get('kind') == 'document'
-            for attachment in attachments
+            attachment.get("kind") == "document" for attachment in attachments
         )
 
         if has_images:
@@ -472,14 +481,20 @@ IMPORTANCE_TO_GROUP: X
             return "text"
 
     def speak(
-        self, conversation_history: str = "", mode: str = "initial", topic: str = "", attachments: list = None
+        self,
+        conversation_history: str = "",
+        mode: str = "initial",
+        topic: str = "",
+        attachments: list = None,
     ):
         """Generates a response from the agent with conversation context."""
         # Select processing mode based on attachments
         selected_mode = self._select_mode_for_message(conversation_history, attachments)
 
         # Log mode selection for scaffolding
-        print(f"[DEBUG] Agent {self.name} selected mode: {selected_mode} for message with {len(attachments or [])} attachments")
+        print(
+            f"[DEBUG] Agent {self.name} selected mode: {selected_mode} for message with {len(attachments or [])} attachments"
+        )
 
         # Track the mode selection in session events
         if attachments:
@@ -489,10 +504,16 @@ IMPORTANCE_TO_GROUP: X
                 details={
                     "selected_mode": selected_mode,
                     "attachments_count": len(attachments),
-                    "has_images": any(att.get('kind') == 'image' for att in attachments),
-                    "has_documents": any(att.get('kind') == 'document' for att in attachments),
-                    "message_preview": conversation_history[:100] if conversation_history else topic[:100]
-                }
+                    "has_images": any(
+                        att.get("kind") == "image" for att in attachments
+                    ),
+                    "has_documents": any(
+                        att.get("kind") == "document" for att in attachments
+                    ),
+                    "message_preview": conversation_history[:100]
+                    if conversation_history
+                    else topic[:100],
+                },
             )
 
         # Check if agent has tools (Letta default agents require using send_message tool)
@@ -534,16 +555,14 @@ Based on this conversation, I want to contribute. Please use the send_message to
                     }
                 ],
             )
-            
+
             # Track the agent's response
             response_text = self._extract_response_text(response)
             if response_text:
                 track_message(
-                    actor=self.name,
-                    content=response_text,
-                    message_type="assistant"
+                    actor=self.name, content=response_text, message_type="assistant"
                 )
-            
+
             return response
         except Exception as e:
             # If tool call fails, try a more direct approach
@@ -563,16 +582,14 @@ Based on this conversation, I want to contribute. Please use the send_message to
                         }
                     ],
                 )
-                
+
                 # Track the agent's response from direct prompt
                 response_text = self._extract_response_text(response)
                 if response_text:
                     track_message(
-                        actor=self.name,
-                        content=response_text,
-                        message_type="assistant"
+                        actor=self.name, content=response_text, message_type="assistant"
                     )
-                
+
                 return response
             else:
                 raise

@@ -9,10 +9,14 @@ from letta_client.types import AgentState
 
 from . import config
 from .letta_api import letta_call
-from .session_tracking import track_message, track_action, track_system_event, track_decision
+from .session_tracking import (
+    track_action,
+    track_decision,
+    track_message,
+    track_system_event,
+)
 
 # spds/secretary_agent.py
-
 
 
 def retry_with_backoff(func, max_retries=3, backoff_factor=1):
@@ -192,7 +196,7 @@ class SecretaryAgent:
                 print(f"👥 Participants: {', '.join(participants)}")
                 secretary_response = self._extract_agent_response(response)
                 print(f"🤖 Secretary: {secretary_response}")
-                
+
                 # Track meeting start
                 track_system_event(
                     event_type="meeting_started",
@@ -201,8 +205,8 @@ class SecretaryAgent:
                         "participants": participants,
                         "meeting_type": meeting_type,
                         "secretary_mode": self.mode,
-                        "secretary_response": secretary_response
-                    }
+                        "secretary_response": secretary_response,
+                    },
                 )
             else:
                 print(f"⚠️ Secretary may not have received meeting start notification")
@@ -293,7 +297,7 @@ class SecretaryAgent:
 
         try:
             retry_with_backoff(send_observation, max_retries=2, backoff_factor=0.5)
-            
+
             # Track message observation
             track_action(
                 actor="secretary",
@@ -301,8 +305,8 @@ class SecretaryAgent:
                 details={
                     "speaker": speaker,
                     "message": message,
-                    "metadata": metadata or {}
-                }
+                    "metadata": metadata or {},
+                },
             )
         except Exception as e:
             # Don't print for every message - too noisy
@@ -332,7 +336,7 @@ class SecretaryAgent:
                 messages=[MessageCreate(role="user", content=action_message)],
             )
             print(f"✅ Action item recorded: {description}")
-            
+
             # Track action item creation
             track_action(
                 actor="secretary",
@@ -340,8 +344,8 @@ class SecretaryAgent:
                 details={
                     "description": description,
                     "assignee": assignee,
-                    "due_date": due_date
-                }
+                    "due_date": due_date,
+                },
             )
         except Exception as e:
             print(f"❌ Failed to record action item: {e}")
@@ -364,15 +368,12 @@ class SecretaryAgent:
                 messages=[MessageCreate(role="user", content=decision_message)],
             )
             print(f"📋 Decision recorded: {decision}")
-            
+
             # Track decision recording
             track_decision(
                 actor="secretary",
                 decision_type="record_decision",
-                details={
-                    "decision": decision,
-                    "context": context
-                }
+                details={"decision": decision, "context": context},
             )
         except Exception as e:
             print(f"❌ Failed to record decision: {e}")

@@ -14,7 +14,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h5 class="mb-0">
-                            <i class="bi bi-chat-dots"></i> 
+                            <i class="bi bi-chat-dots"></i>
                             <span id="current-topic">Active Conversation</span>
                         </h5>
                         <small class="opacity-75">
@@ -23,12 +23,12 @@
                         </small>
                     </div>
                     <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-outline-light btn-sm" 
+                        <button type="button" class="btn btn-outline-light btn-sm"
                                 onclick="window.location.href='{{ url_for('setup') }}'">
                             <i class="bi bi-gear"></i> New Session
                         </button>
                         <div class="dropdown">
-                            <button class="btn btn-outline-light btn-sm dropdown-toggle" 
+                            <button class="btn btn-outline-light btn-sm dropdown-toggle"
                                     type="button" data-bs-toggle="dropdown">
                                 <i class="bi bi-three-dots"></i>
                             </button>
@@ -48,19 +48,19 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Messages Area -->
             <div class="card-body p-0 position-relative">
                 <div id="chat-messages" class="chat-messages">
                     <!-- Welcome message -->
                     <div class="message system">
                         <div class="message-content">
-                            <i class="bi bi-robot"></i> 
+                            <i class="bi bi-robot"></i>
                             Welcome to SWARMS! Your agents will begin responding once you send a message.
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Agent Scores Display -->
                 <div id="agent-scores-container" class="agent-scores" style="display: none;">
                     <h6 class="mb-2">
@@ -69,7 +69,7 @@
                     <div id="agent-scores"></div>
                 </div>
             </div>
-            
+
             <!-- Chat Input -->
             <div class="card-footer bg-light">
                 <div class="chat-input-container">
@@ -77,7 +77,7 @@
                     <div id="attachment-preview" class="mb-2" style="display: none;">
                         <div class="d-flex flex-wrap gap-2" id="attachment-chips"></div>
                     </div>
-                    
+
                     <div class="input-group">
                         <div class="input-group-prepend">
                             <button class="btn btn-outline-secondary" type="button" id="attach-button"
@@ -92,11 +92,11 @@
                             <i class="bi bi-send"></i>
                         </button>
                     </div>
-                    
+
                     <!-- Hidden file input -->
                     <input type="file" id="file-input" multiple accept=".png,.jpg,.jpeg,.gif,.pdf,.docx,.txt"
                            style="display: none;">
-                    
+
                     <!-- Secretary Commands Quick Access -->
                     <div class="mt-2">
                         <small class="text-muted">Secretary commands:</small>
@@ -123,7 +123,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Sidebar -->
     <div class="col-lg-4">
         <div class="row g-3">
@@ -147,7 +147,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Secretary Panel -->
             <div class="col-12">
                 <div class="card shadow-sm">
@@ -156,11 +156,11 @@
                             <i class="bi bi-file-earmark-text"></i> Secretary
                         </h6>
                         <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-light btn-sm secretary-command" 
+                            <button type="button" class="btn btn-outline-light btn-sm secretary-command"
                                     data-command="/minutes" title="Generate Minutes">
                                 <i class="bi bi-file-text"></i>
                             </button>
-                            <button type="button" class="btn btn-outline-light btn-sm secretary-command" 
+                            <button type="button" class="btn btn-outline-light btn-sm secretary-command"
                                     data-command="/stats" title="Show Stats">
                                 <i class="bi bi-bar-chart"></i>
                             </button>
@@ -173,16 +173,16 @@
                                 <p class="mt-2 mb-0 small">Waiting for conversation to begin...</p>
                             </div>
                         </div>
-                        
+
                         <!-- Secretary Minutes -->
                         <div id="secretary-minutes" style="display: none;"></div>
-                        
+
                         <!-- Secretary Stats -->
                         <div id="secretary-stats" style="display: none;"></div>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Export Panel -->
             <div class="col-12">
                 <div class="card shadow-sm">
@@ -197,29 +197,29 @@
                                     data-command="/export formal">
                                 <i class="bi bi-file-earmark-text"></i> Board Minutes
                             </button>
-                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command" 
+                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command"
                                     data-command="/export casual">
                                 <i class="bi bi-chat-heart"></i> Casual Notes
                             </button>
-                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command" 
+                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command"
                                     data-command="/export transcript">
                                 <i class="bi bi-file-text"></i> Raw Transcript
                             </button>
-                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command" 
+                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command"
                                     data-command="/export actions">
                                 <i class="bi bi-check-square"></i> Action Items
                             </button>
-                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command" 
+                            <button type="button" class="btn btn-outline-primary btn-sm secretary-command"
                                     data-command="/export summary">
                                 <i class="bi bi-file-bar-graph"></i> Executive Summary
                             </button>
                             <hr class="my-2">
-                            <button type="button" class="btn btn-primary btn-sm secretary-command" 
+                            <button type="button" class="btn btn-primary btn-sm secretary-command"
                                     data-command="/export all">
                                 <i class="bi bi-collection"></i> Complete Package
                             </button>
                         </div>
-                        
+
                         <div class="mt-3">
                             <small class="text-muted">
                                 <i class="bi bi-info-circle"></i>
@@ -287,36 +287,36 @@ class SimpleChat {
 
         this.init();
     }
-    
+
     init() {
         console.log('Initializing SimpleChat...');
-        
+
         // Get session info
         this.sessionId = sessionStorage.getItem('sessionId');
         const topic = sessionStorage.getItem('topic');
-        
+
         if (!this.sessionId) {
             console.log('No session ID found, redirecting to setup...');
             window.location.href = '/setup';
             return;
         }
-        
+
         console.log('Session ID:', this.sessionId);
         console.log('Topic:', topic);
-        
+
         // Initialize socket
         this.socket = io();
         this.setupSocketEvents();
-        
+
         // Setup UI
         this.setupChatInterface();
-        
+
         // Handle connection - moved inside setupSocketEvents to prevent duplicate registration
         if (topic) {
             this.topicToStart = topic;
         }
     }
-    
+
     setupSocketEvents() {
         // Remove all existing listeners first to prevent duplicates
         this.socket.off('connect');
@@ -331,14 +331,14 @@ class SimpleChat {
         this.socket.off('phase_change');
         this.socket.off('agent_thinking');
         this.socket.off('export_complete');
-        
+
         // Connect handler - now inside setupSocketEvents
         this.socket.on('connect', () => {
             console.log('Connected to server');
             this.isConnected = true;
             this.hideConnectionModal();
             this.joinSession();
-            
+
             if (this.topicToStart) {
                 setTimeout(() => {
                     this.startChat(this.topicToStart);
@@ -346,59 +346,59 @@ class SimpleChat {
                 }, 1000);
             }
         });
-        
+
         this.socket.on('disconnect', () => {
             console.log('Disconnected from server');
             this.isConnected = false;
             this.showToast('Disconnected from server', 'warning');
         });
-        
+
         this.socket.on('joined', (data) => {
             console.log('Joined session:', data.session_id);
         });
-        
+
         this.socket.on('chat_started', (data) => {
             console.log('Chat started:', data);
             this.handleChatStarted(data);
         });
-        
+
         this.socket.on('user_message', (data) => {
             this.addMessage(data.speaker, data.message, 'user', data.timestamp);
         });
-        
+
         this.socket.on('agent_message', (data) => {
             this.addMessage(data.speaker, data.message, 'agent', data.timestamp, data.phase);
             this.hideThinkingIndicator(data.speaker);
         });
-        
+
         this.socket.on('system_message', (data) => {
             this.addMessage('System', data.message, 'system');
         });
-        
+
         this.socket.on('assessing_agents', () => {
             this.showAssessmentIndicator();
         });
-        
+
         this.socket.on('agent_scores', (data) => {
             this.updateAgentScores(data.scores);
         });
-        
+
         this.socket.on('phase_change', (data) => {
             this.updatePhase(data.phase);
         });
-        
+
         this.socket.on('agent_thinking', (data) => {
             this.showThinkingIndicator(data.agent, data.phase, data.progress);
         });
-        
+
         this.socket.on('export_complete', (data) => {
             this.handleExportComplete(data);
         });
-        
+
         this.socket.on('secretary_status', (data) => {
             this.handleSecretaryStatus(data);
         });
-        
+
         this.socket.on('secretary_activity', (data) => {
             this.handleSecretaryActivity(data);
         });
@@ -408,13 +408,13 @@ class SimpleChat {
             this.updateSecretaryMinutes(data.minutes);
         });
     }
-    
+
     setupChatInterface() {
         const chatInput = document.getElementById('chat-input');
         const sendButton = document.getElementById('send-button');
         const attachButton = document.getElementById('attach-button');
         const fileInput = document.getElementById('file-input');
-        
+
         if (chatInput && sendButton) {
             // Handle Enter key
             chatInput.addEventListener('keypress', (e) => {
@@ -423,46 +423,46 @@ class SimpleChat {
                     this.sendMessage();
                 }
             });
-            
+
             // Handle send button click
             sendButton.addEventListener('click', () => {
                 this.sendMessage();
             });
-            
+
             // Auto-resize
             chatInput.addEventListener('input', function() {
                 this.style.height = 'auto';
                 this.style.height = Math.min(this.scrollHeight, 120) + 'px';
             });
         }
-        
+
         // Setup file attachment functionality
         if (attachButton && fileInput) {
             // Attach button click handler
             attachButton.addEventListener('click', () => {
                 fileInput.click();
             });
-            
+
             // File input change handler
             fileInput.addEventListener('change', (e) => {
                 const files = Array.from(e.target.files);
-                
+
                 if (files.length > 3) {
                     this.showToast('Maximum 3 files allowed', 'warning');
                     e.target.value = ''; // Clear selection
                     return;
                 }
-                
+
                 // Upload each file
                 files.forEach(file => {
                     this.uploadFile(file);
                 });
-                
+
                 // Clear input after processing
                 e.target.value = '';
             });
         }
-        
+
         // Setup secretary commands
         document.querySelectorAll('.secretary-command').forEach(button => {
             button.addEventListener('click', (e) => {
@@ -471,49 +471,49 @@ class SimpleChat {
                 this.sendMessage(command);
             });
         });
-        
+
         // Show connection modal initially
         this.showConnectionModal();
     }
-    
+
     joinSession() {
         if (this.socket && this.sessionId) {
             console.log('Joining session:', this.sessionId);
             this.socket.emit('join_session', { session_id: this.sessionId });
         }
     }
-    
+
     startChat(topic) {
         if (this.socket && this.sessionId) {
             console.log('Starting chat with topic:', topic);
-            this.socket.emit('start_chat', { 
-                session_id: this.sessionId, 
-                topic: topic 
+            this.socket.emit('start_chat', {
+                session_id: this.sessionId,
+                topic: topic
             });
         }
     }
-    
+
     async uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
-        
+
         // Add session_id if available
         if (this.sessionId) {
             formData.append('session_id', this.sessionId);
         }
-        
+
         try {
             const response = await fetch('/api/uploads', {
                 method: 'POST',
                 body: formData
             });
-            
+
             if (!response.ok) {
                 throw new Error(`Upload failed: ${response.status}`);
             }
-            
+
             const data = await response.json();
-            
+
             if (data.ok) {
                 this.pendingAttachments.push(data.file);
                 this.renderAttachments();
@@ -532,19 +532,19 @@ class SimpleChat {
     renderAttachments() {
         const container = document.getElementById('attachment-chips');
         const preview = document.getElementById('attachment-preview');
-        
+
         if (!container || !preview) return;
-        
+
         if (this.pendingAttachments.length === 0) {
             preview.style.display = 'none';
             return;
         }
-        
+
         preview.style.display = 'block';
-        
+
         container.innerHTML = this.pendingAttachments.map((attachment, index) => {
             let previewHtml = '';
-            
+
             if (attachment.kind === 'image') {
                 // Create object URL for image preview
                 const blob = new Blob([`data:${attachment.mime};base64,placeholder`], {type: attachment.mime});
@@ -554,7 +554,7 @@ class SimpleChat {
                 // Document preview
                 previewHtml = `<i class="bi bi-file-earmark-text" style="font-size: 1.2em; color: #6c757d;"></i>`;
             }
-            
+
             return `
                 <div class="attachment-chip badge bg-light text-dark d-flex align-items-center gap-1 p-2" data-index="${index}">
                     ${previewHtml}
@@ -568,7 +568,7 @@ class SimpleChat {
     removeAttachment(index) {
         this.pendingAttachments.splice(index, 1);
         this.renderAttachments();
-        
+
         if (this.pendingAttachments.length === 0) {
             document.getElementById('attachment-preview').style.display = 'none';
         }
@@ -583,27 +583,27 @@ class SimpleChat {
     sendMessage(message = null) {
         const chatInput = document.getElementById('chat-input');
         if (!chatInput && !message) return;
-        
+
         const messageText = message || chatInput.value.trim();
         if (!messageText && this.pendingAttachments.length === 0) return;
-        
+
         // Prepare message data
         const messageData = {
             session_id: this.sessionId,
             message: messageText || ""
         };
-        
+
         // Include attachments if any
         if (this.pendingAttachments.length > 0) {
             messageData.attachments = this.pendingAttachments;
         }
-        
+
         // Clear input if it was from the input field
         if (!message && chatInput) {
             chatInput.value = '';
             chatInput.style.height = 'auto';
         }
-        
+
         // Send via WebSocket (for real-time chat) or API (for attachments)
         if (this.socket && this.sessionId) {
             if (this.pendingAttachments.length > 0) {
@@ -615,7 +615,7 @@ class SimpleChat {
                 this.socket.emit('user_message', messageData);
             }
         }
-        
+
         // Clear attachments after sending
         this.clearAttachments();
     }
@@ -630,16 +630,16 @@ class SimpleChat {
                 },
                 body: JSON.stringify(messageData)
             });
-            
+
             if (!response.ok) {
                 throw new Error(`Message send failed: ${response.status}`);
             }
-            
+
             const data = await response.json();
-            
+
             if (data.ok) {
                 this.showToast(`Message sent with ${data.attachments_count} attachment(s)`, 'success');
-                
+
                 // Also emit via WebSocket for real-time UI update
                 this.socket.emit('user_message', {
                     session_id: this.sessionId,
@@ -653,28 +653,28 @@ class SimpleChat {
             this.showToast(`Failed to send message: ${error.message}`, 'error');
         }
     }
-    
+
     handleChatStarted(data) {
         console.log('Handling chat started:', data);
-        
+
         this.showToast(`Chat started: ${data.topic}`, 'success');
         this.agents = data.agents || [];
-        
+
         // Update UI elements
         const topicElement = document.getElementById('current-topic');
         if (topicElement) {
             topicElement.textContent = data.topic;
         }
-        
+
         const modeElement = document.getElementById('current-mode');
         if (modeElement) {
             modeElement.textContent = data.mode.toUpperCase();
         }
-        
+
         // Update participants list
         this.updateParticipantsList();
     }
-    
+
     updateParticipantsList() {
         const agentsList = document.getElementById('agents-list');
         if (agentsList && this.agents.length > 0) {
@@ -687,16 +687,16 @@ class SimpleChat {
             `).join('');
         }
     }
-    
+
     addMessage(speaker, content, type = 'agent', timestamp = null, phase = null) {
         const messagesContainer = document.getElementById('chat-messages');
         if (!messagesContainer) return;
-        
+
         const messageElement = document.createElement('div');
         messageElement.className = `message ${type}`;
-        
+
         const timeStr = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
-        
+
         let headerHtml = '';
         if (type !== 'system') {
             headerHtml = `
@@ -709,15 +709,15 @@ class SimpleChat {
                 </div>
             `;
         }
-        
+
         messageElement.innerHTML = `
             ${headerHtml}
             <div class="message-content">${this.formatMessageContent(content)}</div>
         `;
-        
+
         messagesContainer.appendChild(messageElement);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        
+
         // Show agent scores container when agents respond
         if (type === 'agent') {
             const scoresContainer = document.getElementById('agent-scores-container');
@@ -726,27 +726,27 @@ class SimpleChat {
             }
         }
     }
-    
+
     formatMessageContent(content) {
         return content
             .replace(/\n/g, '<br>')
             .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
     }
-    
+
     showThinkingIndicator(agentName, phase = null, progress = null) {
         const messagesContainer = document.getElementById('chat-messages');
         if (!messagesContainer) return;
-        
+
         // Remove existing thinking indicator for this agent
         this.hideThinkingIndicator(agentName);
-        
+
         const thinkingElement = document.createElement('div');
         thinkingElement.className = 'thinking-indicator';
         thinkingElement.id = `thinking-${agentName}`;
-        
+
         let progressText = progress ? ` (${progress})` : '';
         let phaseText = phase ? ` - ${phase} thoughts` : '';
-        
+
         thinkingElement.innerHTML = `
             <i class="bi bi-robot"></i>
             <span>${agentName} is thinking${phaseText}${progressText}</span>
@@ -756,48 +756,48 @@ class SimpleChat {
                 <div class="thinking-dot"></div>
             </div>
         `;
-        
+
         messagesContainer.appendChild(thinkingElement);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
-    
+
     hideThinkingIndicator(agentName) {
         const thinkingElement = document.getElementById(`thinking-${agentName}`);
         if (thinkingElement) {
             thinkingElement.remove();
         }
     }
-    
+
     showAssessmentIndicator() {
         const messagesContainer = document.getElementById('chat-messages');
         if (!messagesContainer) return;
-        
+
         // Remove existing assessment indicator
         const existingIndicator = document.getElementById('assessment-indicator');
         if (existingIndicator) {
             existingIndicator.remove();
         }
-        
+
         const assessmentElement = document.createElement('div');
         assessmentElement.className = 'progress-indicator';
         assessmentElement.id = 'assessment-indicator';
-        
+
         assessmentElement.innerHTML = `
             <div class="spinner"></div>
             <span>Assessing agent motivations...</span>
         `;
-        
+
         messagesContainer.appendChild(assessmentElement);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
-    
+
     updateAgentScores(scores) {
         // Remove assessment indicator
         const assessmentIndicator = document.getElementById('assessment-indicator');
         if (assessmentIndicator) {
             assessmentIndicator.remove();
         }
-        
+
         // Update scores in sidebar
         const scoresContainer = document.getElementById('agent-scores');
         if (scoresContainer) {
@@ -812,7 +812,7 @@ class SimpleChat {
             `).join('');
         }
     }
-    
+
     updatePhase(phase) {
         const phaseIndicator = document.getElementById('phase-indicator');
         if (phaseIndicator) {
@@ -823,11 +823,11 @@ class SimpleChat {
                 'sequential': 'Sequential Mode',
                 'pure_priority': 'Pure Priority Mode'
             };
-            
+
             phaseIndicator.textContent = phaseNames[phase] || phase;
         }
     }
-    
+
     handleExportComplete(data) {
         const entries = this.normalizeExportEntries(data);
 
@@ -1065,10 +1065,10 @@ class SimpleChat {
             modalElement.removeAttribute('aria-hidden');
         }
     }
-    
+
     handleSecretaryStatus(data) {
         console.log('Secretary status update:', data);
-        
+
         const secretaryContent = document.getElementById('secretary-content');
         if (secretaryContent) {
             secretaryContent.innerHTML = `
@@ -1082,31 +1082,31 @@ class SimpleChat {
                 </div>
             `;
         }
-        
+
         this.showToast(data.message, 'success');
     }
-    
+
     handleSecretaryActivity(data) {
         console.log('Secretary activity:', data);
-        
+
         const secretaryContent = document.getElementById('secretary-content');
         if (secretaryContent) {
             // Show activity indicator
-            const activityClass = data.activity === 'generating' ? 'text-warning' : 
+            const activityClass = data.activity === 'generating' ? 'text-warning' :
                                  data.activity === 'completed' ? 'text-success' : 'text-info';
-            
+
             secretaryContent.innerHTML = `
                 <div class="text-center ${activityClass}">
                     <div class="mb-2">
-                        ${data.activity === 'generating' ? 
-                            '<div class="spinner-border spinner-border-sm" role="status"></div>' : 
+                        ${data.activity === 'generating' ?
+                            '<div class="spinner-border spinner-border-sm" role="status"></div>' :
                             '<i class="bi bi-pencil-square"></i>'
                         }
                     </div>
                     <p class="small mb-0">${data.message}</p>
                 </div>
             `;
-            
+
             // Auto-clear completed messages after 3 seconds
             if (data.activity === 'completed') {
                 setTimeout(() => {
@@ -1142,7 +1142,7 @@ class SimpleChat {
             // No-op: leave existing content; optionally could clear if needed
         }
     }
-    
+
     showConnectionModal() {
         const modal = document.getElementById('connectionModal');
         if (modal) {
@@ -1150,7 +1150,7 @@ class SimpleChat {
             connectionModal.show();
         }
     }
-    
+
     hideConnectionModal() {
         const modal = document.getElementById('connectionModal');
         if (modal) {
@@ -1160,10 +1160,10 @@ class SimpleChat {
             }
         }
     }
-    
+
     showToast(message, type = 'info') {
         console.log('Toast:', message, type);
-        
+
         // Create toast container if it doesn't exist
         let toastContainer = document.getElementById('toast-container');
         if (!toastContainer) {
@@ -1176,7 +1176,7 @@ class SimpleChat {
             toastContainer.style.zIndex = '1050';
             document.body.appendChild(toastContainer);
         }
-        
+
         const colorMap = {
             'success': 'success',
             'error': 'danger',
@@ -1184,28 +1184,28 @@ class SimpleChat {
             'info': 'primary'
         };
         const bgColor = colorMap[type] || 'primary';
-        
+
         // Create toast
         const toast = document.createElement('div');
         toast.className = `toast align-items-center text-white bg-${bgColor} border-0`;
         toast.setAttribute('role', 'alert');
-        
+
         toast.innerHTML = `
             <div class="d-flex">
                 <div class="toast-body">
                     ${message}
                 </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" 
+                <button type="button" class="btn-close btn-close-white me-2 m-auto"
                         data-bs-dismiss="toast"></button>
             </div>
         `;
-        
+
         toastContainer.appendChild(toast);
-        
+
         // Initialize and show toast
         const bsToast = new bootstrap.Toast(toast);
         bsToast.show();
-        
+
         // Remove toast element after it's hidden
         toast.addEventListener('hidden.bs.toast', () => {
             toast.remove();
@@ -1227,7 +1227,7 @@ document.addEventListener('keydown', (e) => {
             sendButton.click();
         }
     }
-    
+
     // Escape to focus input
     if (e.key === 'Escape') {
         const chatInput = document.getElementById('chat-input');

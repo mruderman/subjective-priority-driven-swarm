@@ -9,8 +9,8 @@ from unittest.mock import patch
 import pytest
 
 from spds.main import main
-from spds.session_store import JsonSessionStore
 from spds.session_context import get_current_session_id, set_current_session_id
+from spds.session_store import JsonSessionStore
 
 
 @pytest.fixture
@@ -140,11 +140,9 @@ def test_main_with_session_id(mock_config, monkeypatch):
     # Clear session context
     set_current_session_id(None)
 
-    with patch("spds.main.get_default_session_store") as mock_get_store, \
-         patch("spds.main.SwarmManager", MockSwarm), \
-         patch("spds.main.Letta"), \
-         patch("builtins.input", return_value="Test Topic"):
-
+    with patch("spds.main.get_default_session_store") as mock_get_store, patch(
+        "spds.main.SwarmManager", MockSwarm
+    ), patch("spds.main.Letta"), patch("builtins.input", return_value="Test Topic"):
         mock_get_store.return_value = store
 
         # Run main with session ID
@@ -167,11 +165,9 @@ def test_main_with_new_session_no_title(mock_config, monkeypatch, capsys):
         def start_chat_with_topic(self, topic):
             pass
 
-    with patch("spds.main.get_default_session_store") as mock_get_store, \
-         patch("spds.main.SwarmManager", MockSwarm), \
-         patch("spds.main.Letta"), \
-         patch("builtins.input", return_value="Test Topic"):
-
+    with patch("spds.main.get_default_session_store") as mock_get_store, patch(
+        "spds.main.SwarmManager", MockSwarm
+    ), patch("spds.main.Letta"), patch("builtins.input", return_value="Test Topic"):
         store = JsonSessionStore(mock_config)
         mock_get_store.return_value = store
 
@@ -201,11 +197,9 @@ def test_main_with_new_session_with_title(mock_config, monkeypatch, capsys):
         def start_chat_with_topic(self, topic):
             pass
 
-    with patch("spds.main.get_default_session_store") as mock_get_store, \
-         patch("spds.main.SwarmManager", MockSwarm), \
-         patch("spds.main.Letta"), \
-         patch("builtins.input", return_value="Test Topic"):
-
+    with patch("spds.main.get_default_session_store") as mock_get_store, patch(
+        "spds.main.SwarmManager", MockSwarm
+    ), patch("spds.main.Letta"), patch("builtins.input", return_value="Test Topic"):
         store = JsonSessionStore(mock_config)
         mock_get_store.return_value = store
 
@@ -235,11 +229,9 @@ def test_main_backward_compatibility_no_session(mock_config, monkeypatch):
         def start_chat_with_topic(self, topic):
             pass
 
-    with patch("spds.main.get_default_session_store") as mock_get_store, \
-         patch("spds.main.SwarmManager", MockSwarm), \
-         patch("spds.main.Letta"), \
-         patch("builtins.input", return_value="Test Topic"):
-
+    with patch("spds.main.get_default_session_store") as mock_get_store, patch(
+        "spds.main.SwarmManager", MockSwarm
+    ), patch("spds.main.Letta"), patch("builtins.input", return_value="Test Topic"):
         mock_get_store.return_value = JsonSessionStore(mock_config)
 
         # Run main without any session options
@@ -296,20 +288,18 @@ def test_session_context_preserved_through_execution(mock_config, monkeypatch):
     class MockSwarm:
         def __init__(self, **kwargs):
             # Capture session context during initialization
-            context_captured['init'] = get_current_session_id()
+            context_captured["init"] = get_current_session_id()
 
         def start_chat_with_topic(self, topic):
             # Capture session context during chat start
-            context_captured['chat'] = get_current_session_id()
+            context_captured["chat"] = get_current_session_id()
 
     # Clear session context
     set_current_session_id(None)
 
-    with patch("spds.main.get_default_session_store") as mock_get_store, \
-         patch("spds.main.SwarmManager", MockSwarm), \
-         patch("spds.main.Letta"), \
-         patch("builtins.input", return_value="Test Topic"):
-
+    with patch("spds.main.get_default_session_store") as mock_get_store, patch(
+        "spds.main.SwarmManager", MockSwarm
+    ), patch("spds.main.Letta"), patch("builtins.input", return_value="Test Topic"):
         mock_get_store.return_value = store
 
         # Run with session ID
@@ -317,8 +307,8 @@ def test_session_context_preserved_through_execution(mock_config, monkeypatch):
 
     assert result == 0
     # Verify session context was available at both points
-    assert context_captured['init'] == session.meta.id
-    assert context_captured['chat'] == session.meta.id
+    assert context_captured["init"] == session.meta.id
+    assert context_captured["chat"] == session.meta.id
 
 
 def test_multiple_sessions_created_separately(mock_config):

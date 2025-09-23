@@ -472,9 +472,9 @@ class ResponseValidator:
                     if hasattr(msg, "tool_calls") and msg.tool_calls:
                         analysis["tool_calls"] += len(msg.tool_calls)
 
-                analysis["summary"] = (
-                    f"{len(response.messages)} messages, {len(set(analysis['message_types']))} types"
-                )
+                analysis[
+                    "summary"
+                ] = f"{len(response.messages)} messages, {len(set(analysis['message_types']))} types"
             else:
                 analysis["summary"] = "No messages in response"
 
@@ -545,9 +545,7 @@ class ResponseValidator:
         if "state_persistence" in self.test_results:
             test3 = self.test_results["state_persistence"]
             print(f"\n🧠 State Persistence:")
-            print(
-                f"  State changes detected: {'✅' if test3['state_changed'] else '❌'}"
-            )
+            print(f"  State changes detected: {'✅' if test3['state_changed'] else '❌'}")
             print(
                 f"  Assessment object valid: {'✅' if test3['assessment_valid'] else '❌'}"
             )

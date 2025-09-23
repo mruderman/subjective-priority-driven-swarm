@@ -74,7 +74,7 @@ prompt = f"The user just asked a question or made a statement.{recent_context} B
 # Before
 response = agent.speak(mode="initial")
 
-# After  
+# After
 response = agent.speak(mode="initial", topic=topic)
 ```
 
@@ -159,7 +159,7 @@ This demonstrates that agents now provide substantial, contextual responses inst
 
 ## Working Agents Confirmed
 After testing, these agents are confirmed working:
-- ✅ Alex - Project Manager  
+- ✅ Alex - Project Manager
 - ✅ Adaptive Secretary 20250727_231844
 - ✅ companion-agent-1753201615269-sleeptime
 
@@ -170,6 +170,6 @@ After testing, these agents are confirmed working:
 4. `swarms-web/app.py` - Updated web interface speak calls
 5. Created diagnostic scripts:
    - `debug_agent_creation.py`
-   - `fix_agent_issues.py` 
+   - `fix_agent_issues.py`
    - `test_agent_responses.py`
    - `quick_test_working_agents.py`

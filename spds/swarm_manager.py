@@ -6,14 +6,14 @@ import uuid
 from letta_client import Letta
 from letta_client.errors import NotFoundError
 
-from .config import logger
 from . import config
+from .config import logger
 from .export_manager import ExportManager
 from .letta_api import letta_call
 from .memory_awareness import create_memory_awareness_for_agent
 from .secretary_agent import SecretaryAgent
+from .session_tracking import track_action, track_message, track_system_event
 from .spds_agent import SPDSAgent
-from .session_tracking import track_message, track_action, track_system_event
 
 
 class SwarmManager:
@@ -30,12 +30,12 @@ class SwarmManager:
     ):
         """
         Initialize the SwarmManager, load or create agents, and configure meeting and secretary settings.
-        
+
         This constructor prepares internal state and populates self.agents using one of three input paths:
         - agent_ids: load existing agents by their IDs
         - agent_names: load existing agents by name (first match per name)
         - agent_profiles: create temporary agents from supplied profile dicts
-        
+
         It also initializes conversation state, an ExportManager, and—if enabled—creates a SecretaryAgent. The chosen conversation_mode is validated.
 
         Parameters described when helpful:
@@ -46,7 +46,7 @@ class SwarmManager:
             enable_secretary (bool, optional): If True, attempts to create a SecretaryAgent to observe and assist the meeting.
             secretary_mode (str, optional): Mode passed to the SecretaryAgent when enable_secretary is True.
             meeting_type (str, optional): Descriptive meeting type stored in meeting metadata (e.g., "discussion").
-        
+
         Raises:
             ValueError: If no agents are loaded/created or if conversation_mode is not one of the valid modes.
         """
@@ -112,7 +112,7 @@ class SwarmManager:
         elif level == "error" and message.startswith("[Debug:"):
             # Keep debug messages as-is since they already have the expected format
             display_message = message
-        
+
         print(display_message)
         # Log the original message without prefixes for structured logging
         log_fn = getattr(logger, level, logger.info)
@@ -169,9 +169,7 @@ class SwarmManager:
             try:
                 self._emit(f"Retrieving agent: {agent_id}")
                 agent_state = letta_call(
-                    "agents.retrieve",
-                    self.client.agents.retrieve,
-                    agent_id=agent_id
+                    "agents.retrieve", self.client.agents.retrieve, agent_id=agent_id
                 )
                 self.agents.append(SPDSAgent(agent_state, self.client))
             except NotFoundError:
@@ -183,9 +181,9 @@ class SwarmManager:
     def _load_agents_by_name(self, agent_names: list):
         """
         Load existing agents from the Letta server by name and append them (wrapped as SPDSAgent) to self.agents.
-        
+
         This searches each name with client.agents.list(name=<name>, limit=1) and uses the first match if present; missing names are skipped and a warning is logged. Mutates self.agents by appending SPDSAgent instances for found agents.
-        
+
         Parameters:
             agent_names (list[str]): Iterable of agent display names to look up; each name is matched with a single result (the first match).
         """
@@ -194,10 +192,7 @@ class SwarmManager:
             self._emit(f"Retrieving agent by name: {name}")
             # The list method with a name filter returns a list. We'll take the first one.
             found_agents = letta_call(
-                "agents.list",
-                self.client.agents.list,
-                name=name,
-                limit=1
+                "agents.list", self.client.agents.list, name=name, limit=1
             )
             if not found_agents:
                 self._emit(
@@ -210,24 +205,24 @@ class SwarmManager:
     def _create_agents_from_profiles(self, agent_profiles: list):
         """
         Create temporary SPDSAgent instances from profile dictionaries and add them to self.agents.
-        
+
         Each profile in agent_profiles should be a dict with at least the keys:
         - "name": display name for the agent
         - "persona": short persona/system prompt text
         - "expertise": brief expertise description
-        
+
         Optional keys:
         - "model": model identifier to use for the agent
         - "embedding": embedding model identifier or config
-        
+
         Side effects:
         - Calls SPDSAgent.create_new(...) for each profile (may create transient agents on the backend).
         - Appends each successfully created SPDSAgent to self.agents.
         - Logs creation duration and errors for individual profiles.
-        
+
         Parameters:
             agent_profiles (list): Iterable of profile dicts as described above.
-        
+
         Returns:
             None
         """
@@ -250,22 +245,24 @@ class SwarmManager:
                 )
                 self.agents.append(agent)
                 duration = time.time() - start_time
-                logger.info(f"Agent {profile['name']} created in {duration:.2f} seconds.")
+                logger.info(
+                    f"Agent {profile['name']} created in {duration:.2f} seconds."
+                )
             except Exception as e:
                 logger.error(f"Failed to create agent {profile['name']}: {e}")
 
     def start_chat(self):
         """
         Start an interactive group chat session with the swarm.
-        
+
         Prompts the user for a topic, initializes the meeting, and enters a read-eval loop accepting user messages until the user types "quit" or sends EOF (Ctrl+D). Each user message is appended to the manager's conversation_history, optionally forwarded to the configured secretary for observation, and then triggers a coordinated agent turn via _agent_turn(topic). Lines beginning with "/" are interpreted as secretary commands and handled by _handle_secretary_commands.
-        
+
         Side effects:
         - Reads from standard input.
         - Mutates self.conversation_history and meeting state.
         - Calls _start_meeting, _agent_turn, and _end_meeting.
         - May call secretary.observe_message when a secretary is enabled.
-        
+
         Returns:
             None
         """
@@ -309,21 +306,21 @@ class SwarmManager:
     def start_chat_with_topic(self, topic: str):
         """
         Start and manage an interactive group chat session using a preset topic.
-        
+
         This begins a meeting for the given topic, enters a read-eval loop that accepts human input,
         dispatches secretary commands (if enabled), appends user messages to the shared conversation
         history, notifies the secretary of human messages, and triggers agent turns until the user
         exits. The loop exits when the user types "quit" or sends EOF (Ctrl+D).
-        
+
         Parameters:
             topic (str): The discussion topic used to initialize meeting context and inform agents.
-        
+
         Side effects:
             - Calls self._start_meeting(topic) at start and self._end_meeting() on exit.
             - Appends user messages to self.conversation_history.
             - If a secretary is enabled, calls secretary.observe_message("You", message) for each user input.
             - Calls self._agent_turn(topic) after each user message to drive agent responses.
-        
+
         Returns:
             None
         """
@@ -335,7 +332,9 @@ class SwarmManager:
                 f"Secretary: {self.secretary.agent.name if self.secretary.agent else 'Recording'} ({self.secretary.mode} mode)"
             )
         self._emit("Type 'quit' or Ctrl+D to end the session.")
-        self._emit("Available commands: /minutes, /export, /formal, /casual, /action-item")
+        self._emit(
+            "Available commands: /minutes, /export, /formal, /casual, /action-item"
+        )
 
         self._start_meeting(topic)
 
@@ -357,11 +356,7 @@ class SwarmManager:
             self.conversation_history += f"You: {human_input}\n"
 
             # Track user message
-            track_message(
-                actor="user",
-                content=human_input,
-                message_type="user"
-            )
+            track_message(actor="user", content=human_input, message_type="user")
 
             # Let secretary observe the human message
             if self.secretary:
@@ -372,16 +367,13 @@ class SwarmManager:
         self._end_meeting()
 
     def _update_agent_memories(
-        self,
-        message: str,
-        speaker: str = "User",
-        max_retries=3
+        self, message: str, speaker: str = "User", max_retries=3
     ):
         """
         Broadcast a user message to every agent to update their memory, with retries and error handling.
-        
+
         Sends a message of the form "<speaker>: <message>" to each agent's message store. Retries transient failures with exponential backoff (e.g., HTTP 500 or disconnection). If a token-related error is detected, attempts to reset the agent's messages and retries the update once. Logs failures; does not raise on per-agent errors.
-        
+
         Parameters:
             message (str): The message text to record in each agent's memory.
             speaker (str): Label prepended to the message (defaults to "User").
@@ -458,9 +450,9 @@ class SwarmManager:
     def _reset_agent_messages(self, agent_id: str):
         """
         Reset the stored message history for a specific agent.
-        
+
         Calls the Letta client to clear the agent's message history (agent_id) so the agent can recover from token-limit or context-size issues. Exceptions are caught and logged; this method does not raise.
-        
+
         Parameters:
             agent_id (str): Identifier of the agent whose message history should be reset.
         """
@@ -468,7 +460,7 @@ class SwarmManager:
             letta_call(
                 "agents.messages.reset",
                 self.client.agents.messages.reset,
-                agent_id=agent_id
+                agent_id=agent_id,
             )
             self._emit(f"Successfully reset messages for agent {agent_id}")
         except Exception as e:
@@ -480,12 +472,12 @@ class SwarmManager:
     def _get_agent_message_count(self, agent_id: str) -> int:
         """
         Return the number of messages in an agent's history.
-        
+
         Queries the Lettа client for up to 1000 messages for the given agent and returns the length of the returned collection. If the response is not a sized sequence or an error occurs while fetching messages, the function returns 0 and logs the failure.
-        
+
         Parameters:
             agent_id (str): Identifier of the agent whose message history will be counted.
-        
+
         Returns:
             int: Number of messages found (0 on error or when the result is not size-aware).
         """
@@ -494,7 +486,7 @@ class SwarmManager:
                 "agents.messages.list",
                 self.client.agents.messages.list,
                 agent_id=agent_id,
-                limit=1000
+                limit=1000,
             )
             return len(messages) if hasattr(messages, "__len__") else 0
         except Exception as e:
@@ -507,13 +499,13 @@ class SwarmManager:
     def _warm_up_agent(self, agent, topic: str) -> bool:
         """
         Prime an agent's context so it's prepared to participate in a discussion about the given topic.
-        
+
         Sends a short user-role primer message to the agent's message stream asking it to review its memory and prepare to contribute, then pauses briefly to allow processing. Returns True on successful primer send; returns False if an error occurs while attempting to warm up the agent.
-        
+
         Parameters:
             agent: The SPDSAgent wrapper representing the agent to prime.
             topic (str): The meeting/topic string used in the primer message.
-        
+
         Returns:
             bool: True if the primer was sent successfully; False if warming up failed.
         """
@@ -541,10 +533,10 @@ class SwarmManager:
     def _agent_turn(self, topic: str):
         """
         Evaluate motivation and priority for each agent with respect to the provided topic, build an ordered list of motivated agents (priority_score > 0), and invoke the mode-specific turn handler (_hybrid_turn, _all_speak_turn, _sequential_turn, or _pure_priority_turn). If no agents are motivated the method returns without further action. The method updates agent internal scores and triggers side-effectful turn handlers which append to the shared conversation state and notify the secretary when present.
-        
+
         Parameters:
             topic (str): The meeting topic or prompt used to assess agent motivation.
-        
+
         Returns:
             None
         """
@@ -597,19 +589,19 @@ class SwarmManager:
     def _extract_agent_response(self, response) -> str:
         """
         Extract a human-readable message string from an agent response object.
-        
+
         This helper inspects the response.messages sequence and attempts multiple robust extraction strategies:
         - Prefer text passed via a tool call named "send_message" (JSON-decoded arguments -> "message").
         - Ignore tool_return entries (typically non-content/status).
         - Fall back to assistant/assistant_message content, handling content represented as a plain string, a list of content blocks, objects with a `.text` attribute, or dicts with a "text" key.
         If no usable text is found or an error occurs, returns a short fallback sentence.
-        
+
         Parameters:
             response: An object with a `messages` iterable where each message may expose
                 attributes like `tool_calls`, `tool_return`, `message_type`, `role`, and `content`.
                 The function does not require a specific concrete type, but the object must match
                 the above shape.
-        
+
         Returns:
             str: The extracted message text, or a generic fallback string if extraction fails.
         """
@@ -690,7 +682,9 @@ class SwarmManager:
                     break
 
             if not message_text:
-                message_text = "I have some thoughts but I'm having trouble phrasing them."
+                message_text = (
+                    "I have some thoughts but I'm having trouble phrasing them."
+                )
 
         except Exception as e:
             message_text = "I have some thoughts but I'm having trouble phrasing them."
@@ -701,26 +695,26 @@ class SwarmManager:
     def _hybrid_turn(self, motivated_agents: list, topic: str):
         """
         Run a two-phase hybrid turn where motivated agents first give independent initial thoughts and then respond to each other's ideas.
-        
+
         Phase 1 (initial responses): Each agent in `motivated_agents` is asked to produce an independent short response using the current conversation history. Responses are validated for basic quality; if an agent fails to produce usable text a fallback message based on the agent's expertise is used. Initial replies are appended to the manager's conversation_history and forwarded to the secretary (if present).
-        
+
         Phase 2 (response round): All agents are given a brief instruction to react to the group's initial thoughts. Each motivated agent is then asked to produce a follow-up response that considers others' inputs; those replies are appended to conversation_history and sent to the secretary.
-        
+
         Side effects:
         - Appends agent messages (or fallbacks) to self.conversation_history.
         - Sends prompt messages to agents via self.client.agents.messages.create.
         - Notifies the secretary of agent responses via self._notify_secretary_agent_response.
         - Logs timing, slow responses, and errors.
-        
+
         Parameters:
             motivated_agents (list): Ordered list of agent wrappers (SPDSAgent-like) selected to participate in this turn; each agent is expected to expose `.name`, `.agent.id`, `.priority_score`, `.speak(...)`, and optionally `.expertise`.
             topic (str): The meeting topic used to steer fallback prompts and initial prompting.
-        
+
         Returns:
             None
         """
         turn_start_time = time.time()
-        
+
         # Phase 1: Independent responses
         self._emit("\n=== 🧠 INITIAL RESPONSES ===")
         initial_responses = []
@@ -762,7 +756,9 @@ class SwarmManager:
                         break
                     elif attempt < max_attempts - 1:
                         # Poor response, retry once
-                        self._emit("Weak response detected, retrying...", level="warning")
+                        self._emit(
+                            "Weak response detected, retrying...", level="warning"
+                        )
                         time.sleep(0.5)
                         # Send a more specific prompt
                         self._call_agent_message_create(
@@ -872,13 +868,13 @@ class SwarmManager:
     def _all_speak_turn(self, motivated_agents: list, topic: str):
         """
         Have every motivated agent speak in descending priority order, appending each response to the shared conversation history.
-        
+
         For each agent in motivated_agents (expected to be SPDSAgent-like objects with a .name and .priority_score):
         - Requests a response using the current conversation_history so later speakers can see earlier replies.
         - Extracts a text response, appends "AgentName: message" to self.conversation_history, and notifies the secretary (if present).
         - Propagates the response to all agents' memories via _update_agent_memories.
         - Logs timing and slow-response warnings.
-        
+
         Side effects:
         - Mutates self.conversation_history.
         - Calls agent.speak, self._extract_agent_response, self._update_agent_memories, and self._notify_secretary_agent_response (external I/O/LLM calls).
@@ -975,16 +971,16 @@ class SwarmManager:
     def _pure_priority_turn(self, motivated_agents: list, topic: str):
         """
         Have the single highest-priority motivated agent speak once and record the result.
-        
+
         This picks the first agent from `motivated_agents` (expected to be pre-sorted by priority),
         requests a response using the manager's current conversation_history, appends the agent's
         utterance to conversation_history, and notifies the secretary (if enabled). On error,
         a short fallback message is recorded and the secretary is notified.
-        
+
         Parameters:
             motivated_agents (list): List of motivated agent wrappers, highest priority first.
             topic (str): Meeting topic (not directly used by this turn handler).
-        
+
         Returns:
             None
         """
@@ -1025,12 +1021,12 @@ class SwarmManager:
     def _start_meeting(self, topic: str):
         """
         Initialize meeting context for the swarm and notify the secretary if enabled.
-        
+
         Adds a system-level line with the provided topic to the manager's conversation_history.
         If a SecretaryAgent is present, calls its start_meeting(...) with the topic, the current
         agent names as participants, and the manager's meeting_type, and records the current
         conversation_mode in the secretary's meeting_metadata.
-        
+
         Parameters:
             topic (str): Human-readable meeting topic to add to conversation history and pass to the secretary.
         """
@@ -1044,8 +1040,8 @@ class SwarmManager:
                 "meeting_type": self.meeting_type,
                 "conversation_mode": self.conversation_mode,
                 "agent_count": len(self.agents),
-                "secretary_enabled": getattr(self, "enable_secretary", False)
-            }
+                "secretary_enabled": getattr(self, "enable_secretary", False),
+            },
         )
 
         # Topic is naturally included in conversation_history
@@ -1062,12 +1058,14 @@ class SwarmManager:
             )
 
             # Set conversation mode in metadata
-            self.secretary.meeting_metadata["conversation_mode"] = self.conversation_mode
+            self.secretary.meeting_metadata[
+                "conversation_mode"
+            ] = self.conversation_mode
 
     def _end_meeting(self):
         """
         Mark the meeting as finished and, if a secretary is present, present export options.
-        
+
         If a SecretaryAgent is enabled, logs a meeting-end separator/message and invokes
         _self._offer_export_options()_ to present export/export-command choices to the user.
         If no secretary is configured, this method is a no-op.
@@ -1079,8 +1077,8 @@ class SwarmManager:
                 "meeting_type": self.meeting_type,
                 "conversation_mode": self.conversation_mode,
                 "secretary_enabled": getattr(self, "enable_secretary", False),
-                "conversation_history_length": len(self.conversation_history)
-            }
+                "conversation_history_length": len(self.conversation_history),
+            },
         )
 
         if self.secretary:
@@ -1091,19 +1089,19 @@ class SwarmManager:
     def _handle_secretary_commands(self, user_input: str) -> bool:
         """
         Parse and execute in-chat secretary and memory-related slash commands.
-        
+
         Accepts a user input string (expected to start with '/') and handles commands such as:
         - memory-status / memory-awareness: produce agent memory summaries and awareness checks (available even when secretary is not enabled).
         - minutes / export / formal / casual / action-item / stats / help: delegate to the SecretaryAgent when enabled.
-        
+
         Side effects:
         - May print summaries to stdout and call methods on the secretary (generate_minutes, set_mode, add_action_item, get_conversation_stats, etc.).
         - Logs informational or warning messages via the module logger.
         - If the secretary is not enabled, certain commands (minutes, export, formal, casual, action-item) will be intercepted and a warning is logged instead.
-        
+
         Parameters:
             user_input (str): Raw user input; must start with '/' to be treated as a command.
-        
+
         Returns:
             bool: True if the input was recognized and handled as a command (including when it is recognized but the secretary is disabled), False otherwise.
         """
@@ -1198,7 +1196,7 @@ class SwarmManager:
     def _handle_export_command(self, args: str):
         """
         Handle an export command by generating meeting artifacts in the requested format.
-        
+
         Collects current meeting data from the secretary (metadata, conversation log, action items, decisions, stats) and delegates to ExportManager to produce one of the supported outputs. Supported format strings (case-insensitive) are:
         - "minutes" or "formal": export formal meeting minutes
         - "casual": export casual-style minutes
@@ -1206,9 +1204,9 @@ class SwarmManager:
         - "actions": export action items
         - "summary": export an executive summary
         - "all": export a complete package (multiple files)
-        
+
         If no secretary is available the call is ignored and a warning is logged. Errors during export are caught and logged; the function does not raise.
-        
+
         Parameters:
             args (str): Optional format specifier (e.g., "minutes", "transcript"); defaults to "minutes" when falsy.
         """
@@ -1270,9 +1268,9 @@ class SwarmManager:
     def _offer_export_options(self):
         """
         Prompt the user to choose end-of-meeting export options and dispatch the chosen export command to the secretary.
-        
+
         If a SecretaryAgent is present, this presents a list of available export commands (minutes, casual, transcript, actions, summary, all), reads a single user choice from stdin, and forwards any input that starts with "/" to _handle_secretary_commands. EOF or KeyboardInterrupt during input are ignored and the method returns. If no secretary is configured, the method returns immediately.
-        
+
         No return value.
         """
         if not self.secretary:
@@ -1299,7 +1297,7 @@ class SwarmManager:
     def _show_secretary_help(self):
         """
         Display interactive help text describing secretary and memory-related commands.
-        
+
         Shows available commands for memory-awareness utilities (always available), secretary actions (minutes, export, mode switches, action items, stats — applicable when a secretary is enabled), and general help. The help text is user-facing guidance; it does not perform any command actions itself.
         """
         print(
@@ -1317,17 +1315,18 @@ Secretary Commands (When Secretary Enabled):
   /casual            - Switch to casual meeting notes mode
   /action-item       - Add an action item
   /stats             - Show conversation statistics
-  
+
 General:
   /help              - Show this help message
 
 Note: Memory awareness information respects agent autonomy and provides neutral facts only.
-        """)
+        """
+        )
 
     def _notify_secretary_agent_response(self, agent_name: str, message: str):
         """
         Notify the secretary agent about a single agent's message.
-        
+
         Parameters:
             agent_name (str): Display name of the agent who produced the message.
             message (str): The textual content of the agent's response.
@@ -1338,9 +1337,9 @@ Note: Memory awareness information respects agent autonomy and provides neutral 
     def check_memory_awareness_status(self, silent: bool = False) -> None:
         """
         Check whether any agents have generated memory-awareness information and, when not silent, display it.
-        
+
         For each agent this calls create_memory_awareness_for_agent(self.client, agent.agent). If that call returns a non-empty awareness message and silent is False, the message is presented with a short contextual header and disclaimer that agents retain autonomy over memory decisions.
-        
+
         Parameters:
             silent (bool): If True, perform checks quietly (suppress any console output); useful for background or programmatic checks.
         """
@@ -1386,7 +1385,7 @@ Note: Memory awareness information respects agent autonomy and provides neutral 
                 context_info = letta_call(
                     "agents.context.retrieve",
                     self.client.agents.context.retrieve,
-                    agent_id=agent.agent.id
+                    agent_id=agent.agent.id,
                 )
                 recall_count = context_info.get("num_recall_memory", 0)
                 archival_count = context_info.get("num_archival_memory", 0)

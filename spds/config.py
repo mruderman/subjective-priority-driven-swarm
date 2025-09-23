@@ -276,7 +276,7 @@ LETTA_RETRY_MAX_BACKOFF = float(os.getenv("LETTA_RETRY_MAX_BACKOFF", "5.0"))
 def get_letta_timeout_seconds() -> int:
     """
     Get the configured timeout for Letta API calls in seconds.
-    
+
     Returns:
         int: Timeout value in seconds (default: 30)
     """
@@ -286,7 +286,7 @@ def get_letta_timeout_seconds() -> int:
 def get_letta_max_retries() -> int:
     """
     Get the maximum number of retries for Letta API calls.
-    
+
     Returns:
         int: Maximum retry count (default: 3)
     """
@@ -296,7 +296,7 @@ def get_letta_max_retries() -> int:
 def get_letta_retry_base_delay() -> float:
     """
     Get the base delay for exponential backoff in seconds.
-    
+
     Returns:
         float: Base delay in seconds (default: 0.5)
     """
@@ -306,7 +306,7 @@ def get_letta_retry_base_delay() -> float:
 def get_letta_retry_factor() -> float:
     """
     Get the exponential backoff factor.
-    
+
     Returns:
         float: Backoff multiplier (default: 2.0)
     """
@@ -316,7 +316,7 @@ def get_letta_retry_factor() -> float:
 def get_letta_retry_jitter() -> float:
     """
     Get the jitter range for retry delays in seconds.
-    
+
     Returns:
         float: Jitter range in seconds (default: 0.1)
     """
@@ -326,7 +326,7 @@ def get_letta_retry_jitter() -> float:
 def get_letta_retry_max_backoff() -> float:
     """
     Get the maximum backoff delay in seconds.
-    
+
     Returns:
         float: Maximum backoff in seconds (default: 5.0)
     """
@@ -336,7 +336,7 @@ def get_letta_retry_max_backoff() -> float:
 def get_sessions_dir() -> Path:
     """
     Get the directory for storing session data.
-    
+
     Returns:
         Path: Directory path for sessions (default: "exports/sessions")
     """
@@ -346,7 +346,7 @@ def get_sessions_dir() -> Path:
 def get_session_autoflush_events() -> int:
     """
     Get the number of events to batch before flushing to disk.
-    
+
     Returns:
         int: Number of events to batch (default: 1, flush every event)
     """
@@ -357,7 +357,7 @@ def get_session_autoflush_events() -> int:
 def get_integrations_enabled() -> bool:
     """
     Get whether integrations are enabled.
-    
+
     Returns:
         bool: True if integrations are enabled (default: False)
     """
@@ -367,7 +367,7 @@ def get_integrations_enabled() -> bool:
 def get_integrations_allow_fake_providers() -> bool:
     """
     Get whether fake providers are allowed for testing.
-    
+
     Returns:
         bool: True if fake providers are allowed (default: False)
     """

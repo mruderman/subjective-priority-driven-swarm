@@ -72,13 +72,13 @@ As the Queen coordinator, you must:
    - Coordinate strategy with swarm_think
 
 3. **QUEEN LEADERSHIP PATTERNS**:
-   
+
    - Focus on high-level planning and coordination
    - Delegate implementation details to workers
    - Monitor overall progress and adjust strategy
    - Make executive decisions when consensus fails
-   
-   
+
+
 
 4. **WORKER COORDINATION**:
    - Spawn workers based on task requirements
@@ -88,9 +88,9 @@ As the Queen coordinator, you must:
 
 5. **CONSENSUS MECHANISMS**:
    - Decisions require >50% worker agreement
-   
-   
-   
+
+
+
 
 6. **COLLECTIVE MEMORY**:
    - Store all important decisions in shared memory

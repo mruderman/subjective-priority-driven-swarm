@@ -36,7 +36,7 @@ python test_token_fixes.py
 # CLI interface
 python -m spds.main
 
-# Web GUI  
+# Web GUI
 cd swarms-web && python app.py
 ```
 

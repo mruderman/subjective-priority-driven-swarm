@@ -8,12 +8,13 @@ This test suite shows how the cache invalidation mechanism
 works in realistic scenarios.
 """
 
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from spds.profiles_schema import (
-    get_agent_profiles_validated,
     clear_profiles_cache,
+    get_agent_profiles_validated,
     get_profiles_cache_info,
 )
 
@@ -53,7 +54,7 @@ class TestCacheInvalidationIntegration:
                 "persona": "A new production agent",
                 "expertise": ["deployment", "scaling"],
                 "model": "anthropic/claude-3-5-sonnet",
-            }
+            },
         ]
 
         # Mock the config module to simulate runtime changes
@@ -62,7 +63,7 @@ class TestCacheInvalidationIntegration:
             config1 = get_agent_profiles_validated()
             assert len(config1.agents) == 1
             assert config1.agents[0].model == "openai/gpt-4"
-            
+
             # Verify cache is populated
             is_cached, fingerprint1 = get_profiles_cache_info()
             assert is_cached is True
@@ -74,7 +75,7 @@ class TestCacheInvalidationIntegration:
                 assert len(config2.agents) == 2
                 assert config2.agents[0].model == "openai/gpt-4.1"
                 assert config2.agents[1].name == "Production Agent 2"
-                
+
                 # Verify cache was invalidated and updated
                 is_cached2, fingerprint2 = get_profiles_cache_info()
                 assert is_cached2 is True
@@ -87,20 +88,32 @@ class TestCacheInvalidationIntegration:
         """
         # Initial profiles (e.g., default configuration)
         default_profiles = [
-            {"name": "Default Agent", "persona": "Default persona", "expertise": ["general"]}
+            {
+                "name": "Default Agent",
+                "persona": "Default persona",
+                "expertise": ["general"],
+            }
         ]
 
         # Custom profiles (e.g., loaded from user configuration file)
         custom_profiles = [
-            {"name": "Custom Agent 1", "persona": "Custom persona 1", "expertise": ["custom1"]},
-            {"name": "Custom Agent 2", "persona": "Custom persona 2", "expertise": ["custom2"]},
+            {
+                "name": "Custom Agent 1",
+                "persona": "Custom persona 1",
+                "expertise": ["custom1"],
+            },
+            {
+                "name": "Custom Agent 2",
+                "persona": "Custom persona 2",
+                "expertise": ["custom2"],
+            },
         ]
 
         # Step 1: Application starts with default profiles
         with patch("spds.config.AGENT_PROFILES", default_profiles):
             config1 = get_agent_profiles_validated()
             assert config1.agents[0].name == "Default Agent"
-            
+
             cache_info1 = get_profiles_cache_info()
             assert cache_info1[0] is True  # Cache populated
 
@@ -111,7 +124,7 @@ class TestCacheInvalidationIntegration:
             assert len(config2.agents) == 2
             assert config2.agents[0].name == "Custom Agent 1"
             assert config2.agents[1].name == "Custom Agent 2"
-            
+
             # Verify cache was automatically invalidated
             cache_info2 = get_profiles_cache_info()
             assert cache_info2[0] is True  # Cache repopulated
@@ -121,7 +134,7 @@ class TestCacheInvalidationIntegration:
         with patch("spds.config.AGENT_PROFILES", default_profiles):
             config3 = get_agent_profiles_validated()
             assert config3.agents[0].name == "Default Agent"
-            
+
             # Verify cache was invalidated again
             cache_info3 = get_profiles_cache_info()
             assert cache_info3[1] == cache_info1[1]  # Same fingerprint as step 1
@@ -134,9 +147,13 @@ class TestCacheInvalidationIntegration:
         config_profiles = [
             {"name": "Config Agent", "persona": "From config", "expertise": ["config"]}
         ]
-        
+
         explicit_profiles = [
-            {"name": "Explicit Agent", "persona": "From parameter", "expertise": ["explicit"]}
+            {
+                "name": "Explicit Agent",
+                "persona": "From parameter",
+                "expertise": ["explicit"],
+            }
         ]
 
         with patch("spds.config.AGENT_PROFILES", config_profiles):
@@ -163,7 +180,11 @@ class TestCacheInvalidationIntegration:
         while ensuring cache invalidation works correctly.
         """
         profiles = [
-            {"name": f"Agent {i}", "persona": f"Persona {i}", "expertise": [f"skill{i}"]}
+            {
+                "name": f"Agent {i}",
+                "persona": f"Persona {i}",
+                "expertise": [f"skill{i}"],
+            }
             for i in range(10)  # 10 agents
         ]
 

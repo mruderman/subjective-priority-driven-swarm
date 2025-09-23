@@ -34,7 +34,7 @@ Added explicit `max_tokens` parameter to all new agent creation:
 ```python
 # Get safe token limit for the model
 safe_max_tokens = config.MODEL_TOKEN_LIMITS.get(
-    agent_model, 
+    agent_model,
     {"safe_max": config.DEFAULT_MAX_TOKENS}
 )["safe_max"]
 
