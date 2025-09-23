@@ -39,6 +39,16 @@ const defaultSessionPayload = (): Required<CreateSessionPayload> => ({
   tags: ['playwright'],
 });
 
+/**
+ * Creates a session via the test API and returns its summary.
+ *
+ * The provided `overrides` are shallow-merged with the test `defaultSessionPayload`.
+ * The function asserts that the HTTP response is OK (will fail the test if not) and
+ * returns the parsed SessionSummary from the response body.
+ *
+ * @param overrides - Optional fields (e.g., `title`, `tags`) to override the default session payload.
+ * @returns The created session's summary as a `SessionSummary`.
+ */
 async function createSessionViaApi(
   request: APIRequestContext,
   overrides: CreateSessionPayload | undefined
@@ -49,6 +59,17 @@ async function createSessionViaApi(
   return (await response.json()) as SessionSummary;
 }
 
+/**
+ * Fetches sessions from the server API and returns them as SessionSummary objects.
+ *
+ * Sends a GET request to `/api/sessions` with an optional `limit` query parameter,
+ * asserts that the HTTP response is OK (test assertion), and returns the parsed JSON array.
+ *
+ * @param options - Optional settings:
+ *   - `limit`: maximum number of sessions to return; if omitted the server default is used.
+ * @returns An array of SessionSummary objects parsed from the response.
+ * @throws If the HTTP response is not OK — the function asserts `response.ok()` and will fail the test.
+ */
 async function listSessionsViaApi(
   request: APIRequestContext,
   options?: { limit?: number }
@@ -63,6 +84,17 @@ async function listSessionsViaApi(
   return (await response.json()) as SessionSummary[];
 }
 
+/**
+ * Creates an export for a session via the API.
+ *
+ * Sends a POST to `/api/sessions/{sessionId}/export` and returns the parsed
+ * CreateExportResponse from the server. The function asserts that the HTTP
+ * response is OK — the assertion will fail the calling test if the request
+ * does not succeed.
+ *
+ * @param sessionId - ID of the session to export
+ * @returns The server's CreateExportResponse object
+ */
 async function createSessionExportViaApi(
   request: APIRequestContext,
   sessionId: string
@@ -72,6 +104,14 @@ async function createSessionExportViaApi(
   return (await response.json()) as CreateExportResponse;
 }
 
+/**
+ * Retrieve the list of exports for a session via the API.
+ *
+ * @param sessionId - ID of the session whose exports should be listed.
+ * @param options - Optional query options.
+ * @param options.limit - Maximum number of exports to return.
+ * @returns An array of SessionExport objects for the given session.
+ */
 async function listSessionExportsViaApi(
   request: APIRequestContext,
   sessionId: string,
