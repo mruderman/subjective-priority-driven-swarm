@@ -30,6 +30,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from letta_client import Letta
 from letta_flask import LettaFlask, LettaFlaskConfig
 
+from playwright_fixtures import get_mock_agents
+
 from spds import config
 from spds.export_manager import ExportManager, export_session_to_json, export_session_to_markdown
 from spds.secretary_agent import SecretaryAgent
@@ -647,6 +649,9 @@ def chat():
 @app.route("/api/agents")
 def get_agents():
     """API endpoint to get available agents."""
+    if os.getenv("PLAYWRIGHT_TEST") == "1":
+        return jsonify({"agents": get_mock_agents()})
+
     try:
         # Initialize Letta client
         letta_password = config.get_letta_password()
