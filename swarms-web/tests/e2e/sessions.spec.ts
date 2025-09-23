@@ -38,6 +38,16 @@ const fulfillJson = (route: import('@playwright/test').Route, response: JsonResp
   });
 
 const parseJson = (request: Request) => {
+  try {
+    const fn = (request as unknown as { postDataJSON?: () => unknown }).postDataJSON;
+    if (typeof fn === 'function') {
+      const parsed = fn.call(request);
+      return parsed ?? {};
+    }
+  } catch {
+    /* ignore and fall through */
+  }
+
   const data = request.postData();
   if (!data) {
     return {};
@@ -45,7 +55,7 @@ const parseJson = (request: Request) => {
 
   try {
     return JSON.parse(data);
-  } catch (error) {
+  } catch {
     return {};
   }
 };
@@ -60,6 +70,7 @@ test.describe('Session management lifecycle', () => {
   let listResponseOverride: ((url: URL) => JsonResponse) | null;
   let createResponseOverride: ((payload: Record<string, unknown>) => JsonResponse) | null;
   let resumeResponseOverride: ((payload: Record<string, unknown>) => JsonResponse) | null;
+  let createSequence: number;
 
   const createRequests: Record<string, unknown>[] = [];
   test.beforeEach(async ({ page }) => {
@@ -68,6 +79,7 @@ test.describe('Session management lifecycle', () => {
     createResponseOverride = null;
     resumeResponseOverride = null;
     createRequests.length = 0;
+    createSequence = 0;
 
     await page.addInitScript(() => {
       class BootstrapToastStub {
@@ -149,8 +161,13 @@ test.describe('Session management lifecycle', () => {
         body: 'window.Alpine = window.Alpine || { start(){ /* noop */ } };',
       });
     });
-    await page.route('**/api/sessions', async (route) => {
+    await page.route('**/api/sessions*', async (route) => {
       const request = route.request();
+
+      if (request.method() === 'HEAD' || request.method() === 'OPTIONS') {
+        await route.fulfill({ status: 204 });
+        return;
+      }
 
       if (request.method() === 'GET') {
         const handler = listResponseOverride
@@ -182,8 +199,9 @@ test.describe('Session management lifecycle', () => {
           ? createResponseOverride
           : (body: Record<string, unknown>): JsonResponse => {
               const nowIso = '2024-02-01T10:00:00Z';
+              createSequence += 1;
               const newSession: SessionMeta = {
-                id: `session-${String(Date.now())}-${String(Math.floor(Math.random() * 1e4)).padStart(4, '0')}`,
+                id: `session-created-${String(createSequence).padStart(4, '0')}`,
                 title: typeof body.title === 'string' && body.title.trim() !== '' ? body.title : null,
                 created_at: nowIso,
                 last_updated: nowIso,
@@ -250,6 +268,22 @@ test.describe('Session management lifecycle', () => {
     await expect(page.locator('#sessions-container').locator('table')).toHaveCount(0);
   });
 
+  test('respects limit query parameter when listing sessions', async ({ page }) => {
+    await page.goto('/sessions');
+
+    const items = await page.evaluate<SessionMeta[]>(async () => {
+      const response = await fetch('/api/sessions?limit=1');
+      if (!response.ok) {
+        throw new Error(`Unexpected status: ${response.status}`);
+      }
+
+      return (await response.json()) as SessionMeta[];
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject(baseSessions[0]);
+  });
+
   test('surfaces backend errors when loading sessions fails', async ({ page }) => {
     listResponseOverride = () => ({ status: 500, body: { error: 'cannot list sessions' } });
 
@@ -267,8 +301,8 @@ test.describe('Session management lifecycle', () => {
 
     await expectToast(page, 'Session created successfully!');
 
-    const titles = page.locator('tbody#sessions-table-body tr.session-row td:nth-child(2)');
-    await expect(titles.first()).toContainText('Product Planning');
+    const rows = page.locator('tbody#sessions-table-body tr.session-row');
+    await expect(rows.first()).toContainText('Product Planning');
 
     expect(createRequests).toHaveLength(1);
     expect(createRequests[0]).toMatchObject({
@@ -301,7 +335,7 @@ test.describe('Session management lifecycle', () => {
   });
 
   test('resumes a session successfully and redirects to chat', async ({ page }) => {
-    await page.route('**/chat', async (route) => {
+    await page.route('**/chat*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'text/html',
@@ -319,7 +353,7 @@ test.describe('Session management lifecycle', () => {
     await page.locator('button.resume-session').first().click();
 
     await expectToast(page, 'Session resumed successfully!');
-    await page.waitForURL('**/chat');
+    await page.waitForURL('**/chat*');
   });
 
   test('shows message when attempting to resume without providing an ID', async ({ page }) => {
@@ -330,8 +364,8 @@ test.describe('Session management lifecycle', () => {
     await page.locator('button.resume-session').first().click();
 
     await expectToast(page, 'Error resuming session: id is required');
-    await page.waitForTimeout(1100);
-    expect(page.url()).toContain('/sessions');
+    await expect(page).not.toHaveURL('**/chat*', { timeout: 2000 });
+    await expect(page).toHaveURL(/\/sessions(\?.*)?$/);
   });
 
   test('surfaces not found errors when resuming unknown sessions', async ({ page }) => {
@@ -342,8 +376,8 @@ test.describe('Session management lifecycle', () => {
     await page.locator('button.resume-session').first().click();
 
     await expectToast(page, 'Error resuming session: Session not found');
-    await page.waitForTimeout(1100);
-    expect(page.url()).toContain('/sessions');
+    await expect(page).not.toHaveURL('**/chat*', { timeout: 2000 });
+    await expect(page).toHaveURL(/\/sessions(\?.*)?$/);
   });
 
   test('shows server error messages when resume fails unexpectedly', async ({ page }) => {
@@ -354,8 +388,8 @@ test.describe('Session management lifecycle', () => {
     await page.locator('button.resume-session').first().click();
 
     await expectToast(page, 'Error resuming session: boom');
-    await page.waitForTimeout(1100);
-    expect(page.url()).toContain('/sessions');
+    await expect(page).not.toHaveURL('**/chat*', { timeout: 2000 });
+    await expect(page).toHaveURL(/\/sessions(\?.*)?$/);
   });
 
   test('refreshes the list to reflect deleted sessions', async ({ page }) => {
