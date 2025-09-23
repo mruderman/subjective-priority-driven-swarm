@@ -7,6 +7,7 @@ It intentionally implements a no-op behavior suitable for local testing
 and Playwright-driven E2E tests where the external package is not
 available or fails to install due to packaging metadata issues.
 """
+
 from dataclasses import dataclass
 from typing import Optional
 

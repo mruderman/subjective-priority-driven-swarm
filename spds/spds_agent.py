@@ -510,9 +510,11 @@ IMPORTANCE_TO_GROUP: X
                     "has_documents": any(
                         att.get("kind") == "document" for att in attachments
                     ),
-                    "message_preview": conversation_history[:100]
-                    if conversation_history
-                    else topic[:100],
+                    "message_preview": (
+                        conversation_history[:100]
+                        if conversation_history
+                        else topic[:100]
+                    ),
                 },
             )
 

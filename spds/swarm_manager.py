@@ -1058,9 +1058,9 @@ class SwarmManager:
             )
 
             # Set conversation mode in metadata
-            self.secretary.meeting_metadata[
-                "conversation_mode"
-            ] = self.conversation_mode
+            self.secretary.meeting_metadata["conversation_mode"] = (
+                self.conversation_mode
+            )
 
     def _end_meeting(self):
         """
