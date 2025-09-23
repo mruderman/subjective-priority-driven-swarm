@@ -146,7 +146,8 @@ test.beforeEach(async ({ page }) => {
 
               const trimmedMessage = message.trim();
               if (trimmedMessage.startsWith('/')) {
-                switch (trimmedMessage) {
+                const command = trimmedMessage.split(/\s+/)[0];
+                switch (command) {
                   case '/minutes':
                     setTimeout(() => {
                       const minutesContainer = document.getElementById('secretary-minutes');
