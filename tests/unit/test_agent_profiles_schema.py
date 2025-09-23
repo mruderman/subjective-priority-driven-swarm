@@ -8,11 +8,11 @@ from pydantic import ValidationError
 from spds.profiles_schema import (
     AgentProfile,
     ProfilesConfig,
+    _compute_profiles_fingerprint,
     clear_profiles_cache,
     get_agent_profiles_validated,
     get_profiles_cache_info,
     validate_agent_profiles,
-    _compute_profiles_fingerprint,
 )
 
 
@@ -461,7 +461,7 @@ class TestCacheInvalidation:
 
         fingerprint1 = _compute_profiles_fingerprint(profiles)
         fingerprint2 = _compute_profiles_fingerprint(profiles)
-        
+
         assert fingerprint1 == fingerprint2
         assert isinstance(fingerprint1, str)
         assert len(fingerprint1) == 64  # SHA256 hex digest length
@@ -477,22 +477,32 @@ class TestCacheInvalidation:
 
         fingerprint1 = _compute_profiles_fingerprint(profiles1)
         fingerprint2 = _compute_profiles_fingerprint(profiles2)
-        
+
         assert fingerprint1 != fingerprint2
 
     def test_fingerprint_order_insensitive_for_dict_keys(self):
         """Test that dictionary key order doesn't affect fingerprint."""
         # Same data, different key order
         profiles1 = [
-            {"name": "Agent", "persona": "Test", "expertise": ["skill"], "model": "gpt-4"}
+            {
+                "name": "Agent",
+                "persona": "Test",
+                "expertise": ["skill"],
+                "model": "gpt-4",
+            }
         ]
         profiles2 = [
-            {"expertise": ["skill"], "name": "Agent", "model": "gpt-4", "persona": "Test"}
+            {
+                "expertise": ["skill"],
+                "name": "Agent",
+                "model": "gpt-4",
+                "persona": "Test",
+            }
         ]
 
         fingerprint1 = _compute_profiles_fingerprint(profiles1)
         fingerprint2 = _compute_profiles_fingerprint(profiles2)
-        
+
         assert fingerprint1 == fingerprint2
 
     def test_fingerprint_order_sensitive_for_list_order(self):
@@ -508,21 +518,25 @@ class TestCacheInvalidation:
 
         fingerprint1 = _compute_profiles_fingerprint(profiles1)
         fingerprint2 = _compute_profiles_fingerprint(profiles2)
-        
+
         assert fingerprint1 != fingerprint2
 
     def test_cache_invalidation_on_data_change(self, monkeypatch):
         """Test that cache is invalidated when source data changes."""
         # Setup initial profiles
         initial_profiles = [
-            {"name": "Initial Agent", "persona": "Initial persona", "expertise": ["initial"]}
+            {
+                "name": "Initial Agent",
+                "persona": "Initial persona",
+                "expertise": ["initial"],
+            }
         ]
         monkeypatch.setattr("spds.config.AGENT_PROFILES", initial_profiles)
 
         # First call should cache
         config1 = get_agent_profiles_validated()
         assert config1.agents[0].name == "Initial Agent"
-        
+
         # Verify cache info
         is_cached, fingerprint = get_profiles_cache_info()
         assert is_cached is True
@@ -530,14 +544,18 @@ class TestCacheInvalidation:
 
         # Change the profiles
         changed_profiles = [
-            {"name": "Changed Agent", "persona": "Changed persona", "expertise": ["changed"]}
+            {
+                "name": "Changed Agent",
+                "persona": "Changed persona",
+                "expertise": ["changed"],
+            }
         ]
         monkeypatch.setattr("spds.config.AGENT_PROFILES", changed_profiles)
 
         # Second call should detect change and invalidate cache
         config2 = get_agent_profiles_validated()
         assert config2.agents[0].name == "Changed Agent"
-        
+
         # Verify cache was updated
         is_cached2, fingerprint2 = get_profiles_cache_info()
         assert is_cached2 is True
@@ -547,7 +565,11 @@ class TestCacheInvalidation:
     def test_cache_reuse_when_data_unchanged(self, monkeypatch):
         """Test that cache is reused when data hasn't changed."""
         profiles = [
-            {"name": "Unchanged Agent", "persona": "Unchanged", "expertise": ["unchanged"]}
+            {
+                "name": "Unchanged Agent",
+                "persona": "Unchanged",
+                "expertise": ["unchanged"],
+            }
         ]
         monkeypatch.setattr("spds.config.AGENT_PROFILES", profiles)
 
@@ -568,10 +590,18 @@ class TestCacheInvalidation:
     def test_cache_invalidation_with_explicit_source(self):
         """Test cache invalidation when using explicit source parameter."""
         source1 = [
-            {"name": "Source 1 Agent", "persona": "From source 1", "expertise": ["source1"]}
+            {
+                "name": "Source 1 Agent",
+                "persona": "From source 1",
+                "expertise": ["source1"],
+            }
         ]
         source2 = [
-            {"name": "Source 2 Agent", "persona": "From source 2", "expertise": ["source2"]}
+            {
+                "name": "Source 2 Agent",
+                "persona": "From source 2",
+                "expertise": ["source2"],
+            }
         ]
 
         # First call with source1
@@ -649,7 +679,7 @@ class TestCacheInvalidation:
                 "expertise": ["skill1", "skill2", "skill3"],
                 "model": "openai/gpt-4",
                 "embedding": "openai/text-embedding-ada-002",
-                "custom_field": {"nested": {"value": 123}}
+                "custom_field": {"nested": {"value": 123}},
             }
         ]
         monkeypatch.setattr("spds.config.AGENT_PROFILES", initial_profiles)
@@ -665,7 +695,7 @@ class TestCacheInvalidation:
                 "expertise": ["skill1", "skill2", "skill3"],
                 "model": "openai/gpt-4",
                 "embedding": "openai/text-embedding-ada-002",
-                "custom_field": {"nested": {"value": 456}}  # Changed nested value
+                "custom_field": {"nested": {"value": 456}},  # Changed nested value
             }
         ]
         monkeypatch.setattr("spds.config.AGENT_PROFILES", changed_profiles)
@@ -689,10 +719,10 @@ class TestCacheInvalidation:
         invalid_profiles = [
             {"name": "", "persona": "Invalid", "expertise": ["invalid"]}  # Empty name
         ]
-        
+
         with pytest.raises(ValueError) as exc_info:
             get_agent_profiles_validated(invalid_profiles)
-        
+
         assert "cannot be empty" in str(exc_info.value)
 
     def test_get_profiles_cache_info_functionality(self):
@@ -705,7 +735,7 @@ class TestCacheInvalidation:
         # After caching
         profiles = [{"name": "Test", "persona": "Test", "expertise": ["test"]}]
         get_agent_profiles_validated(profiles)
-        
+
         is_cached, fingerprint = get_profiles_cache_info()
         assert is_cached is True
         assert fingerprint is not None

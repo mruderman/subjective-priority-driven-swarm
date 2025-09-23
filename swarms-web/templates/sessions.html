@@ -155,7 +155,7 @@
             <h1 class="mb-4">
                 <i class="bi bi-list-ul"></i> Session Management
             </h1>
-            
+
             <!-- New Session Form -->
             <div class="new-session-form">
                 <h5 class="mb-3">Create New Session</h5>
@@ -164,14 +164,14 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="session-title" class="form-label">Session Title (Optional)</label>
-                                <input type="text" class="form-control" id="session-title" 
+                                <input type="text" class="form-control" id="session-title"
                                        placeholder="Enter a descriptive title for your session">
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="session-tags" class="form-label">Tags (Optional)</label>
-                                <input type="text" class="form-control" id="session-tags" 
+                                <input type="text" class="form-control" id="session-tags"
                                        placeholder="Enter tags separated by commas">
                                 <div class="form-text">Separate multiple tags with commas</div>
                             </div>
@@ -187,7 +187,7 @@
                     </div>
                 </form>
             </div>
-            
+
             <!-- Sessions List -->
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -205,11 +205,11 @@
                         </div>
                         <p class="mt-2 text-muted">Loading sessions...</p>
                     </div>
-                    
+
                     <div id="sessions-container">
                         <!-- Sessions will be loaded here -->
                     </div>
-                    
+
                     <div class="empty-state" id="empty-state" style="display: none;">
                         <i class="bi bi-inbox display-4 text-muted"></i>
                         <h5 class="text-muted mt-3">No sessions found</h5>
@@ -217,7 +217,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Exports Section -->
             <div class="exports-section" id="exports-section">
                 <div class="card">
@@ -237,11 +237,11 @@
                             </div>
                             <span class="ms-2">Loading exports...</span>
                         </div>
-                        
+
                         <div id="exports-container">
                             <!-- Exports will be loaded here -->
                         </div>
-                        
+
                         <div class="exports-empty" id="exports-empty" style="display: none;">
                             <i class="bi bi-inbox display-6 text-muted"></i>
                             <p class="text-muted mt-2">No exports found for this session</p>
@@ -267,12 +267,12 @@ class SessionManager {
     constructor() {
         this.init();
     }
-    
+
     init() {
         this.loadSessions();
         this.setupEventListeners();
     }
-    
+
     setupEventListeners() {
         // New session form
         const newSessionForm = document.getElementById('new-session-form');
@@ -282,7 +282,7 @@ class SessionManager {
                 this.createSession();
             });
         }
-        
+
         // Refresh button
         const refreshBtn = document.getElementById('refresh-sessions');
         if (refreshBtn) {
@@ -291,50 +291,50 @@ class SessionManager {
             });
         }
     }
-    
+
     async loadSessions() {
         const container = document.getElementById('sessions-container');
         const loadingSpinner = document.getElementById('loading-spinner');
         const emptyState = document.getElementById('empty-state');
-        
+
         // Show loading state
         if (loadingSpinner) loadingSpinner.style.display = 'block';
         if (container) container.innerHTML = '';
         if (emptyState) emptyState.style.display = 'none';
-        
+
         try {
             const response = await fetch('/api/sessions');
             const sessions = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(sessions.error || 'Failed to load sessions');
             }
-            
+
             // Hide loading state
             if (loadingSpinner) loadingSpinner.style.display = 'none';
-            
+
             if (sessions.length === 0) {
                 if (emptyState) emptyState.style.display = 'block';
                 return;
             }
-            
+
             this.renderSessions(sessions);
-            
+
         } catch (error) {
             console.error('Error loading sessions:', error);
             if (loadingSpinner) loadingSpinner.style.display = 'none';
             this.showToast('Error loading sessions: ' + error.message, 'error');
         }
     }
-    
+
     renderSessions(sessions) {
         const container = document.getElementById('sessions-container');
         if (!container) return;
-        
+
         // Create table
         const table = document.createElement('div');
         table.className = 'table-responsive';
-        
+
         table.innerHTML = `
             <table class="table table-hover">
                 <thead>
@@ -351,9 +351,9 @@ class SessionManager {
                 </tbody>
             </table>
         `;
-        
+
         container.appendChild(table);
-        
+
         // Render session rows
         const tbody = document.getElementById('sessions-table-body');
         sessions.forEach(session => {
@@ -361,24 +361,24 @@ class SessionManager {
             tbody.appendChild(row);
         });
     }
-    
+
     createSessionRow(session) {
         const row = document.createElement('tr');
         row.className = 'session-row';
-        
+
         const shortId = session.id.substring(0, 8);
         const createdDate = new Date(session.created_at).toLocaleString();
         const updatedDate = new Date(session.last_updated).toLocaleString();
-        
-        const tagsHtml = session.tags.length > 0 
+
+        const tagsHtml = session.tags.length > 0
             ? session.tags.map(tag => `<span class="badge bg-secondary">${tag}</span>`).join(' ')
             : '<span class="text-muted">-</span>';
-        
+
         row.innerHTML = `
             <td>
                 <div class="d-flex align-items-center">
                     <span class="session-id" title="${session.id}">${shortId}</span>
-                    <button class="btn btn-sm btn-outline-secondary copy-btn ms-2" 
+                    <button class="btn btn-sm btn-outline-secondary copy-btn ms-2"
                             data-id="${session.id}" title="Copy full ID">
                         <i class="bi bi-clipboard"></i>
                     </button>
@@ -405,13 +405,13 @@ class SessionManager {
                 </div>
             </td>
         `;
-        
+
         // Add event listeners
         this.setupRowEventListeners(row, session);
-        
+
         return row;
     }
-    
+
     setupRowEventListeners(row, session) {
         // Copy button
         const copyBtn = row.querySelector('.copy-btn');
@@ -421,7 +421,7 @@ class SessionManager {
                 this.copyToClipboard(session.id, copyBtn);
             });
         }
-        
+
         // Resume button
         const resumeBtn = row.querySelector('.resume-session');
         if (resumeBtn) {
@@ -430,7 +430,7 @@ class SessionManager {
                 this.resumeSession(session.id);
             });
         }
-        
+
         // View exports button
         const viewExportsBtn = row.querySelector('.view-exports');
         if (viewExportsBtn) {
@@ -439,7 +439,7 @@ class SessionManager {
                 this.showExports(session.id, session.title);
             });
         }
-        
+
         // Export now button
         const exportNowBtn = row.querySelector('.export-now');
         if (exportNowBtn) {
@@ -449,15 +449,15 @@ class SessionManager {
             });
         }
     }
-    
+
     async createSession() {
         const titleInput = document.getElementById('session-title');
         const tagsInput = document.getElementById('session-tags');
-        
+
         const title = titleInput ? titleInput.value.trim() : '';
         const tagsText = tagsInput ? tagsInput.value.trim() : '';
         const tags = tagsText ? tagsText.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
-        
+
         try {
             const response = await fetch('/api/sessions', {
                 method: 'POST',
@@ -466,28 +466,28 @@ class SessionManager {
                 },
                 body: JSON.stringify({ title, tags })
             });
-            
+
             const result = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(result.error || 'Failed to create session');
             }
-            
+
             this.showToast('Session created successfully!', 'success');
-            
+
             // Clear form
             if (titleInput) titleInput.value = '';
             if (tagsInput) tagsInput.value = '';
-            
+
             // Reload sessions list
             this.loadSessions();
-            
+
         } catch (error) {
             console.error('Error creating session:', error);
             this.showToast('Error creating session: ' + error.message, 'error');
         }
     }
-    
+
     async resumeSession(sessionId) {
         try {
             const response = await fetch('/api/sessions/resume', {
@@ -497,19 +497,19 @@ class SessionManager {
                 },
                 body: JSON.stringify({ id: sessionId })
             });
-            
+
             const result = await response.json();
-            
+
             if (!response.ok) {
                 if (response.status === 404) {
                     throw new Error('Session not found');
                 }
                 throw new Error(result.error || 'Failed to resume session');
             }
-            
+
             if (result.ok) {
                 this.showToast('Session resumed successfully!', 'success');
-                
+
                 // Redirect to chat page after a short delay
                 setTimeout(() => {
                     window.location.href = '/chat';
@@ -517,20 +517,20 @@ class SessionManager {
             } else {
                 throw new Error(result.error || 'Failed to resume session');
             }
-            
+
         } catch (error) {
             console.error('Error resuming session:', error);
             this.showToast('Error resuming session: ' + error.message, 'error');
         }
     }
-    
+
     copyToClipboard(text, button) {
         navigator.clipboard.writeText(text).then(() => {
             // Visual feedback
             const originalHtml = button.innerHTML;
             button.innerHTML = '<i class="bi bi-check"></i>';
             button.classList.add('copied');
-            
+
             setTimeout(() => {
                 button.innerHTML = originalHtml;
                 button.classList.remove('copied');
@@ -540,7 +540,7 @@ class SessionManager {
             this.showToast('Failed to copy to clipboard', 'error');
         });
     }
-    
+
     showToast(message, type = 'info') {
         // Use the same toast system as the main app
         if (window.swarmsApp && window.swarmsApp.showToast) {
@@ -549,32 +549,32 @@ class SessionManager {
             // Fallback toast implementation
             const toastContainer = document.getElementById('toast-container');
             if (!toastContainer) return;
-            
+
             const toast = document.createElement('div');
             toast.className = `toast align-items-center text-white bg-${this.getBootstrapColorClass(type)} border-0`;
             toast.setAttribute('role', 'alert');
-            
+
             toast.innerHTML = `
                 <div class="d-flex">
                     <div class="toast-body">
                         ${message}
                     </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" 
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto"
                             data-bs-dismiss="toast"></button>
                 </div>
             `;
-            
+
             toastContainer.appendChild(toast);
-            
+
             const bsToast = new bootstrap.Toast(toast);
             bsToast.show();
-            
+
             toast.addEventListener('hidden.bs.toast', () => {
                 toast.remove();
             });
         }
     }
-    
+
     getBootstrapColorClass(type) {
         const colorMap = {
             'success': 'success',
@@ -584,7 +584,7 @@ class SessionManager {
         };
         return colorMap[type] || 'primary';
     }
-    
+
     // Export-related methods
     async showExports(sessionId, sessionTitle) {
         const exportsSection = document.getElementById('exports-section');
@@ -592,27 +592,27 @@ class SessionManager {
         const exportsLoading = document.getElementById('exports-loading');
         const exportsEmpty = document.getElementById('exports-empty');
         const exportsSessionTitle = document.getElementById('exports-session-title');
-        
+
         if (!exportsSection || !exportsContainer) return;
-        
+
         // Show loading state
         exportsSection.classList.add('active');
         exportsLoading.style.display = 'block';
         exportsContainer.innerHTML = '';
         exportsEmpty.style.display = 'none';
         exportsSessionTitle.textContent = `(${sessionTitle || 'Untitled Session'})`;
-        
+
         try {
             const response = await fetch(`/api/sessions/${sessionId}/exports`);
             const exports = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(exports.error || 'Failed to load exports');
             }
-            
+
             // Hide loading state
             exportsLoading.style.display = 'none';
-            
+
             if (exports.length === 0) {
                 exportsEmpty.style.display = 'block';
                 // Set up the "create first export" button
@@ -622,39 +622,39 @@ class SessionManager {
                 }
                 return;
             }
-            
+
             this.renderExports(exports, sessionId);
-            
+
         } catch (error) {
             console.error('Error loading exports:', error);
             exportsLoading.style.display = 'none';
             this.showToast('Error loading exports: ' + error.message, 'error');
         }
     }
-    
+
     renderExports(exports, sessionId) {
         const container = document.getElementById('exports-container');
         if (!container) return;
-        
+
         container.innerHTML = '<div class="exports-list"></div>';
         const exportsList = container.querySelector('.exports-list');
-        
+
         exports.forEach(exportItem => {
             const exportElement = this.createExportElement(exportItem, sessionId);
             exportsList.appendChild(exportElement);
         });
     }
-    
+
     createExportElement(exportItem, sessionId) {
         const div = document.createElement('div');
         div.className = 'export-item';
-        
+
         const createdDate = new Date(exportItem.created_at).toLocaleString();
         const sizeKB = Math.round(exportItem.size_bytes / 1024);
-        
+
         const kindIcon = exportItem.kind === 'json' ? '📊' : '📝';
         const kindLabel = exportItem.kind === 'json' ? 'JSON Summary' : 'Markdown Minutes';
-        
+
         div.innerHTML = `
             <div class="export-item-header">
                 <div class="export-item-info">
@@ -675,7 +675,7 @@ class SessionManager {
                 </div>
             </div>
         `;
-        
+
         // Add download event listener
         const downloadBtn = div.querySelector('.download-export');
         if (downloadBtn) {
@@ -684,30 +684,30 @@ class SessionManager {
                 this.downloadExport(sessionId, exportItem.filename);
             });
         }
-        
+
         return div;
     }
-    
+
     async triggerExport(sessionId) {
         try {
             this.showToast('Creating session export...', 'info');
-            
+
             const response = await fetch(`/api/sessions/${sessionId}/export`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             const result = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(result.error || 'Export failed');
             }
-            
+
             if (result.ok) {
                 this.showToast('Session exported successfully!', 'success');
-                
+
                 // Refresh exports list if currently showing
                 const exportsSection = document.getElementById('exports-section');
                 if (exportsSection && exportsSection.classList.contains('active')) {
@@ -719,13 +719,13 @@ class SessionManager {
             } else {
                 throw new Error(result.error || 'Export failed');
             }
-            
+
         } catch (error) {
             console.error('Error triggering export:', error);
             this.showToast('Error exporting session: ' + error.message, 'error');
         }
     }
-    
+
     downloadExport(sessionId, filename) {
         // Create a download link and trigger it
         const downloadUrl = `/api/sessions/${sessionId}/exports/${filename}`;
@@ -735,7 +735,7 @@ class SessionManager {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
+
         this.showToast(`Downloading ${filename}...`, 'info');
     }
 }
@@ -743,7 +743,7 @@ class SessionManager {
 // Initialize session manager when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.sessionManager = new SessionManager();
-    
+
     // Set up exports section event listeners
     const closeExportsBtn = document.getElementById('close-exports');
     if (closeExportsBtn) {

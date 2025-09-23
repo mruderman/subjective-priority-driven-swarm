@@ -74,7 +74,7 @@ Map PR labels to agent types:
 ### Label-Based Topology
 ```bash
 # Small PR (< 100 lines): ring topology
-# Medium PR (100-500 lines): mesh topology  
+# Medium PR (100-500 lines): mesh topology
 # Large PR (> 500 lines): hierarchical topology
 npx ruv-swarm github pr-topology --pr 123
 ```
@@ -122,7 +122,7 @@ echo "$REVIEW_RESULTS" | jq -r '.comments[]' | while read -r comment; do
   FILE=$(echo "$comment" | jq -r '.file')
   LINE=$(echo "$comment" | jq -r '.line')
   BODY=$(echo "$comment" | jq -r '.body')
-  
+
   gh pr review 123 --comment --body "$BODY"
 done
 ```
@@ -189,7 +189,7 @@ SWARM_STATUS=$(npx ruv-swarm github pr-status 123)
 if [[ "$SWARM_STATUS" == "complete" ]]; then
   # Check review requirements
   REVIEWS=$(gh pr view 123 --json reviews --jq '.reviews | length')
-  
+
   if [[ $REVIEWS -ge 2 ]]; then
     # Enable auto-merge
     gh pr merge 123 --auto --squash
@@ -208,11 +208,11 @@ const { execSync } = require('child_process');
 createServer((req, res) => {
   if (req.url === '/github-webhook') {
     const event = JSON.parse(body);
-    
+
     if (event.action === 'opened' && event.pull_request) {
       execSync(`npx ruv-swarm github pr-init ${event.pull_request.number}`);
     }
-    
+
     res.writeHead(200);
     res.end('OK');
   }

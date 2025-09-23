@@ -4,13 +4,13 @@ These tests simulate full user workflows from start to finish.
 """
 
 import json
+import logging
 import sys
 from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-import logging
 from letta_client import Letta
 from letta_client.types import AgentState, EmbeddingConfig, LlmConfig, Memory, Tool
 
@@ -247,7 +247,10 @@ class TestE2EUserScenarios:
         assert "Swarm chat started" in caplog.text
         assert "Project Planning Discussion" in caplog.text
         assert "Assessing agent motivations" in caplog.text
-        assert "Alex: I think we should start with a thorough risk assessment" in caplog.text
+        assert (
+            "Alex: I think we should start with a thorough risk assessment"
+            in caplog.text
+        )
         assert "Exiting chat" in caplog.text
 
         # Verify API calls

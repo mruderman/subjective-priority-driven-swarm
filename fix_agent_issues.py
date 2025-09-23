@@ -216,7 +216,7 @@ def retry_with_backoff(func, max_retries=3, backoff_factor=1):
                             except Exception as retry_e:
                                 print(f"[Debug: Retry failed for {agent.name}: {retry_e}]")
                         break
-            
+
             if not success:
                 print(f"[Debug: Failed to update {agent.name} after {max_retries} attempts]")'''
 

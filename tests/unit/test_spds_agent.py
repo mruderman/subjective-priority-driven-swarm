@@ -253,7 +253,9 @@ class TestSPDSAgent:
             description="Assessment tool",
         )
         mock_letta_client.tools.create_from_function.return_value = mock_tool
-        mock_letta_client.agents.tools.attach.side_effect = RuntimeError("attach failed")
+        mock_letta_client.agents.tools.attach.side_effect = RuntimeError(
+            "attach failed"
+        )
 
         agent = SPDSAgent(agent_state, mock_letta_client)
 
@@ -339,7 +341,11 @@ class TestSPDSAgent:
                 ),
             )
         )
-        response = SimpleNamespace(messages=[SimpleNamespace(tool_calls=[tool_call], tool_return=None, content=None)])
+        response = SimpleNamespace(
+            messages=[
+                SimpleNamespace(tool_calls=[tool_call], tool_return=None, content=None)
+            ]
+        )
         mock_letta_client.agents.messages.create.return_value = response
 
         agent._get_full_assessment("conversation", "topic")
@@ -402,7 +408,9 @@ class TestSPDSAgent:
         agent = SPDSAgent(agent_state, mock_letta_client)
 
         empty_tool_call = SimpleNamespace(
-            function=SimpleNamespace(name="send_message", arguments=json.dumps({"message": ""}))
+            function=SimpleNamespace(
+                name="send_message", arguments=json.dumps({"message": ""})
+            )
         )
         response = SimpleNamespace(
             messages=[
@@ -498,9 +506,7 @@ class TestSPDSAgent:
         )
         assert response == mock_message_response
 
-    def test_speak_with_tools_history_prompt(
-        self, mock_letta_client, mock_tool_state
-    ):
+    def test_speak_with_tools_history_prompt(self, mock_letta_client, mock_tool_state):
         """History prompts should mention send_message when tools are present."""
         agent_state = mk_agent_state(
             id="ag-history",
@@ -511,22 +517,22 @@ class TestSPDSAgent:
         )
 
         agent = SPDSAgent(agent_state, mock_letta_client)
-        mock_letta_client.agents.messages.create.return_value = SimpleNamespace(messages=[])
+        mock_letta_client.agents.messages.create.return_value = SimpleNamespace(
+            messages=[]
+        )
 
         history = "Line 1\nLine 2"
         agent.speak(history, mode="initial", topic="Topic")
 
-        sent_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][0][
-            "content"
-        ]
+        sent_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
+            0
+        ]["content"]
         expected_prompt = f"""{history}
 
 Based on this conversation, I want to contribute. Please use the send_message tool to share your response. Remember to call the send_message function with your response as the message parameter."""
         assert sent_prompt == expected_prompt
 
-    def test_speak_with_tools_topic_prompts(
-        self, mock_letta_client, mock_tool_state
-    ):
+    def test_speak_with_tools_topic_prompts(self, mock_letta_client, mock_tool_state):
         """Initial and response prompts should change with mode when tools are attached."""
         agent_state = mk_agent_state(
             id="ag-topic",
@@ -537,12 +543,14 @@ Based on this conversation, I want to contribute. Please use the send_message to
         )
 
         agent = SPDSAgent(agent_state, mock_letta_client)
-        mock_letta_client.agents.messages.create.return_value = SimpleNamespace(messages=[])
+        mock_letta_client.agents.messages.create.return_value = SimpleNamespace(
+            messages=[]
+        )
 
         agent.speak("", mode="initial", topic="Topic")
-        initial_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
-            0
-        ]["content"]
+        initial_prompt = mock_letta_client.agents.messages.create.call_args[1][
+            "messages"
+        ][0]["content"]
         expected_initial = (
             "Based on my assessment of the topic 'Topic', I want to share my initial thoughts and "
             "perspective. Please use the send_message tool to contribute your viewpoint to this "
@@ -554,9 +562,9 @@ Based on this conversation, I want to contribute. Please use the send_message to
         mock_letta_client.agents.messages.create.reset_mock()
 
         agent.speak("", mode="response", topic="Topic")
-        response_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
-            0
-        ]["content"]
+        response_prompt = mock_letta_client.agents.messages.create.call_args[1][
+            "messages"
+        ][0]["content"]
         expected_response = (
             "Based on what everyone has shared about 'Topic', I'd like to respond to the discussion. "
             "Please use the send_message tool to share your response, building on or reacting to what "
@@ -575,12 +583,14 @@ Based on this conversation, I want to contribute. Please use the send_message to
         )
 
         agent = SPDSAgent(agent_state, mock_letta_client)
-        mock_letta_client.agents.messages.create.return_value = SimpleNamespace(messages=[])
+        mock_letta_client.agents.messages.create.return_value = SimpleNamespace(
+            messages=[]
+        )
 
         agent.speak("", mode="initial", topic="Topic")
-        initial_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
-            0
-        ]["content"]
+        initial_prompt = mock_letta_client.agents.messages.create.call_args[1][
+            "messages"
+        ][0]["content"]
         assert (
             initial_prompt
             == "Based on my assessment of 'Topic', here is my initial contribution:"
@@ -589,9 +599,9 @@ Based on this conversation, I want to contribute. Please use the send_message to
         mock_letta_client.agents.messages.create.reset_mock()
 
         agent.speak("", mode="response", topic="Topic")
-        response_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
-            0
-        ]["content"]
+        response_prompt = mock_letta_client.agents.messages.create.call_args[1][
+            "messages"
+        ][0]["content"]
         assert (
             response_prompt
             == "Based on the discussion about 'Topic', here is my response:"

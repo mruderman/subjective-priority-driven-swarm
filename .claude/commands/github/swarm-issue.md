@@ -159,7 +159,7 @@ gh issue edit 456 --body "$UPDATED_BODY"
 echo "$SUBTASKS" | jq -r '.tasks[] | select(.priority == "high")' | while read -r task; do
   TITLE=$(echo "$task" | jq -r '.title')
   BODY=$(echo "$task" | jq -r '.description')
-  
+
   gh issue create \
     --title "$TITLE" \
     --body "$BODY
@@ -322,12 +322,12 @@ STALE_ISSUES=$(gh issue list --state open --json number,title,updatedAt,labels \
 echo "$STALE_ISSUES" | jq -r '.number' | while read -r num; do
   # Get full issue context
   ISSUE=$(gh issue view $num --json title,body,comments,labels)
-  
+
   # Analyze with swarm
   ACTION=$(npx ruv-swarm github analyze-stale \
     --issue "$ISSUE" \
     --suggest-action)
-  
+
   case "$ACTION" in
     "close")
       # Add stale label and warning comment

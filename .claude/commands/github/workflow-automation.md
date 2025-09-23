@@ -16,13 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Initialize Swarm
         uses: ruvnet/swarm-action@v1
         with:
           topology: mesh
           max-agents: 6
-          
+
       - name: Analyze Changes
         run: |
           npx ruv-swarm actions analyze \
@@ -64,13 +64,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Detect Languages
         id: detect
         run: |
           npx ruv-swarm actions detect-stack \
             --output json > stack.json
-            
+
       - name: Dynamic Build Matrix
         run: |
           npx ruv-swarm actions create-matrix \
@@ -97,7 +97,7 @@ jobs:
           SECURITY_ISSUES=$(npx ruv-swarm actions security \
             --deep-scan \
             --format json)
-          
+
           # Create issues for complex security problems
           echo "$SECURITY_ISSUES" | jq -r '.issues[]? | @base64' | while read -r issue; do
             _jq() {
@@ -187,7 +187,7 @@ jobs:
           npx ruv-swarm actions deploy-risk \
             --changes ${{ github.sha }} \
             --history 30d
-            
+
       - name: Choose Strategy
         run: |
           npx ruv-swarm actions deploy-strategy \
@@ -236,7 +236,7 @@ async function run() {
     topology: 'mesh',
     agents: ['analyzer', 'optimizer']
   });
-  
+
   await swarm.execute(core.getInput('task'));
 }
 ```
@@ -257,7 +257,7 @@ jobs:
             --detect-frameworks \
             --optimize-coverage)
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
-  
+
   test:
     needs: generate-matrix
     strategy:
@@ -318,13 +318,13 @@ jobs:
         run: |
           # Get PR details using gh CLI
           PR_DATA=$(gh pr view ${{ github.event.pull_request.number }} --json files,labels)
-          
+
           # Run validation with swarm
           RESULTS=$(npx ruv-swarm actions pr-validate \
             --spawn-agents "linter,tester,security,docs" \
             --parallel \
             --pr-data "$PR_DATA")
-          
+
           # Post results as PR comment
           gh pr comment ${{ github.event.pull_request.number }} \
             --body "$RESULTS"

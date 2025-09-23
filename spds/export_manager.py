@@ -733,6 +733,7 @@ def restore_session_from_json(
 
     # Set session context so tracking functions work for both existing and new sessions
     from .session_context import set_current_session_id
+
     set_current_session_id(session_id)
 
     # Add system event for minutes

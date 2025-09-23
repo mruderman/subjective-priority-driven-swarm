@@ -2,14 +2,15 @@ import json
 import time
 
 import pytest
-
 from letta_client.errors import NotFoundError
 
 from spds import swarm_manager
 
 
 class DummyMessages:
-    def __init__(self, create_side_effect=None, list_side_effect=None, reset_side_effect=None):
+    def __init__(
+        self, create_side_effect=None, list_side_effect=None, reset_side_effect=None
+    ):
         self.create_calls = []
         self.create_side_effect = create_side_effect or []
         self.list_side_effect = list_side_effect
@@ -88,7 +89,13 @@ def make_manager_with_agent(fake_messages):
 
 def test_update_agent_memories_retries_and_token_reset(monkeypatch):
     # Simulate create raising 500, then max_tokens, then succeeding
-    msgs = DummyMessages(create_side_effect=[Exception("500 error"), Exception("max_tokens exceeded"), None])
+    msgs = DummyMessages(
+        create_side_effect=[
+            Exception("500 error"),
+            Exception("max_tokens exceeded"),
+            None,
+        ]
+    )
     mgr = make_manager_with_agent(msgs)
 
     # Patch sleep to avoid delays
@@ -166,6 +173,7 @@ def test_agent_turn_dispatches_modes(monkeypatch):
     mgr.client = None
     a1 = FakeAgentObj("id1", "A", priority=1.0)
     a2 = FakeAgentObj("id2", "B", priority=0.0)
+
     # a1 will report priority>0
     def assess(topic):
         a1.priority_score = 0.9
@@ -180,6 +188,7 @@ def test_agent_turn_dispatches_modes(monkeypatch):
     def mark(name):
         def _fn(motivated_agents, topic):
             called[name] = True
+
         return _fn
 
     mgr._hybrid_turn = mark("hybrid")

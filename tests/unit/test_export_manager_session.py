@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+
 @pytest.fixture(autouse=True)
 def reset_session_state():
     """Reset session state before and after each test."""
@@ -16,6 +17,7 @@ def reset_session_state():
     reset_default_session_store()
     reset_default_session_tracker()
 
+
 from spds.export_manager import (
     build_session_summary,
     export_session_to_json,
@@ -23,15 +25,25 @@ from spds.export_manager import (
     restore_session_from_json,
 )
 from spds.session_context import set_current_session_id
-from spds.session_store import JsonSessionStore, SessionEvent, set_default_session_store, reset_default_session_store
-from spds.session_tracking import track_action, track_decision, track_message, reset_default_session_tracker
+from spds.session_store import (
+    JsonSessionStore,
+    SessionEvent,
+    reset_default_session_store,
+    set_default_session_store,
+)
+from spds.session_tracking import (
+    reset_default_session_tracker,
+    track_action,
+    track_decision,
+    track_message,
+)
 
 
 def create_test_session_with_events(tmp_path):
     """Create a test session with various event types."""
     sessions_dir = tmp_path / "sessions"
     store = JsonSessionStore(sessions_dir)
-    
+
     # Override the default session store so tracking functions use this store
     set_default_session_store(store)
     reset_default_session_tracker()  # Reset tracker to pick up new store
@@ -240,7 +252,9 @@ def test_restore_session_from_json_new_session(tmp_path):
 
     # Export to JSON
     export_dir = tmp_path / "exports"
-    json_path = export_session_to_json(original_session_state.meta.id, dest_dir=export_dir)
+    json_path = export_session_to_json(
+        original_session_state.meta.id, dest_dir=export_dir
+    )
 
     # Restore to new session
     new_session_id = restore_session_from_json(json_path)
@@ -279,7 +293,9 @@ def test_restore_session_from_json_existing_session(tmp_path):
 
     # Export to JSON
     export_dir = tmp_path / "exports"
-    json_path = export_session_to_json(original_session_state.meta.id, dest_dir=export_dir)
+    json_path = export_session_to_json(
+        original_session_state.meta.id, dest_dir=export_dir
+    )
 
     # Create target session
     target_session = store.create(title="Target Session")
@@ -386,7 +402,9 @@ def test_export_atomic_writes(tmp_path):
     export_dir = tmp_path / "exports"
 
     # Export and verify atomic write behavior
-    markdown_path = export_session_to_markdown(session_state.meta.id, dest_dir=export_dir)
+    markdown_path = export_session_to_markdown(
+        session_state.meta.id, dest_dir=export_dir
+    )
 
     # File should exist and be complete
     assert markdown_path.exists()

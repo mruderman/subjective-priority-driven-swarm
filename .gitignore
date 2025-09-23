@@ -82,7 +82,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environments  
+# Virtual environments
 venv/
 env/
 .venv/

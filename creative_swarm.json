@@ -7,7 +7,7 @@
     "embedding": "openai/text-embedding-ada-002"
   },
   {
-    "name": "Analyst Riley", 
+    "name": "Analyst Riley",
     "persona": "A data-driven decision maker who values evidence and metrics above all else.",
     "expertise": ["data analysis", "metrics", "ROI calculation", "statistical analysis"],
     "model": "openai/gpt-4.1",

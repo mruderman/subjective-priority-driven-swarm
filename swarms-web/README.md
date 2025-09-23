@@ -33,7 +33,7 @@ A modern web interface for the Subjective Priority-Driven Swarm (SPDS) framework
    export LETTA_BASE_URL="http://localhost:8283"
    export LETTA_PASSWORD="your-server-password"
    export LETTA_ENVIRONMENT="SELF_HOSTED"
-   
+
    # For Letta Cloud
    export LETTA_BASE_URL="https://api.letta.com"
    export LETTA_API_KEY="your-api-key"
@@ -44,7 +44,7 @@ A modern web interface for the Subjective Priority-Driven Swarm (SPDS) framework
    ```bash
    python run.py
    ```
-   
+
    Or manually:
    ```bash
    python app.py

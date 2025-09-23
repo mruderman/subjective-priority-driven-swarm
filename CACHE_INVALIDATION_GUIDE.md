@@ -140,14 +140,14 @@ from spds.profiles_schema import get_agent_profiles_validated, clear_profiles_ca
 
 def test_cache_invalidation():
     clear_profiles_cache()  # Clean state
-    
+
     # Test cache invalidation behavior
     with patch("spds.config.AGENT_PROFILES", initial_profiles):
         config1 = get_agent_profiles_validated()
-        
+
     with patch("spds.config.AGENT_PROFILES", changed_profiles):
         config2 = get_agent_profiles_validated()  # Should invalidate
-        
+
     assert config1 is not config2
 ```
 
@@ -198,7 +198,7 @@ def _compute_profiles_fingerprint(profiles_source):
 
 ```python
 cache_valid = (
-    _validated_profiles_cache is not None and 
+    _validated_profiles_cache is not None and
     _cache_fingerprint == current_fingerprint
 )
 ```

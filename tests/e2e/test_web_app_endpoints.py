@@ -39,7 +39,9 @@ def _load_web_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("LETTA_BASE_URL", "http://localhost:8283")
     monkeypatch.setenv("LETTA_ENVIRONMENT", "SELF_HOSTED")
 
-    monkeypatch.setattr(config, "validate_letta_config", lambda check_connectivity=False: True)
+    monkeypatch.setattr(
+        config, "validate_letta_config", lambda check_connectivity=False: True
+    )
 
     module_path = Path(__file__).resolve().parents[2] / "swarms-web" / "app.py"
     spec = importlib.util.spec_from_file_location("swarms_web_app_test", module_path)
@@ -124,7 +126,12 @@ def test_setup_page_renders(web_app):
 
 
 def test_get_agents_returns_serialised_agents(web_app):
-    agent = SimpleNamespace(id="agent-1", name="Alex", model="openai/gpt-4", created_at="2024-01-01T00:00:00")
+    agent = SimpleNamespace(
+        id="agent-1",
+        name="Alex",
+        model="openai/gpt-4",
+        created_at="2024-01-01T00:00:00",
+    )
     web_app._test_client_factory = lambda: _build_letta_client([agent])
 
     client = web_app.app.test_client()
@@ -148,7 +155,9 @@ def test_get_agents_handles_errors_gracefully(web_app):
     def raise_error():
         raise RuntimeError("boom")
 
-    web_app._test_client_factory = lambda: _build_letta_client(list_side_effect=raise_error)
+    web_app._test_client_factory = lambda: _build_letta_client(
+        list_side_effect=raise_error
+    )
 
     client = web_app.app.test_client()
     response = client.get("/api/agents")
@@ -233,7 +242,11 @@ def test_start_session_handles_initialisation_failure(web_app, monkeypatch):
     client = web_app.app.test_client()
     response = client.post(
         "/api/start_session",
-        json={"agent_ids": ["agent-1"], "conversation_mode": "hybrid", "topic": "Failure"},
+        json={
+            "agent_ids": ["agent-1"],
+            "conversation_mode": "hybrid",
+            "topic": "Failure",
+        },
     )
 
     assert response.status_code == 500
@@ -373,7 +386,9 @@ def test_export_manager_routes_workflow(web_app, tmp_path, monkeypatch):
     (export_dir / "session.json").write_text(json.dumps({"id": session.meta.id}))
 
     # Point the exports directory to our temp location.
-    monkeypatch.setattr(web_app, "ExportManager", lambda: SimpleNamespace(export=lambda *_, **__: None))
+    monkeypatch.setattr(
+        web_app, "ExportManager", lambda: SimpleNamespace(export=lambda *_, **__: None)
+    )
     client = web_app.app.test_client()
 
     # Trigger export route which should now succeed (no exception path).

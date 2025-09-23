@@ -1,9 +1,10 @@
 import json
-import pytest
 from datetime import datetime as real_datetime
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+import pytest
 
 # Mark this module as unit tests so it is included when running `-m unit`
 pytestmark = pytest.mark.unit

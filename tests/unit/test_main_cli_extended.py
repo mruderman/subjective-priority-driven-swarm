@@ -100,9 +100,7 @@ def test_main_no_auth_baseurl_only(monkeypatch):
     monkeypatch.delenv("LETTA_SERVER_PASSWORD", raising=False)
     with patch("spds.main.config.LETTA_ENVIRONMENT", "SELF_HOSTED"), patch(
         "spds.main.config.LETTA_API_KEY", ""
-    ), patch(
-        "spds.main.config.LETTA_BASE_URL", "http://x"
-    ), patch(
+    ), patch("spds.main.config.LETTA_BASE_URL", "http://x"), patch(
         "spds.main.SwarmManager"
     ) as SM, patch(
         "spds.main.Letta"

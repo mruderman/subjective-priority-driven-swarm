@@ -5,23 +5,27 @@ import spds.meeting_templates as meeting_templates
 
 def test_render_basic_template():
     data = {
-        'metadata': {'topic': 'Roadmap', 'participants': ['Alice', 'Bob'], 'meeting_type': 'planning'},
-        'conversation_log': [],
+        "metadata": {
+            "topic": "Roadmap",
+            "participants": ["Alice", "Bob"],
+            "meeting_type": "planning",
+        },
+        "conversation_log": [],
     }
     tpl = meeting_templates.BoardMinutesTemplate()
     out = tpl.generate(data)
     assert isinstance(out, str)
-    assert 'Roadmap' in out
+    assert "Roadmap" in out
 
 
 def test_render_with_optional_fields():
     data = {
-        'metadata': {'topic': 'Sync', 'participants': [], 'notes_style': 'casual'},
-        'conversation_log': [],
+        "metadata": {"topic": "Sync", "participants": [], "notes_style": "casual"},
+        "conversation_log": [],
     }
     tpl = meeting_templates.CasualMinutesTemplate()
     out = tpl.generate(data)
-    assert 'Sync' in out
+    assert "Sync" in out
 
 
 def test_casual_template_long_conversation_features():
@@ -32,7 +36,10 @@ def test_casual_template_long_conversation_features():
     )
     conversation = [
         {"speaker": "Alice", "message": long_message + " This idea could work."},
-        {"speaker": "Bob", "message": "What if we pilot the idea with two teams first?"},
+        {
+            "speaker": "Bob",
+            "message": "What if we pilot the idea with two teams first?",
+        },
     ] * 6
     stats = {
         "total_messages": len(conversation),
@@ -43,7 +50,9 @@ def test_casual_template_long_conversation_features():
         },
     }
     decisions = [{"decision": "Launch pilot"}]
-    action_items = [{"description": "Prepare pilot plan", "assignee": "Cara", "due_date": "Friday"}]
+    action_items = [
+        {"description": "Prepare pilot plan", "assignee": "Cara", "due_date": "Friday"}
+    ]
     data = {
         "metadata": {
             "topic": "Roadmap",
@@ -101,16 +110,14 @@ def test_determine_conversation_vibe_branches():
         == "Action-packed planning 🎯"
     )
     assert (
-        tpl._determine_conversation_vibe([{}] * 30, [], [])
-        == "Deep dive discussion 🧠"
+        tpl._determine_conversation_vibe([{}] * 30, [], []) == "Deep dive discussion 🧠"
     )
     assert (
         tpl._determine_conversation_vibe([{}] * 20, [], [])
         == "Collaborative brainstorming 💡"
     )
     assert (
-        tpl._determine_conversation_vibe([{}] * 10, [], [])
-        == "Chill and productive 😊"
+        tpl._determine_conversation_vibe([{}] * 10, [], []) == "Chill and productive 😊"
     )
 
 
@@ -160,9 +167,11 @@ def test_extract_casual_insights_and_good_ideas():
     )
     assert any("idea" in idea.lower() for idea in ideas)
 
-    fallback = tpl._extract_good_ideas([
-        {"speaker": "Fay", "message": "Short"},
-    ])
+    fallback = tpl._extract_good_ideas(
+        [
+            {"speaker": "Fay", "message": "Short"},
+        ]
+    )
     assert len(fallback) == 3
 
 
