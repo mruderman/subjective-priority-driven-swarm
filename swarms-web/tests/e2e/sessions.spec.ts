@@ -183,7 +183,7 @@ test.describe('Session management lifecycle', () => {
           : (body: Record<string, unknown>): JsonResponse => {
               const nowIso = '2024-02-01T10:00:00Z';
               const newSession: SessionMeta = {
-                id: `session-${Math.random().toString(16).slice(2, 10)}`,
+                id: `session-${String(Date.now())}-${String(Math.floor(Math.random() * 1e4)).padStart(4, '0')}`,
                 title: typeof body.title === 'string' && body.title.trim() !== '' ? body.title : null,
                 created_at: nowIso,
                 last_updated: nowIso,
