@@ -330,6 +330,10 @@ class SimpleChat {
         this.socket.off('phase_change');
         this.socket.off('agent_thinking');
         this.socket.off('export_complete');
+        this.socket.off('secretary_minutes');
+        this.socket.off('secretary_stats');
+        this.socket.off('secretary_status');
+        this.socket.off('secretary_activity');
         
         // Connect handler - now inside setupSocketEvents
         this.socket.on('connect', () => {
@@ -405,6 +409,10 @@ class SimpleChat {
         // Minutes payload with rendered text from secretary
         this.socket.on('secretary_minutes', (data) => {
             this.updateSecretaryMinutes(data.minutes);
+        });
+
+        this.socket.on('secretary_stats', (data) => {
+            this.updateSecretaryStats(data.stats);
         });
     }
     
@@ -910,6 +918,50 @@ class SimpleChat {
             // Keep a small status panel, but deprioritize it visually when minutes are shown
             // No-op: leave existing content; optionally could clear if needed
         }
+    }
+
+    updateSecretaryStats(stats) {
+        const statsEl = document.getElementById('secretary-stats');
+        if (!statsEl) {
+            return;
+        }
+
+        const entries = stats && typeof stats === 'object'
+            ? Object.entries(stats)
+            : [];
+
+        statsEl.innerHTML = '';
+
+        if (entries.length === 0) {
+            const emptyState = document.createElement('p');
+            emptyState.className = 'small text-muted mb-0';
+            emptyState.textContent = 'No statistics available yet.';
+            statsEl.appendChild(emptyState);
+        } else {
+            const list = document.createElement('div');
+            list.className = 'd-flex flex-column gap-1';
+
+            entries.forEach(([label, value]) => {
+                const row = document.createElement('div');
+                row.className = 'd-flex justify-content-between align-items-center';
+
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'text-muted';
+                labelSpan.textContent = label;
+
+                const valueSpan = document.createElement('span');
+                valueSpan.className = 'fw-semibold';
+                valueSpan.textContent = String(value);
+
+                row.appendChild(labelSpan);
+                row.appendChild(valueSpan);
+                list.appendChild(row);
+            });
+
+            statsEl.appendChild(list);
+        }
+
+        statsEl.style.display = 'block';
     }
     
     showConnectionModal() {

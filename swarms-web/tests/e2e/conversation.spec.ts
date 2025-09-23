@@ -146,24 +146,94 @@ test.beforeEach(async ({ page }) => {
 
               const trimmedMessage = message.trim();
               if (trimmedMessage.startsWith('/')) {
-                if (trimmedMessage === '/minutes') {
-                  setTimeout(() => {
-                    const minutesContainer = document.getElementById('secretary-minutes');
-                    if (minutesContainer) {
-                      minutesContainer.style.display = 'block';
-                    }
-                    emitEvent('secretary_activity', {
-                      activity: 'generating',
-                      message: '📝 Generating meeting minutes...',
-                    });
-                    emitEvent('secretary_minutes', {
-                      minutes: 'Meeting Minutes\n- Agenda review\n- Decisions recorded',
-                    });
-                    emitEvent('secretary_activity', {
-                      activity: 'completed',
-                      message: '✅ Meeting minutes generated!',
-                    });
-                  }, 120);
+                switch (trimmedMessage) {
+                  case '/minutes':
+                    setTimeout(() => {
+                      const minutesContainer = document.getElementById('secretary-minutes');
+                      if (minutesContainer) {
+                        minutesContainer.style.display = 'block';
+                      }
+                      emitEvent('secretary_activity', {
+                        activity: 'generating',
+                        message: '📝 Generating meeting minutes...',
+                      });
+                      emitEvent('secretary_minutes', {
+                        minutes: 'Meeting Minutes\n- Agenda review\n- Decisions recorded',
+                      });
+                      emitEvent('secretary_activity', {
+                        activity: 'completed',
+                        message: '✅ Meeting minutes generated!',
+                      });
+                    }, 120);
+                    break;
+                  case '/stats':
+                    setTimeout(() => {
+                      emitEvent('secretary_activity', {
+                        activity: 'generating',
+                        message: '📊 Gathering conversation statistics...',
+                      });
+                      emitEvent('secretary_stats', {
+                        stats: {
+                          'Total Messages': 12,
+                          'Agents Responded': '2 / 3',
+                          'Action Items Logged': 3,
+                        },
+                      });
+                      emitEvent('secretary_activity', {
+                        activity: 'completed',
+                        message: '📈 Conversation stats are ready!',
+                      });
+                    }, 120);
+                    break;
+                  case '/memory-status':
+                    setTimeout(() => {
+                      emitEvent('secretary_status', {
+                        status: 'awareness',
+                        agent_name: 'Memory Monitor',
+                        mode: 'memory tracking',
+                        message: 'Memory status summarized for 3 agents.',
+                      });
+                    }, 80);
+                    break;
+                  case '/memory-awareness':
+                    setTimeout(() => {
+                      emitEvent('secretary_status', {
+                        status: 'insight',
+                        agent_name: 'Memory Monitor',
+                        mode: 'awareness check',
+                        message: 'Agents notified about recent memory usage.',
+                      });
+                    }, 80);
+                    break;
+                  case '/help':
+                    setTimeout(() => {
+                      emitEvent('system_message', {
+                        message: [
+                          '📝 Available Commands:',
+                          '',
+                          'Memory Awareness (Available Always):',
+                          '  /memory-status     - Show objective memory statistics for all agents',
+                          '  /memory-awareness  - Display neutral memory awareness information if criteria are met',
+                          '',
+                          'Secretary Commands (When Secretary Enabled):',
+                          '  /minutes           - Generate current meeting minutes',
+                          '  /stats             - Show conversation statistics',
+                          '',
+                          'General:',
+                          '  /help              - Show this help message',
+                        ].join('\n'),
+                        timestamp: new Date().toISOString(),
+                      });
+                    }, 60);
+                    break;
+                  default:
+                    setTimeout(() => {
+                      emitEvent('system_message', {
+                        message: `Unrecognized command: ${trimmedMessage}`,
+                        timestamp: new Date().toISOString(),
+                      });
+                    }, 40);
+                    break;
                 }
               } else {
                 setTimeout(() => {
@@ -255,6 +325,11 @@ const startConversation = async (page: Page, topic = 'Exploring AI collaboration
   await expect(page.locator('#chat-input')).toBeVisible();
 };
 
+const sendSlashCommand = async (page: Page, command: string) => {
+  await page.locator('#chat-input').fill(command);
+  await page.locator('#send-button').click();
+};
+
 test('should load the main page and display agent selection cards', async ({ page }) => {
   await page.goto('/setup');
 
@@ -279,11 +354,51 @@ test('should allow a user to select agents, start a chat, and see agent response
 test('should respond to the /minutes slash command', async ({ page }) => {
   await startConversation(page, 'Documenting project updates');
 
-  await page.locator('#chat-input').fill('/minutes');
-  await page.locator('#send-button').click();
+  await sendSlashCommand(page, '/minutes');
 
   const minutesContent = page.locator('#secretary-minutes');
+  await expect(minutesContent).toBeVisible();
   await expect(minutesContent).toContainText('Meeting Minutes');
+});
+
+test('should reveal secretary stats when using the /stats command', async ({ page }) => {
+  await startConversation(page, 'Tracking meeting participation');
+
+  await sendSlashCommand(page, '/stats');
+
+  const statsContent = page.locator('#secretary-stats');
+  await expect(statsContent).toBeVisible();
+  await expect(statsContent).toContainText('Total Messages');
+  await expect(statsContent).toContainText('Agents Responded');
+});
+
+test('should show a toast with memory status details for /memory-status', async ({ page }) => {
+  await startConversation(page, 'Memory diagnostics conversation');
+
+  await sendSlashCommand(page, '/memory-status');
+
+  const toastContainer = page.locator('#toast-container');
+  await expect(toastContainer).toContainText('Memory status summarized for 3 agents.');
+});
+
+test('should show a toast when /memory-awareness is triggered', async ({ page }) => {
+  await startConversation(page, 'Memory awareness insights');
+
+  await sendSlashCommand(page, '/memory-awareness');
+
+  const toastContainer = page.locator('#toast-container');
+  await expect(toastContainer).toContainText('Agents notified about recent memory usage.');
+});
+
+test('should surface help documentation after sending /help', async ({ page }) => {
+  await startConversation(page, 'Reviewing secretary commands');
+
+  await sendSlashCommand(page, '/help');
+
+  const helpMessage = page
+    .locator('#chat-messages .message.system')
+    .filter({ hasText: 'Available Commands' });
+  await expect(helpMessage).toHaveCount(1);
 });
 
 test('should display secretary options when the toggle is enabled', async ({ page }) => {
