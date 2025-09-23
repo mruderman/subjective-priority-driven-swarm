@@ -144,9 +144,11 @@ test.describe('Session management lifecycle', () => {
     });
 
     await page.route('**/alpinejs@3.13.1/dist/cdn.min.js*', async (route) => {
-      await route.fulfill({ contentType: 'application/javascript', body: '' });
+      await route.fulfill({
+        contentType: 'application/javascript',
+        body: 'window.Alpine = window.Alpine || { start(){ /* noop */ } };',
+      });
     });
-
     await page.route('**/api/sessions', async (route) => {
       const request = route.request();
 
