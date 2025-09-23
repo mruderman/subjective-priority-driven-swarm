@@ -388,13 +388,13 @@ def main(argv=None):
         print(f"Mode: Creating temporary swarm from config: {args.swarm_config}")
         agent_profiles = load_swarm_from_file(args.swarm_config)
         if not agent_profiles:
-            return 1  # Exit if the config file is invalid or not found
+            sys.exit(1)  # Exit if the config file is invalid or not found
     elif args.interactive:
         # Interactive setup explicitly requested
         print("Mode: Interactive agent selection")
         result = interactive_agent_selection(client)
         if not result or len(result) < 6:
-            return 1  # User cancelled or no agents selected
+            sys.exit(1)  # User cancelled or no agents selected
         (
             selected_agent_ids,
             topic,
@@ -413,7 +413,7 @@ def main(argv=None):
             topic = input("Enter the topic of conversation: ")
         except EOFError:
             print("\nExiting.")
-            return
+            sys.exit(0)
         print("Creating swarm from temporary agent profiles...")
         # Validate agent profiles before use
         try:
@@ -423,7 +423,7 @@ def main(argv=None):
         except Exception as e:
             print(f"Error: Invalid agent profiles configuration: {e}")
             print("Please check your agent profiles configuration and try again.")
-            return
+            sys.exit(1)
 
     try:
         # Set conversation mode - default to sequential for non-interactive flows
@@ -454,7 +454,7 @@ def main(argv=None):
             swarm.start_chat()
     except ValueError as e:
         print(f"Error initializing swarm: {e}")
-        return 1
+        sys.exit(1)
 
     return 0
 

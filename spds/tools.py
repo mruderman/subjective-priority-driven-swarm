@@ -46,20 +46,21 @@ def build_tool_create_kwargs(
             payload["description"] = description
         return payload
 
-    if "func" in param_names:
-        return _with_common_kwargs("func")
-
+    # Prioritize 'function' parameter for legacy compatibility
     if "function" in param_names:
         payload = _with_common_kwargs("function")
         if return_model is not None and "return_model" in param_names:
             payload["return_model"] = return_model
         return payload
 
+    if "func" in param_names:
+        return _with_common_kwargs("func")
+
     # Fallback when signature is not introspectable (e.g. mocks, builtins)
-    fallback_payload = _with_common_kwargs("func")
-    if return_model is not None and "function" in param_names:
-        # Edge case: signature hiding param names but still indicating legacy style
-        fallback_payload = _with_common_kwargs("function")
+    # Default to legacy 'function=' parameter for compatibility
+    fallback_payload = _with_common_kwargs("function")
+    if return_model is not None:
+        # Always include return_model in fallback for legacy compatibility
         fallback_payload["return_model"] = return_model
     return fallback_payload
 

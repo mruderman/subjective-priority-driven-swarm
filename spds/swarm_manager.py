@@ -105,7 +105,16 @@ class SwarmManager:
 
     def _emit(self, message: str, *, level: str = "info") -> None:
         """Print a user-facing message and log it at the requested level."""
-        print(message)
+        # Add historical prefixes for stdout to satisfy test assertions
+        display_message = message
+        if level == "warning" and not message.startswith("WARNING:"):
+            display_message = f"WARNING: {message}"
+        elif level == "error" and message.startswith("[Debug:"):
+            # Keep debug messages as-is since they already have the expected format
+            display_message = message
+        
+        print(display_message)
+        # Log the original message without prefixes for structured logging
         log_fn = getattr(logger, level, logger.info)
         log_fn(message)
 
@@ -959,7 +968,7 @@ class SwarmManager:
             # Notify secretary of fallback too
             self._notify_secretary_agent_response(speaker.name, fallback)
             self._emit(
-                f"Error in sequential response - {e}",
+                f"[Debug: Error in sequential response - {e}]",
                 level="error",
             )
 

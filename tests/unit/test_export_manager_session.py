@@ -7,6 +7,15 @@ from pathlib import Path
 
 import pytest
 
+@pytest.fixture(autouse=True)
+def reset_session_state():
+    """Reset session state before and after each test."""
+    reset_default_session_store()
+    reset_default_session_tracker()
+    yield
+    reset_default_session_store()
+    reset_default_session_tracker()
+
 from spds.export_manager import (
     build_session_summary,
     export_session_to_json,
@@ -14,14 +23,18 @@ from spds.export_manager import (
     restore_session_from_json,
 )
 from spds.session_context import set_current_session_id
-from spds.session_store import JsonSessionStore, SessionEvent
-from spds.session_tracking import track_action, track_decision, track_message
+from spds.session_store import JsonSessionStore, SessionEvent, set_default_session_store, reset_default_session_store
+from spds.session_tracking import track_action, track_decision, track_message, reset_default_session_tracker
 
 
 def create_test_session_with_events(tmp_path):
     """Create a test session with various event types."""
     sessions_dir = tmp_path / "sessions"
     store = JsonSessionStore(sessions_dir)
+    
+    # Override the default session store so tracking functions use this store
+    set_default_session_store(store)
+    reset_default_session_tracker()  # Reset tracker to pick up new store
 
     # Create session
     session_state = store.create(title="Test Session", tags=["test", "export"])

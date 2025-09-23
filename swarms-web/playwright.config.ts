@@ -26,6 +26,7 @@ export default defineConfig({
       PLAYWRIGHT_TEST: '1',
       PORT: new URL(baseURL).port || '5002',
       PYTHONUNBUFFERED: '1',
+      SPDS_ALLOW_EPHEMERAL_AGENTS: 'true',
     },
   },
 });

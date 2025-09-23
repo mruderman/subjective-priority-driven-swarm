@@ -160,15 +160,39 @@ def validate_agent_profiles(profiles: Union[dict, list, Any]) -> ProfilesConfig:
         raise ValueError(error_msg) from e
 
 
-# Convenience function for caching validated profiles
+# Cache for validated profiles with fingerprint-based invalidation
+import hashlib
+import json
+from typing import Tuple
+
 _validated_profiles_cache: Optional[ProfilesConfig] = None
+_cache_fingerprint: Optional[str] = None
+
+
+def _compute_profiles_fingerprint(profiles_source: Union[dict, list]) -> str:
+    """
+    Compute a stable fingerprint for the profiles source data.
+    
+    Args:
+        profiles_source: The profiles data to fingerprint
+        
+    Returns:
+        str: A stable hash representing the profiles data
+    """
+    # Convert to JSON string with sorted keys for stable hashing
+    json_str = json.dumps(profiles_source, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(json_str.encode('utf-8')).hexdigest()
 
 
 def get_agent_profiles_validated(
     profiles_source: Optional[Union[dict, list]] = None,
 ) -> ProfilesConfig:
     """
-    Get validated agent profiles, with caching.
+    Get validated agent profiles, with cache invalidation based on source fingerprint.
+
+    The cache is automatically invalidated when the source profiles data changes.
+    This ensures that changes to config.AGENT_PROFILES are always reflected
+    without manual cache clearing.
 
     Args:
         profiles_source: Optional source of profiles. If None, uses config.AGENT_PROFILES.
@@ -176,20 +200,55 @@ def get_agent_profiles_validated(
     Returns:
         ProfilesConfig: Validated profiles configuration
     """
-    global _validated_profiles_cache
+    global _validated_profiles_cache, _cache_fingerprint
 
-    if _validated_profiles_cache is None:
-        if profiles_source is None:
-            from spds import config
+    # Determine the actual source
+    actual_source = profiles_source
+    if actual_source is None:
+        from spds import config
+        actual_source = config.AGENT_PROFILES
 
-            profiles_source = config.AGENT_PROFILES
+    # Compute fingerprint of current source
+    current_fingerprint = _compute_profiles_fingerprint(actual_source)
 
-        _validated_profiles_cache = validate_agent_profiles(profiles_source)
+    # Check if cache is valid (exists and fingerprint matches)
+    cache_valid = (
+        _validated_profiles_cache is not None and 
+        _cache_fingerprint == current_fingerprint
+    )
+
+    if not cache_valid:
+        # Cache miss or invalidation - validate and store
+        _validated_profiles_cache = validate_agent_profiles(actual_source)
+        _cache_fingerprint = current_fingerprint
+        logger.debug(f"Profiles cache updated with fingerprint: {current_fingerprint[:8]}...")
 
     return _validated_profiles_cache
 
 
 def clear_profiles_cache():
-    """Clear the cached validated profiles."""
-    global _validated_profiles_cache
+    """
+    Clear the cached validated profiles.
+    
+    This forces the next call to get_agent_profiles_validated() to re-validate
+    the profiles source, regardless of whether the source data has changed.
+    """
+    global _validated_profiles_cache, _cache_fingerprint
     _validated_profiles_cache = None
+    _cache_fingerprint = None
+    logger.debug("Profiles cache manually cleared")
+
+
+def get_profiles_cache_info() -> Tuple[bool, Optional[str]]:
+    """
+    Get information about the current cache state.
+    
+    Returns:
+        Tuple[bool, Optional[str]]: (is_cached, fingerprint_prefix)
+            - is_cached: Whether profiles are currently cached
+            - fingerprint_prefix: First 8 characters of cache fingerprint, or None
+    """
+    return (
+        _validated_profiles_cache is not None,
+        _cache_fingerprint[:8] if _cache_fingerprint else None
+    )

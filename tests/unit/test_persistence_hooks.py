@@ -1,6 +1,7 @@
 # tests/unit/test_persistence_hooks.py
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -22,6 +23,15 @@ class TestPersistenceHooks:
         """Reset the default session tracker before each test."""
         import spds.session_tracking
         spds.session_tracking._default_tracker = None
+        
+        # Enable ephemeral agents for tests
+        os.environ['SPDS_ALLOW_EPHEMERAL_AGENTS'] = 'true'
+    
+    def teardown_method(self):
+        """Clean up after each test."""
+        # Restore default ephemeral agents setting
+        if 'SPDS_ALLOW_EPHEMERAL_AGENTS' in os.environ:
+            del os.environ['SPDS_ALLOW_EPHEMERAL_AGENTS']
     
     @pytest.fixture
     def temp_sessions_dir(self):
@@ -293,7 +303,7 @@ class TestPersistenceHooks:
                 # Verify tracking was called
                 assert mock_store.save_event.called
                 call_args = mock_store.save_event.call_args[0][0]
-                assert call_args.actor == "system"
+                assert call_args.actor == "secretary"  # Secretary agent performs the action
                 assert call_args.type == "action"
                 assert call_args.payload["action_type"] == "add_action_item"
                 assert call_args.payload["details"]["description"] == "Test action item"
@@ -352,6 +362,9 @@ class TestPersistenceHooks:
         loaded_state = store.load(session_id)
         
         assert loaded_state.meta.id == session_id
-        assert len(loaded_state.events) == 2
-        assert loaded_state.events[0].payload["content"] == "Message 0"
-        assert loaded_state.events[1].payload["content"] == "Message 1"
+        assert len(loaded_state.events) == 3  # 1 session creation + 2 message events
+        # Find the message events (skip the session creation event)
+        message_events = [e for e in loaded_state.events if e.type == "message"]
+        assert len(message_events) == 2
+        assert message_events[0].payload["content"] == "Message 0"
+        assert message_events[1].payload["content"] == "Message 1"

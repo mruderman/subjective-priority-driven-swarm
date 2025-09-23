@@ -169,6 +169,29 @@ class JsonSessionStore(SessionStore):
             # Create empty events file
             events_file = self._get_events_file(session_id)
             self._atomic_write(events_file, "")
+            
+            # Add system event for session creation to preserve metadata
+            creation_event = SessionEvent(
+                event_id=str(uuid4()),
+                session_id=session_id,
+                ts=now,
+                actor="system",
+                type="system",
+                payload={
+                    "event_type": "session_created",
+                    "title": title,
+                    "tags": tags or []
+                }
+            )
+            # Directly append to events file to avoid recursion
+            event_json = creation_event.model_dump_json() + "\n"
+            with events_file.open('a') as f:
+                f.write(event_json)
+            
+            # Also add event to the session state in memory
+            session_state.events.append(creation_event)
+            session_state.meta.last_updated = creation_event.ts
+            self._save_session_state(session_state)
         
         logger.info(f"Created session {session_id}")
         return session_state
@@ -199,20 +222,31 @@ class JsonSessionStore(SessionStore):
             
             # Update session.json with new event
             try:
-                session_state = self.load(session_id)
-                session_state.events.append(event)
-                session_state.meta.last_updated = event.ts
-                self._save_session_state(session_state)
-            except ValueError: # Catches "Session not found"
-                # If session.json doesn't exist, create a new one
-                now = datetime.utcnow()
-                meta = SessionMeta(
-                    id=session_id,
-                    created_at=now,
-                    last_updated=now,
-                )
-                session_state = SessionState(meta=meta, events=[event])
-                self._save_session_state(session_state)
+                # Try to load existing session.json directly without fallback to rebuild
+                session_file = self._get_session_file(session_id)
+                if session_file.exists():
+                    try:
+                        with session_file.open('r') as f:
+                            content = f.read()
+                            if content.strip():
+                                session_state = SessionState.model_validate_json(content)
+                                session_state.events.append(event)
+                                session_state.meta.last_updated = event.ts
+                                self._save_session_state(session_state)
+                            else:
+                                raise ValueError("Empty session file")
+                    except Exception as e:
+                        logger.debug(f"Cannot load session.json directly: {e}, skipping update")
+                else:
+                    logger.debug(f"Session file {session_file} does not exist, creating minimal session.json")
+                    # Create minimal session from first event
+                    meta = SessionMeta(
+                        id=session_id,
+                        created_at=event.ts,
+                        last_updated=event.ts,
+                    )
+                    session_state = SessionState(meta=meta, events=[event])
+                    self._save_session_state(session_state)
             except Exception as e:
                 logger.warning(f"Failed to update session.json for {session_id}, but event saved to events.jsonl: {e}")
             
@@ -254,12 +288,21 @@ class JsonSessionStore(SessionStore):
                     if events:
                         # Create session meta from first event
                         first_event = events[0]
+                        # Try to restore title from system events
+                        title = None
+                        tags = []
+                        for event in events:
+                            if event.type == "system" and event.payload.get("event_type") == "session_created":
+                                title = event.payload.get("title")
+                                tags = event.payload.get("tags", [])
+                                break
+                        
                         meta = SessionMeta(
                             id=session_id,
                             created_at=first_event.ts,
                             last_updated=events[-1].ts if events else first_event.ts,
-                            title=None,
-                            tags=[]
+                            title=title,
+                            tags=tags
                         )
                         
                         session_state = SessionState(meta=meta, events=events)
@@ -335,3 +378,17 @@ def get_default_session_store() -> JsonSessionStore:
                 _default_session_store = JsonSessionStore(sessions_dir)
     
     return _default_session_store
+
+
+def set_default_session_store(store: Optional[JsonSessionStore]) -> None:
+    """Override the default session store (useful for tests)."""
+    global _default_session_store
+    with _default_store_lock:
+        _default_session_store = store
+
+
+def reset_default_session_store() -> None:
+    """Reset the default session store to None."""
+    global _default_session_store
+    with _default_store_lock:
+        _default_session_store = None

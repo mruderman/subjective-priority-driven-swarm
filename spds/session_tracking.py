@@ -68,16 +68,20 @@ class SessionTracker:
             logger.debug("No active session, skipping decision tracking")
             return
         
+        # Flatten details to top-level payload keys while preserving structure
+        payload = {
+            "decision_type": decision_type,
+            "details": details,
+            **details  # Expose details keys at top level for backward compatibility
+        }
+        
         event = SessionEvent(
             event_id=self._generate_event_id(),
             session_id=session_id,
             ts=datetime.utcnow(),
             actor=actor,
             type="decision",
-            payload={
-                "decision_type": decision_type,
-                "details": details
-            }
+            payload=payload
         )
         
         self._save_event(event)
@@ -89,16 +93,20 @@ class SessionTracker:
             logger.debug("No active session, skipping action tracking")
             return
         
+        # Flatten details to top-level payload keys while preserving structure  
+        payload = {
+            "action_type": action_type,
+            "details": details,
+            **details  # Expose details keys at top level for backward compatibility
+        }
+        
         event = SessionEvent(
             event_id=self._generate_event_id(),
             session_id=session_id,
             ts=datetime.utcnow(),
             actor=actor,
             type="action",
-            payload={
-                "action_type": action_type,
-                "details": details
-            }
+            payload=payload
         )
         
         self._save_event(event)
@@ -110,16 +118,20 @@ class SessionTracker:
             logger.debug("No active session, skipping system event tracking")
             return
         
+        # Flatten details to top-level payload keys while preserving structure
+        payload = {
+            "event_type": event_type,
+            "details": details,
+            **details  # Expose details keys at top level for backward compatibility
+        }
+        
         event = SessionEvent(
             event_id=self._generate_event_id(),
             session_id=session_id,
             ts=datetime.utcnow(),
             actor="system",
             type="system",
-            payload={
-                "event_type": event_type,
-                "details": details
-            }
+            payload=payload
         )
         
         self._save_event(event)
@@ -149,6 +161,18 @@ def get_default_session_tracker() -> SessionTracker:
         _default_tracker = SessionTracker()
     
     return _default_tracker
+
+
+def set_default_session_tracker(tracker: Optional[SessionTracker]) -> None:
+    """Override the default session tracker (useful for tests)."""
+    global _default_tracker
+    _default_tracker = tracker
+
+
+def reset_default_session_tracker() -> None:
+    """Reset the default session tracker to None."""
+    global _default_tracker
+    _default_tracker = None
 
 
 # Convenience functions for tracking

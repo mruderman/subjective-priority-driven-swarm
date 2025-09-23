@@ -28,7 +28,11 @@ const mockAgents: MockAgent[] = [
   },
 ];
 
+let currentAgents: MockAgent[] = [...mockAgents];
+
 test.beforeEach(async ({ page }) => {
+  currentAgents = [...mockAgents];
+
   await page.addInitScript(({ agents }) => {
     const mockAgentsData = agents as MockAgent[];
 
@@ -217,16 +221,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/agents', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ agents: mockAgents }),
-    });
-  });
-
-  // Provide a lightweight mocked start_session so tests don't trigger LettA
-  // network lookups during session creation which can fail on CI or offline.
-  await page.route('**/api/start_session', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ session_id: 'session-test', status: 'success' }),
+      body: JSON.stringify({ agents: currentAgents }),
     });
   });
 
@@ -254,20 +249,9 @@ const startConversation = async (page: Page, topic = 'Exploring AI collaboration
   await page.locator('.mode-card').first().click();
   await page.locator('#topic').fill(topic);
 
-  // Click first, then wait for the chat URL to reach DOMContentLoaded.
-  // Using a two-step approach avoids a race where the frame can be
-  // detached during a redirect and cause `page.waitForURL` to abort.
   await page.locator('#start-chat-btn').click();
 
-  // If Playwright test mode injects session via query param, navigate there
-  // after the mocked start_session returns. This avoids the Flask server
-  // performing LettA agent lookups during session creation.
   await page.waitForResponse('**/api/start_session');
-  // Navigate directly to the chat URL with the test session id. We set
-  // sessionStorage early via addInitScript so the client will initialize
-  // reliably without race conditions.
-  await page.goto('/chat?session_id=session-test');
-
   await expect(page.locator('#chat-input')).toBeVisible();
 };
 
@@ -300,4 +284,56 @@ test('should respond to the /minutes slash command', async ({ page }) => {
 
   const minutesContent = page.locator('#secretary-minutes');
   await expect(minutesContent).toContainText('Meeting Minutes');
+});
+
+test('should display secretary options when the toggle is enabled', async ({ page }) => {
+  await page.goto('/setup');
+
+  const secretaryToggle = page.locator('#enable_secretary');
+  const secretaryOptions = page.locator('#secretary-options');
+
+  await expect(secretaryOptions).toBeHidden();
+
+  await secretaryToggle.check();
+  await expect(secretaryOptions).toBeVisible();
+
+  await secretaryToggle.uncheck();
+  await expect(secretaryOptions).toBeHidden();
+});
+
+test('should require selecting at least one agent before starting a session', async ({ page }) => {
+  await page.goto('/setup');
+
+  await expect(page.locator('.agent-card').first()).toBeVisible();
+
+  await page.locator('#topic').fill('Valid topic without agent selection');
+  await page.locator('#start-chat-btn').click();
+
+  await expect(page.locator('#toast-container')).toContainText('Please select at least one agent');
+});
+
+test('should update conversation mode selection when cards are changed', async ({ page }) => {
+  await page.goto('/setup');
+
+  const hybridCard = page.locator('.mode-card[data-mode="hybrid"]');
+  const allSpeakCard = page.locator('.mode-card[data-mode="all_speak"]');
+  const modeInput = page.locator('#conversation_mode');
+
+  await expect(hybridCard).toHaveClass(/selected/);
+  await expect(modeInput).toHaveValue('hybrid');
+
+  await allSpeakCard.click();
+
+  await expect(allSpeakCard).toHaveClass(/selected/);
+  await expect(hybridCard).not.toHaveClass(/selected/);
+  await expect(modeInput).toHaveValue('all_speak');
+});
+
+test('should show a warning when no agents are returned from the server', async ({ page }) => {
+  currentAgents = [];
+  await page.goto('/setup');
+
+  const noAgentsAlert = page.locator('#no-agents');
+  await expect(noAgentsAlert).toBeVisible();
+  await expect(page.locator('#agent-count')).toHaveText('None Available');
 });

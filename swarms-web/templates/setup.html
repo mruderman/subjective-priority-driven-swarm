@@ -250,11 +250,22 @@ function renderAgentCards() {
     if (loadingDiv) loadingDiv.style.display = 'none';
     
     if (agents.length === 0) {
-        if (noAgentsDiv) noAgentsDiv.style.display = 'block';
+        if (container) {
+            container.style.display = 'none';
+        }
+        if (noAgentsDiv) {
+            noAgentsDiv.classList.remove('hidden-by-default');
+            noAgentsDiv.style.display = 'block';
+        }
         return;
     }
     
+    if (noAgentsDiv) {
+        noAgentsDiv.style.display = 'none';
+    }
+    
     // Show agents container
+    container.classList.remove('hidden-by-default');
     container.style.display = 'block';
     container.innerHTML = '';
     
@@ -344,13 +355,21 @@ function setupSecretaryOptions() {
     const secretaryOptions = document.getElementById('secretary-options');
     
     if (secretaryToggle && secretaryOptions) {
-        secretaryToggle.addEventListener('change', () => {
-            if (secretaryToggle.checked) {
+        const applyVisibility = (enabled) => {
+            if (enabled) {
+                secretaryOptions.classList.remove('hidden-by-default');
                 secretaryOptions.style.display = 'block';
             } else {
                 secretaryOptions.style.display = 'none';
+                secretaryOptions.classList.add('hidden-by-default');
             }
+        };
+
+        secretaryToggle.addEventListener('change', () => {
+            applyVisibility(secretaryToggle.checked);
         });
+
+        applyVisibility(secretaryToggle.checked);
     }
 }
 
@@ -390,6 +409,10 @@ function setupFormSubmission() {
             topic: topic
         };
         
+        if (window.__PLAYWRIGHT_TEST === '1') {
+            formData.playwright_test = true;
+        }
+
         await startSession(formData);
     });
 }

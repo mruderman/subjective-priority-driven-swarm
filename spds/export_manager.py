@@ -731,6 +731,10 @@ def restore_session_from_json(
         session_id = session_state.meta.id
         logger.info(f"Created new session {session_id} for restoration")
 
+    # Set session context so tracking functions work for both existing and new sessions
+    from .session_context import set_current_session_id
+    set_current_session_id(session_id)
+
     # Add system event for minutes
     if summary["minutes_markdown"]:
         from .session_tracking import track_system_event

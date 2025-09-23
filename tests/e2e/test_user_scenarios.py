@@ -765,7 +765,11 @@ class TestE2EUserScenarios:
         sys.stdout = captured_output
 
         # Run main (should handle EOF gracefully)
-        main([])
+        try:
+            main([])
+        except SystemExit as e:
+            # EOFError handling calls sys.exit(0), which is expected
+            assert e.code == 0
 
         sys.stdout = sys.__stdout__
         output = captured_output.getvalue()

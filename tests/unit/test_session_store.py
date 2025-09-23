@@ -33,7 +33,13 @@ class TestJsonSessionStore:
         assert session_state.meta.tags == ["test", "demo"]
         assert session_state.meta.created_at is not None
         assert session_state.meta.last_updated is not None
-        assert session_state.events == []
+        # Should have one session_created event
+        assert len(session_state.events) == 1
+        assert session_state.events[0].type == "system"
+        assert session_state.events[0].actor == "system"
+        assert session_state.events[0].payload["event_type"] == "session_created"
+        assert session_state.events[0].payload["title"] == "Test Session"
+        assert session_state.events[0].payload["tags"] == ["test", "demo"]
         assert session_state.extras is None
     
     def test_create_session_with_custom_id(self, session_store):
@@ -64,11 +70,15 @@ class TestJsonSessionStore:
         
         # Reload the session and verify the event was saved
         loaded_state = session_store.load(session_id)
-        assert len(loaded_state.events) == 1
-        assert loaded_state.events[0].event_id == "test-event-1"
-        assert loaded_state.events[0].actor == "test_agent"
-        assert loaded_state.events[0].type == "message"
-        assert loaded_state.events[0].payload["content"] == "Hello world"
+        assert len(loaded_state.events) == 2  # session_created + the saved event
+        # First event should be session_created
+        assert loaded_state.events[0].type == "system"
+        assert loaded_state.events[0].payload["event_type"] == "session_created"
+        # Second event should be our saved event
+        assert loaded_state.events[1].event_id == "test-event-1"
+        assert loaded_state.events[1].actor == "test_agent"
+        assert loaded_state.events[1].type == "message"
+        assert loaded_state.events[1].payload["content"] == "Hello world"
     
     def test_load_session(self, session_store):
         """Test loading a session by ID."""
@@ -93,8 +103,12 @@ class TestJsonSessionStore:
         
         assert loaded_state.meta.id == session_id
         assert loaded_state.meta.title == "Load Test"
-        assert len(loaded_state.events) == 3
-        assert loaded_state.events[0].payload["content"] == "Message 0"
+        assert len(loaded_state.events) == 4  # 1 session_created + 3 manual events
+        # First event should be session_created
+        assert loaded_state.events[0].type == "system"
+        assert loaded_state.events[0].payload["event_type"] == "session_created"
+        # Next events should be our manually added events
+        assert loaded_state.events[1].payload["content"] == "Message 0"
     
     def test_list_sessions(self, session_store):
         """Test listing all sessions."""
@@ -153,7 +167,7 @@ class TestJsonSessionStore:
         assert loaded_state.meta.last_updated > original_time
     
     def test_atomic_writes(self, session_store):
-        """Test that writes are atomic (don't corrupt data on partial writes)."""
+        """Test that session recovery works when session.json is corrupted."""
         # Create a session
         session_state = session_store.create(title="Atomic Test")
         session_id = session_state.meta.id
@@ -162,10 +176,12 @@ class TestJsonSessionStore:
         session_file = session_store._get_session_file(session_id)
         session_file.write_text("invalid json{")
         
-        # The load should fail and fall back to events.jsonl
-        # Since we haven't added any events, it should raise an error
-        with pytest.raises(ValueError, match="Session .* not found"):
-            session_store.load(session_id)
+        # The load should succeed by rebuilding from events.jsonl (session_created event)
+        recovered_state = session_store.load(session_id)
+        assert recovered_state.meta.id == session_id
+        assert recovered_state.meta.title == "Atomic Test"
+        assert len(recovered_state.events) == 1  # session_created event
+        assert recovered_state.events[0].payload["event_type"] == "session_created"
     
     def test_rebuild_from_events_jsonl(self, session_store):
         """Test that session can be rebuilt from events.jsonl if session.json is corrupted."""
@@ -193,9 +209,13 @@ class TestJsonSessionStore:
         loaded_state = session_store.load(session_id)
         
         assert loaded_state.meta.id == session_id
-        assert len(loaded_state.events) == 2
-        assert loaded_state.events[0].payload["content"] == "Message 0"
-        assert loaded_state.events[1].payload["content"] == "Message 1"
+        assert len(loaded_state.events) == 3  # 1 session_created + 2 manual events
+        # First event should be session_created
+        assert loaded_state.events[0].type == "system"
+        assert loaded_state.events[0].payload["event_type"] == "session_created"
+        # Next events should be our manually added events
+        assert loaded_state.events[1].payload["content"] == "Message 0"
+        assert loaded_state.events[2].payload["content"] == "Message 1"
     
     def test_concurrent_access(self, session_store):
         """Test thread safety with concurrent access."""
@@ -233,7 +253,7 @@ class TestJsonSessionStore:
         
         # Verify all events were saved
         loaded_state = session_store.load(session_id)
-        assert len(loaded_state.events) == 3 * event_count
+        assert len(loaded_state.events) == 1 + (3 * event_count)  # 1 session_created + 30 manual events
 
 
 class TestSessionModels:

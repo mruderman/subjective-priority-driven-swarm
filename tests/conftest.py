@@ -146,3 +146,9 @@ def mock_message_response():
             )
         ]
     )
+
+
+@pytest.fixture(autouse=True)
+def set_ephemeral_agents_env(monkeypatch):
+    """Set SPDS_ALLOW_EPHEMERAL_AGENTS to 'true' for all tests."""
+    monkeypatch.setenv("SPDS_ALLOW_EPHEMERAL_AGENTS", "true")

@@ -141,8 +141,29 @@ class SwarmsApp {
     
     renderAgentCards() {
         const container = document.getElementById('agent-cards');
+        const loadingDiv = document.getElementById('agents-loading');
+        const noAgentsDiv = document.getElementById('no-agents');
         if (!container) return;
         
+        if (loadingDiv) {
+            loadingDiv.style.display = 'none';
+        }
+
+        if (this.agents.length === 0) {
+            container.style.display = 'none';
+            if (noAgentsDiv) {
+                noAgentsDiv.classList.remove('hidden-by-default');
+                noAgentsDiv.style.display = 'block';
+            }
+            return;
+        }
+
+        if (noAgentsDiv) {
+            noAgentsDiv.style.display = 'none';
+        }
+
+        container.classList.remove('hidden-by-default');
+        container.style.display = 'block';
         container.innerHTML = '';
         
         this.agents.forEach(agent => {
@@ -226,13 +247,21 @@ class SwarmsApp {
         const secretaryOptions = document.getElementById('secretary-options');
         
         if (secretaryToggle && secretaryOptions) {
-            secretaryToggle.addEventListener('change', () => {
-                if (secretaryToggle.checked) {
+            const applyVisibility = (enabled) => {
+                if (enabled) {
+                    secretaryOptions.classList.remove('hidden-by-default');
                     secretaryOptions.style.display = 'block';
                 } else {
                     secretaryOptions.style.display = 'none';
+                    secretaryOptions.classList.add('hidden-by-default');
                 }
+            };
+
+            secretaryToggle.addEventListener('change', () => {
+                applyVisibility(secretaryToggle.checked);
             });
+
+            applyVisibility(secretaryToggle.checked);
         }
     }
     
@@ -271,6 +300,10 @@ class SwarmsApp {
                 meeting_type: document.getElementById('meeting_type').value,
                 topic: topic
             };
+            
+            if (window.__PLAYWRIGHT_TEST === '1') {
+                formData.playwright_test = true;
+            }
             
             await this.startSession(formData);
         });

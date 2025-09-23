@@ -389,7 +389,8 @@ def get_allow_ephemeral_agents() -> bool:
     Set SPDS_ALLOW_EPHEMERAL_AGENTS=true explicitly to allow creation from
     profiles or to create a new secretary when one is not provided.
     """
-    return os.getenv("SPDS_ALLOW_EPHEMERAL_AGENTS", "false").lower() in ("1", "true", "yes")
+    env_value = os.getenv("SPDS_ALLOW_EPHEMERAL_AGENTS", "false").lower()
+    return env_value in ("1", "true", "yes")
 
 
 def get_secretary_agent_id() -> Optional[str]:

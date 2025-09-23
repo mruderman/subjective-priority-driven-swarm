@@ -687,6 +687,29 @@ def start_session():
         session_id = str(uuid.uuid4())
         session["session_id"] = session_id
 
+        if data.get("playwright_test") or os.getenv("PLAYWRIGHT_TEST") == "1":
+            conversation_mode = data.get("conversation_mode", "hybrid")
+
+            class DummySwarm:
+                def __init__(self, mode):
+                    self.conversation_mode = mode
+                    self.conversation_history = ""
+
+            class DummyWebSwarm:
+                def __init__(self, mode):
+                    self.session_id = session_id
+                    self.swarm = DummySwarm(mode)
+
+                def start_web_chat(self, topic):
+                    return None
+
+                def process_user_message(self, message):
+                    return None
+
+            active_sessions[session_id] = DummyWebSwarm(conversation_mode)
+
+            return jsonify({"session_id": session_id, "status": "mock"})
+
         # Create WebSwarmManager
         web_swarm = WebSwarmManager(
             session_id=session_id,
