@@ -85,6 +85,7 @@ __pycache__/
 venv/
 env/
 .venv/
+.venv-*
 
 # Environment variables
 .env
