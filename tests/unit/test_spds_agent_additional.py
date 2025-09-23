@@ -4,8 +4,8 @@ import re
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from spds.spds_agent import SPDSAgent
 import spds.spds_agent as spds_agent_module
+from spds.spds_agent import SPDSAgent
 
 
 def mk_agent_state(name="Alice", system=None):
@@ -15,7 +15,9 @@ def mk_agent_state(name="Alice", system=None):
 
 
 def test_parse_system_prompt_extracts_persona_and_expertise():
-    state = mk_agent_state(system="You are Test. Your persona is: Researcher. Your expertise is in: ml, ai.")
+    state = mk_agent_state(
+        system="You are Test. Your persona is: Researcher. Your expertise is in: ml, ai."
+    )
     agent = SPDSAgent(state, client=Mock())
     assert "Researcher" in agent.persona
     assert any("ml" in e for e in agent.expertise)
@@ -80,7 +82,10 @@ def test_speak_fallback_on_no_tool_calls(monkeypatch):
     def raise_no_tools(*a, **k):
         raise RuntimeError("No tool calls found")
 
-    client.agents.messages.create.side_effect = [RuntimeError("No tool calls found"), SimpleNamespace(messages=[SimpleNamespace(content="ok")])]
+    client.agents.messages.create.side_effect = [
+        RuntimeError("No tool calls found"),
+        SimpleNamespace(messages=[SimpleNamespace(content="ok")]),
+    ]
 
     agent = SPDSAgent(state, client=client)
     # Should not raise
@@ -168,7 +173,9 @@ def test_get_full_assessment_falls_back_to_local_tool(monkeypatch):
     )
     client.agents.messages.create.return_value = response
 
-    with patch.object(spds_agent_module.tools, "perform_subjective_assessment") as mock_local:
+    with patch.object(
+        spds_agent_module.tools, "perform_subjective_assessment"
+    ) as mock_local:
         mock_local.return_value = SimpleNamespace(
             importance_to_self=5,
             perceived_gap=5,
@@ -207,7 +214,9 @@ def test_get_full_assessment_handles_invalid_json_and_content_dict(monkeypatch):
 
     client.agents.messages.create.return_value = response
 
-    with patch.object(spds_agent_module.tools, "SubjectiveAssessment") as mock_sa, patch.object(
+    with patch.object(
+        spds_agent_module.tools, "SubjectiveAssessment"
+    ) as mock_sa, patch.object(
         spds_agent_module.tools, "perform_subjective_assessment"
     ) as mock_local:
         sentinel = SimpleNamespace(marker="parsed")
@@ -239,7 +248,9 @@ def test_get_full_assessment_parses_string_list_content(monkeypatch):
 
     client.agents.messages.create.return_value = response
 
-    with patch.object(spds_agent_module.tools, "SubjectiveAssessment") as mock_sa, patch.object(
+    with patch.object(
+        spds_agent_module.tools, "SubjectiveAssessment"
+    ) as mock_sa, patch.object(
         spds_agent_module.tools, "perform_subjective_assessment"
     ) as mock_local:
         sentinel = SimpleNamespace(marker="list-str")
@@ -269,7 +280,9 @@ def test_get_full_assessment_handles_direct_string_content(monkeypatch):
 
     client.agents.messages.create.return_value = response
 
-    with patch.object(spds_agent_module.tools, "SubjectiveAssessment") as mock_sa, patch.object(
+    with patch.object(
+        spds_agent_module.tools, "SubjectiveAssessment"
+    ) as mock_sa, patch.object(
         spds_agent_module.tools, "perform_subjective_assessment"
     ) as mock_local:
         sentinel = SimpleNamespace(marker="direct-str")
@@ -299,7 +312,9 @@ def test_get_full_assessment_handles_namespace_text_content(monkeypatch):
 
     client.agents.messages.create.return_value = response
 
-    with patch.object(spds_agent_module.tools, "SubjectiveAssessment") as mock_sa, patch.object(
+    with patch.object(
+        spds_agent_module.tools, "SubjectiveAssessment"
+    ) as mock_sa, patch.object(
         spds_agent_module.tools, "perform_subjective_assessment"
     ) as mock_local:
         sentinel = SimpleNamespace(marker="ns-text")
@@ -329,7 +344,9 @@ def test_get_full_assessment_skips_non_string_candidates(monkeypatch):
 
     client.agents.messages.create.return_value = response
 
-    with patch.object(spds_agent_module.tools, "perform_subjective_assessment") as mock_local:
+    with patch.object(
+        spds_agent_module.tools, "perform_subjective_assessment"
+    ) as mock_local:
         sentinel = SimpleNamespace(marker="fallback")
         mock_local.return_value = sentinel
         agent._get_full_assessment(topic="Topic", conversation_history="History")
@@ -362,7 +379,9 @@ def test_get_full_assessment_handles_non_dict_json_then_scores(monkeypatch):
 
     client.agents.messages.create.return_value = response
 
-    with patch.object(spds_agent_module.tools, "SubjectiveAssessment") as mock_sa, patch.object(
+    with patch.object(
+        spds_agent_module.tools, "SubjectiveAssessment"
+    ) as mock_sa, patch.object(
         spds_agent_module.tools, "perform_subjective_assessment"
     ) as mock_local:
         sentinel = SimpleNamespace(marker="after-json")
@@ -383,7 +402,7 @@ def test_get_full_assessment_handles_weird_json_module(monkeypatch):
         messages=[
             SimpleNamespace(
                 tool_calls=[],
-                tool_return="{\"unexpected\": true}",
+                tool_return='{"unexpected": true}',
                 message_type="tool_message",
                 content=None,
             ),
@@ -407,7 +426,9 @@ def test_get_full_assessment_handles_weird_json_module(monkeypatch):
 
     client.agents.messages.create.return_value = response
 
-    with patch.object(spds_agent_module.tools, "SubjectiveAssessment") as mock_sa, patch.object(
+    with patch.object(
+        spds_agent_module.tools, "SubjectiveAssessment"
+    ) as mock_sa, patch.object(
         spds_agent_module.tools, "perform_subjective_assessment"
     ) as mock_local:
         sentinel = SimpleNamespace(marker="json-non-dict")
@@ -448,7 +469,9 @@ def test_get_full_assessment_uses_fallback_scores_when_any_skipped(monkeypatch):
 
     monkeypatch.setattr(builtins, "any", fake_any)
 
-    with patch.object(spds_agent_module.tools, "SubjectiveAssessment") as mock_sa, patch.object(
+    with patch.object(
+        spds_agent_module.tools, "SubjectiveAssessment"
+    ) as mock_sa, patch.object(
         spds_agent_module.tools, "perform_subjective_assessment"
     ) as mock_local:
         sentinel = SimpleNamespace(marker="fallback-scores")

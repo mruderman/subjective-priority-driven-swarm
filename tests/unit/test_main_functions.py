@@ -121,7 +121,9 @@ def test_interactive_agent_selection_missing_topic(monkeypatch):
         monkeypatch.setattr(
             m.questionary,
             "select",
-            lambda *a, **k: SimpleNamespace(ask=lambda: "🔀 Sequential (one speaker per turn with fairness)"),
+            lambda *a, **k: SimpleNamespace(
+                ask=lambda: "🔀 Sequential (one speaker per turn with fairness)"
+            ),
         )
         monkeypatch.setattr(
             m.questionary,

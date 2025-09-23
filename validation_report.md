@@ -78,7 +78,7 @@ def retry_with_exponential_backoff(func, max_retries=3, base_delay=1.0):
     for attempt in range(max_retries):
         try:
             return func()
-        except (httpx.RemoteProtocolError, ConnectionError, 
+        except (httpx.RemoteProtocolError, ConnectionError,
                 Exception) as e:
             if attempt == max_retries - 1:
                 raise e

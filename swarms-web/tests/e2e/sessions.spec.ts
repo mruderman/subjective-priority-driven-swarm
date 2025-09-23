@@ -39,20 +39,17 @@ const fulfillJson = (route: import('@playwright/test').Route, response: JsonResp
 
 const parseJson = (request: Request) => {
   try {
-    const fn = (request as unknown as { postDataJSON?: () => unknown }).postDataJSON;
+    const fn = (request as any).postDataJSON;
     if (typeof fn === 'function') {
       const parsed = fn.call(request);
       return parsed ?? {};
     }
   } catch {
-    /* ignore and fall through */
+    /* fall through to manual parsing */
   }
 
   const data = request.postData();
-  if (!data) {
-    return {};
-  }
-
+  if (!data) return {};
   try {
     return JSON.parse(data);
   } catch {
@@ -407,4 +404,3 @@ test.describe('Session management lifecycle', () => {
     await expect(rows.first()).not.toContainText('Strategy Sync');
   });
 });
-

@@ -11,7 +11,7 @@ This project implements a multi-agent group chat system based on their subjectiv
 
 - **Phase 2**: Agents respond to each other's ideas with rebuttals, agreements, or new insights/
 
-**👥 All-Speak Mode**: Fast-paced group discussions  
+**👥 All-Speak Mode**: Fast-paced group discussions
 - All motivated agents respond in priority order
 - Each agent sees previous responses within the same turn
 
@@ -100,7 +100,7 @@ This project implements a multi-agent group chat system based on their subjectiv
     ```bash
     # Core CLI dependencies
     pip install -r requirements.txt
-    
+
     # Additional web interface dependencies
     pip install -r swarms-web/requirements.txt
     ```
@@ -113,7 +113,7 @@ This project implements a multi-agent group chat system based on their subjectiv
     LETTA_PASSWORD=your-server-password            # Primary variable for server authentication
     LETTA_BASE_URL=http://localhost:8283           # For self-hosted (fallback for local dev)
     LETTA_ENVIRONMENT=SELF_HOSTED                  # Or LETTA_CLOUD
-    
+
     # Optional Configuration
     LOG_LEVEL=INFO                                 # Logging level (DEBUG, INFO, WARN, ERROR)
     SPDS_INIT_LOGGING=1                           # Enable automatic logging setup
@@ -133,11 +133,11 @@ This project implements a multi-agent group chat system based on their subjectiv
 
 4.  **Self-hosted Letta Server Setup (Optional):**
     If you're running your own Letta server instead of using Letta Cloud:
-    
+
     ```bash
     # Quick setup using provided script
     cd spds && bash setup.sh
-    
+
     # Or manual Docker setup
     docker run --name letta-ade-server -d \
       -v "$(pwd)":/app/spds_project \
@@ -258,7 +258,7 @@ Available commands: /minutes, /export, /formal, /casual, /action-item
 
 === 🧠 INITIAL RESPONSES ===
 Alice: [Independent research perspective]
-Bob: [Creative industry insights] 
+Bob: [Creative industry insights]
 Diana: [Product strategy viewpoint]
 
 === 💬 RESPONSE ROUND ===
@@ -350,7 +350,7 @@ Each computational being uses its own LLM to assess conversation relevance:
    - **Pure Priority**: Highest motivation always leads
 
 4. **🧬 Authentic Personalities**: Each agent maintains unique:
-   - **Persona**: Distinct personality and communication style  
+   - **Persona**: Distinct personality and communication style
    - **Expertise**: Domain knowledge and areas of interest
    - **Model**: Their own LLM provider and capabilities
    - **Memory**: Persistent conversation history and context
@@ -388,7 +388,7 @@ AGENT_PROFILES = [
         "embedding": "openai/text-embedding-ada-002"
     },
     {
-        "name": "Anthropic Agent", 
+        "name": "Anthropic Agent",
         "persona": "A creative problem solver",
         "expertise": ["creativity", "innovation"],
         "model": "anthropic/claude-3-5-sonnet-20241022",

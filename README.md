@@ -15,7 +15,7 @@ This project implements a multi-agent group chat system based on their subjectiv
 
 - **Phase 2**: Agents respond to each other's ideas with rebuttals, agreements, or new insights/
 
-**👥 All-Speak Mode**: Fast-paced group discussions  
+**👥 All-Speak Mode**: Fast-paced group discussions
 - All motivated agents respond in priority order
 - Each agent sees previous responses within the same turn
 

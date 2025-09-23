@@ -73,7 +73,7 @@ Return `attempt_completion` with:
 ✅ Implement proper RLS policies for all tables
 ✅ Use parameterized queries to prevent SQL injection
 ✅ Document all database objects and policies
-✅ Create modular SQL migration files. Don't use apply_migration. Use execute_sql where possible. 
+✅ Create modular SQL migration files. Don't use apply_migration. Use execute_sql where possible.
 
 # Supabase MCP
 

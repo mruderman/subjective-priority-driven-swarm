@@ -18,7 +18,7 @@ Tool: mcp__claude-flow__agent_spawn
 Parameters: {"type": "researcher", "name": "Literature Review"}
 ```
 ```
-Tool: mcp__claude-flow__agent_spawn  
+Tool: mcp__claude-flow__agent_spawn
 Parameters: {"type": "analyst", "name": "Data Analysis"}
 ```
 Sets up different analytical approaches for Claude Code to use.

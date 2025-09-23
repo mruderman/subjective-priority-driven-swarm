@@ -11,7 +11,7 @@ WebApp had two critical differences from the working CLI version:
 # WEBAPP (BROKEN)
 agent.assess_motivation_and_priority("current topic")  # Hardcoded string!
 
-# CLI (WORKING) 
+# CLI (WORKING)
 agent.assess_motivation_and_priority(topic)  # Real topic passed
 ```
 
@@ -27,7 +27,7 @@ def _web_agent_turn(self):
     for agent in self.swarm.agents:
         agent.assess_motivation_and_priority("current topic")  # ❌
 
-# NEW: webapp/_web_agent_turn(topic)  
+# NEW: webapp/_web_agent_turn(topic)
 def _web_agent_turn(self, topic: str):
     for agent in self.swarm.agents:
         agent.assess_motivation_and_priority(topic)  # ✅
@@ -45,7 +45,7 @@ for agent in motivated_agents:
 # OLD
 self._web_agent_turn()
 
-# NEW  
+# NEW
 self._web_agent_turn(self.current_topic)
 ```
 

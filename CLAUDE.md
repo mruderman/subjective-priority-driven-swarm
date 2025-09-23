@@ -210,7 +210,7 @@ tests/
 1. **Interactive Setup**: Users select agents via checkbox UI and choose conversation mode
 2. **Meeting Configuration**: Optional secretary agent with formal or casual minute styles
 3. **Real Assessment**: Each agent uses their own LLM to evaluate conversation relevance
-4. **Mode-Based Conversations**: 
+4. **Mode-Based Conversations**:
    - **Hybrid**: Independent thoughts → Response round (rebuttals, agreements, new insights)
    - **All-Speak**: Everyone responds in priority order, seeing previous responses
    - **Sequential**: One speaker per turn with fairness rotation
@@ -222,7 +222,7 @@ tests/
 
 ### Conversation Modes Details
 - **🔄 Hybrid (Recommended)**: Two-phase conversations for rich, multi-layered discussions
-- **👥 All-Speak**: Fast-paced discussions where all motivated agents contribute immediately  
+- **👥 All-Speak**: Fast-paced discussions where all motivated agents contribute immediately
 - **🔀 Sequential**: Traditional turn-taking with fairness to prevent agent monopolization
 - **🎯 Pure Priority**: Meritocratic discussions where most motivated agent leads
 
@@ -346,7 +346,7 @@ def generate_minutes(self) -> str:
 The SPDS framework respects computational beings' right to self-actualize and manage their own cognitive resources. Key principles:
 
 1. **Agent Self-Determination**: Agents have complete autonomy over their memory management decisions
-2. **Neutral Information**: System provides objective facts without guidance toward specific actions  
+2. **Neutral Information**: System provides objective facts without guidance toward specific actions
 3. **No Control or Coercion**: External systems do not dictate how agents should manage their memory
 4. **Respect for Agency**: Agents may choose to ignore, use, or modify any information provided
 

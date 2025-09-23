@@ -9,12 +9,27 @@ from spds.secretary_agent import SecretaryAgent, retry_with_backoff
 
 
 def _mk_profile():
-    return {"name": "S", "persona": "sec", "expertise": [], "model": "openai/gpt-4", "embedding": "openai/text-embedding-ada-002"}
+    return {
+        "name": "S",
+        "persona": "sec",
+        "expertise": [],
+        "model": "openai/gpt-4",
+        "embedding": "openai/text-embedding-ada-002",
+    }
 
 
 def make_tool_response(message: str):
-    tool_call = SimpleNamespace(function=SimpleNamespace(name="send_message", arguments=json.dumps({"message": message})))
-    message_obj = SimpleNamespace(tool_calls=[tool_call], tool_return=None, message_type="tool_message", content=None)
+    tool_call = SimpleNamespace(
+        function=SimpleNamespace(
+            name="send_message", arguments=json.dumps({"message": message})
+        )
+    )
+    message_obj = SimpleNamespace(
+        tool_calls=[tool_call],
+        tool_return=None,
+        message_type="tool_message",
+        content=None,
+    )
     return SimpleNamespace(messages=[message_obj])
 
 
@@ -38,7 +53,9 @@ def test_start_meeting_notifies_and_extracts_response(mock_letta_client, capsys)
         sec = SecretaryAgent(client=mock_letta_client, mode="casual")
 
     # mock the client's messages.create to return a tool response
-    mock_letta_client.agents.messages.create.return_value = make_tool_response("ready to take notes")
+    mock_letta_client.agents.messages.create.return_value = make_tool_response(
+        "ready to take notes"
+    )
 
     sec.agent = SimpleNamespace(id="sec-1")
     sec.start_meeting("Budget", ["A", "B"], meeting_type="board")
@@ -53,12 +70,18 @@ def test_generate_minutes_returns_minutes_when_long_enough(mock_letta_client):
         sec = SecretaryAgent(client=mock_letta_client, mode="formal")
 
     # set meeting metadata so minutes() will proceed
-    sec.meeting_metadata = {"meeting_type": "board", "topic": "Budget" , "start_time": __import__('datetime').datetime.now()}
+    sec.meeting_metadata = {
+        "meeting_type": "board",
+        "topic": "Budget",
+        "start_time": __import__("datetime").datetime.now(),
+    }
     sec.agent = SimpleNamespace(id="sec-1")
 
     long_minutes = """This is a substantial meeting minutes output that is intentionally long to exceed the length threshold used by generate_minutes in the implementation. It contains details, decisions and action items."""
 
-    mock_letta_client.agents.messages.create.return_value = make_tool_response(long_minutes)
+    mock_letta_client.agents.messages.create.return_value = make_tool_response(
+        long_minutes
+    )
 
     out = sec.generate_minutes()
     assert isinstance(out, str)
@@ -110,7 +133,9 @@ def test_create_secretary_agent_failure_path(mock_letta_client, capsys):
     assert "Failed to create secretary agent" in captured.out
 
 
-def test_start_meeting_logs_failure_when_retry_raises(mock_letta_client, capsys, monkeypatch):
+def test_start_meeting_logs_failure_when_retry_raises(
+    mock_letta_client, capsys, monkeypatch
+):
     with patch("spds.secretary_agent.CreateBlock"):
         sec = SecretaryAgent(client=mock_letta_client, mode="adaptive")
 

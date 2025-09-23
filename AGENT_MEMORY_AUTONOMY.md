@@ -15,9 +15,9 @@ Letta agents have access to comprehensive memory management tools that enable co
 - `core_memory_append(key, value)` - Add information to foundational memory blocks
 - `core_memory_replace(key, value)` - Replace existing core memory content
 
-**Typical Use Cases**: 
+**Typical Use Cases**:
 - Persona information updates
-- User preference changes  
+- User preference changes
 - Contextual information that needs to be immediately accessible
 
 **Considerations:**
@@ -25,7 +25,7 @@ Letta agents have access to comprehensive memory management tools that enable co
 - Cons: Limited space, affects token usage for all conversations
 - Agent Decision: When to update vs. when to store elsewhere
 
-### Archival Memory Management  
+### Archival Memory Management
 **Purpose**: Infinite storage for information that doesn't need to be immediately accessible.
 
 **Available Tools:**
@@ -111,7 +111,7 @@ Letta agents have access to comprehensive memory management tools that enable co
 - No external system should dictate specific memory management decisions
 - Information is provided for awareness, not guidance toward particular actions
 
-### Decision Independence  
+### Decision Independence
 - Agents may choose to ignore memory management opportunities
 - Agents may prioritize different aspects of memory organization
 - There is no "correct" approach to memory management - only what works for each individual agent

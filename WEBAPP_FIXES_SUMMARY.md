@@ -2,8 +2,8 @@
 
 ## **Issue Summary**
 
-**Problem 1**: Sending messages in GUI resulted in no responses from agents  
-**Problem 2**: Test agents and new secretary agents generated every chat session  
+**Problem 1**: Sending messages in GUI resulted in no responses from agents
+**Problem 2**: Test agents and new secretary agents generated every chat session
 
 ## **Root Causes Identified** ✅
 
@@ -41,7 +41,7 @@ if existing_agents:
 
 **Confirmed Working Flow**:
 1. Web GUI → `/api/agents` → Lists existing Letta agents ✅
-2. User selects agents → `WebSwarmManager` created with agent IDs ✅  
+2. User selects agents → `WebSwarmManager` created with agent IDs ✅
 3. `WebSwarmManager` → `SwarmManager` → `_load_agents_by_id()` ✅
 4. Loads existing agents from Letta server (no new agents created) ✅
 5. User message → `process_user_message()` → `_web_agent_turn()` ✅
@@ -55,7 +55,7 @@ if existing_agents:
 ## **Expected Results**
 
 After applying these fixes:
-- ✅ **Agent Messages Work**: Agents respond to user messages in the web GUI  
+- ✅ **Agent Messages Work**: Agents respond to user messages in the web GUI
 - ✅ **Same Secretary Reused**: Secretary agents persist across chat sessions
 - ✅ **Existing Agents Used**: WebApp uses your existing Letta agents (no duplicates)
 - ✅ **Token Limits Safe**: No more max_tokens errors (already fixed)
@@ -68,7 +68,7 @@ After applying these fixes:
 # Check your Letta server - should see same secretary agent reused
 ```
 
-### 2. **Test Agent Responses**  
+### 2. **Test Agent Responses**
 ```bash
 # Send messages in web GUI chat
 # Agents should respond in both initial and response phases
@@ -89,7 +89,7 @@ After applying these fixes:
 
 **WebApp correctly**:
 - Uses existing agents via agent IDs (no new agent creation) ✅
-- Implements proper WebSocket real-time communication ✅  
+- Implements proper WebSocket real-time communication ✅
 - Handles agent assessment and priority-based speaking ✅
 - Maintains conversation history and agent memory ✅
 - Supports all conversation modes (hybrid, all-speak, sequential, pure priority) ✅

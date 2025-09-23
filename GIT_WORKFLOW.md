@@ -14,7 +14,7 @@ This repository is configured with the following git settings:
 # Start new feature
 git new-feature feature/my-feature-name
 
-# Switch branches 
+# Switch branches
 git sw main
 git sw feature/my-feature
 
@@ -86,7 +86,7 @@ git branch -d feature/descriptive-name
 
 ```bash
 feature/add-secretary-agent          # New features
-bugfix/fix-memory-overflow          # Bug fixes  
+bugfix/fix-memory-overflow          # Bug fixes
 hotfix/critical-security-patch      # Urgent fixes
 docs/update-installation-guide      # Documentation
 refactor/simplify-swarm-manager     # Code improvements

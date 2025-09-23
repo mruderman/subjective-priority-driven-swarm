@@ -21,15 +21,17 @@ from spds.export_manager import (
 from spds.session_store import (
     JsonSessionStore,
     SessionEvent,
-    set_default_session_store,
     reset_default_session_store,
+    set_default_session_store,
 )
 
 
 @pytest.fixture
 def export_dir(tmp_path, monkeypatch):
     export_path = tmp_path / "exports"
-    monkeypatch.setattr(export_module.config, "DEFAULT_EXPORT_DIRECTORY", str(export_path))
+    monkeypatch.setattr(
+        export_module.config, "DEFAULT_EXPORT_DIRECTORY", str(export_path)
+    )
     export_path.mkdir(parents=True, exist_ok=True)
     return export_path
 
@@ -49,14 +51,31 @@ def _sample_meeting_data():
             "conversation_mode": "hybrid",
         },
         "conversation_log": [
-            {"timestamp": now - timedelta(minutes=10), "speaker": "Alex", "message": "Initial thoughts"},
-            {"timestamp": now - timedelta(minutes=9), "speaker": "Jordan", "message": "Follow up"},
+            {
+                "timestamp": now - timedelta(minutes=10),
+                "speaker": "Alex",
+                "message": "Initial thoughts",
+            },
+            {
+                "timestamp": now - timedelta(minutes=9),
+                "speaker": "Jordan",
+                "message": "Follow up",
+            },
         ],
         "action_items": [
-            {"description": "Prepare summary", "assignee": "Alex", "due_date": "Tomorrow", "status": "pending"}
+            {
+                "description": "Prepare summary",
+                "assignee": "Alex",
+                "due_date": "Tomorrow",
+                "status": "pending",
+            }
         ],
         "decisions": [
-            {"decision": "Adopt new testing suite", "actor": "Jordan", "ts": now.isoformat()}
+            {
+                "decision": "Adopt new testing suite",
+                "actor": "Jordan",
+                "ts": now.isoformat(),
+            }
         ],
         "stats": {
             "duration_minutes": 45,
@@ -73,15 +92,32 @@ def test_export_manager_generates_files(manager, export_dir, tmp_path):
     meeting_data = _sample_meeting_data()
 
     formal_minutes = manager.export_meeting_minutes(meeting_data, "formal")
-    casual_minutes = manager.export_meeting_minutes(meeting_data, "casual", filename="custom_notes")
-    transcript = manager.export_raw_transcript(meeting_data["conversation_log"], meeting_data["metadata"])
+    casual_minutes = manager.export_meeting_minutes(
+        meeting_data, "casual", filename="custom_notes"
+    )
+    transcript = manager.export_raw_transcript(
+        meeting_data["conversation_log"], meeting_data["metadata"]
+    )
     structured = manager.export_structured_data(meeting_data)
-    actions = manager.export_action_items(meeting_data["action_items"], meeting_data["metadata"])
-    formatted = manager.export_formatted_conversation(meeting_data["conversation_log"], meeting_data["metadata"])
+    actions = manager.export_action_items(
+        meeting_data["action_items"], meeting_data["metadata"]
+    )
+    formatted = manager.export_formatted_conversation(
+        meeting_data["conversation_log"], meeting_data["metadata"]
+    )
     summary = manager.export_executive_summary(meeting_data)
     package_files = manager.export_complete_package(meeting_data, format_type="formal")
 
-    for path in [formal_minutes, casual_minutes, transcript, structured, actions, formatted, summary, *package_files]:
+    for path in [
+        formal_minutes,
+        casual_minutes,
+        transcript,
+        structured,
+        actions,
+        formatted,
+        summary,
+        *package_files,
+    ]:
         assert Path(path).exists()
 
     # Ensure list_exports returns sorted paths.
@@ -133,15 +169,19 @@ def test_session_summary_and_restore(tmp_path, export_dir, monkeypatch):
     summary = build_session_summary(session)
     assert summary["actions"] and summary["decisions"] and summary["messages"]
 
-    md_path = export_session_to_markdown(session.meta.id, dest_dir=tmp_path / "session_exports")
-    json_path = export_session_to_json(session.meta.id, dest_dir=tmp_path / "session_exports")
+    md_path = export_session_to_markdown(
+        session.meta.id, dest_dir=tmp_path / "session_exports"
+    )
+    json_path = export_session_to_json(
+        session.meta.id, dest_dir=tmp_path / "session_exports"
+    )
     assert md_path.exists()
     assert json_path.exists()
 
     restored_events = {"systems": [], "decisions": [], "actions": []}
 
-    import spds.session_tracking as session_tracking
     import spds.session_context as session_context
+    import spds.session_tracking as session_tracking
 
     monkeypatch.setattr(
         session_tracking,
@@ -158,7 +198,9 @@ def test_session_summary_and_restore(tmp_path, export_dir, monkeypatch):
         "track_action",
         lambda *args, **kwargs: restored_events["actions"].append((args, kwargs)),
     )
-    monkeypatch.setattr(session_context, "set_current_session_id", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        session_context, "set_current_session_id", lambda *args, **kwargs: None
+    )
 
     restored_id = restore_session_from_json(json_path)
     assert isinstance(restored_id, str)

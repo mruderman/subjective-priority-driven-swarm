@@ -9,7 +9,11 @@ from types import SimpleNamespace
 import pytest
 
 from spds import main as main_module
-from spds.session_store import JsonSessionStore, reset_default_session_store, set_default_session_store
+from spds.session_store import (
+    JsonSessionStore,
+    reset_default_session_store,
+    set_default_session_store,
+)
 
 
 class DummySwarm:
@@ -34,11 +38,25 @@ def _install_session_store(tmp_path: Path):
 @pytest.fixture(autouse=True)
 def isolate_config(monkeypatch: pytest.MonkeyPatch):
     # Prevent real network/config lookups.
-    monkeypatch.setattr(main_module.config, "validate_letta_config", lambda check_connectivity=False: True)
+    monkeypatch.setattr(
+        main_module.config,
+        "validate_letta_config",
+        lambda check_connectivity=False: True,
+    )
     monkeypatch.setattr(main_module.config, "get_letta_password", lambda: "test-token")
-    monkeypatch.setattr(main_module.config, "LETTA_ENVIRONMENT", "SELF_HOSTED", raising=False)
-    monkeypatch.setattr(main_module.config, "LETTA_BASE_URL", "http://localhost:8283", raising=False)
-    monkeypatch.setattr(main_module, "Letta", lambda *_, **__: SimpleNamespace(agents=SimpleNamespace(), tools=SimpleNamespace()))
+    monkeypatch.setattr(
+        main_module.config, "LETTA_ENVIRONMENT", "SELF_HOSTED", raising=False
+    )
+    monkeypatch.setattr(
+        main_module.config, "LETTA_BASE_URL", "http://localhost:8283", raising=False
+    )
+    monkeypatch.setattr(
+        main_module,
+        "Letta",
+        lambda *_, **__: SimpleNamespace(
+            agents=SimpleNamespace(), tools=SimpleNamespace()
+        ),
+    )
     yield
     reset_default_session_store()
 
@@ -74,9 +92,13 @@ def test_new_session_flag_triggers_swarm(monkeypatch, tmp_path):
     _install_session_store(tmp_path)
 
     dummy_swarm = DummySwarm()
-    monkeypatch.setattr(main_module, "SwarmManager", lambda *args, **kwargs: dummy_swarm)
+    monkeypatch.setattr(
+        main_module, "SwarmManager", lambda *args, **kwargs: dummy_swarm
+    )
 
-    exit_code = main_module.main(["--new-session", "Kickoff", "--agent-ids", "agent-123"])
+    exit_code = main_module.main(
+        ["--new-session", "Kickoff", "--agent-ids", "agent-123"]
+    )
     assert exit_code == 0
     assert dummy_swarm.started is True
 
@@ -97,7 +119,9 @@ def test_swarm_config_path(monkeypatch, tmp_path):
     config_path.write_text(json.dumps(profiles))
 
     dummy_swarm = DummySwarm()
-    monkeypatch.setattr(main_module, "SwarmManager", lambda *args, **kwargs: dummy_swarm)
+    monkeypatch.setattr(
+        main_module, "SwarmManager", lambda *args, **kwargs: dummy_swarm
+    )
 
     # Provide canned input for topic prompt.
     monkeypatch.setattr("builtins.input", lambda prompt="": "Playwright Coverage")
@@ -117,18 +141,27 @@ def test_agent_ids_flow(monkeypatch, tmp_path):
     agents_ns.retrieve = lambda agent_id: SimpleNamespace(
         id=agent_id,
         name="Mock Agent",
-        system="You are Mock Agent. Your persona is: Tester. Your expertise is in: testing."
+        system="You are Mock Agent. Your persona is: Tester. Your expertise is in: testing.",
     )
     agents_ns.list = lambda **_: []
-    agents_ns.messages = SimpleNamespace(create=lambda **_: SimpleNamespace(messages=[]))
+    agents_ns.messages = SimpleNamespace(
+        create=lambda **_: SimpleNamespace(messages=[])
+    )
     agents_ns.tools = SimpleNamespace(attach=lambda **_: SimpleNamespace())
 
     monkeypatch.setattr(
         main_module,
         "Letta",
-        lambda *_, **__: SimpleNamespace(agents=agents_ns, tools=SimpleNamespace(create_from_function=lambda **_: SimpleNamespace(id="tool-1"))),
+        lambda *_, **__: SimpleNamespace(
+            agents=agents_ns,
+            tools=SimpleNamespace(
+                create_from_function=lambda **_: SimpleNamespace(id="tool-1")
+            ),
+        ),
     )
-    monkeypatch.setattr(main_module, "SwarmManager", lambda *args, **kwargs: dummy_swarm)
+    monkeypatch.setattr(
+        main_module, "SwarmManager", lambda *args, **kwargs: dummy_swarm
+    )
 
     exit_code = main_module.main(["--agent-ids", "agent-001"])
     assert exit_code == 0

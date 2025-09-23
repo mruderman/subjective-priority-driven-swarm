@@ -89,7 +89,11 @@ def test_start_chat_observe_message_called(monkeypatch):
     def observe(who, msg):
         flag.called = True
 
-    mgr.secretary = types.SimpleNamespace(agent=types.SimpleNamespace(name="Sec"), mode="adaptive", observe_message=observe)
+    mgr.secretary = types.SimpleNamespace(
+        agent=types.SimpleNamespace(name="Sec"),
+        mode="adaptive",
+        observe_message=observe,
+    )
 
     seq = iter(["topic", "hello", "quit"])
 

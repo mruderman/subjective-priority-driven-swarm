@@ -10,7 +10,7 @@ SPARC (Specification, Planning, Architecture, Review, Code) is a comprehensive d
 - **workflow-manager**: Process automation
 - **batch-executor**: Parallel task execution
 
-### Development Modes  
+### Development Modes
 - **coder**: Autonomous code generation
 - **architect**: System design
 - **reviewer**: Code review

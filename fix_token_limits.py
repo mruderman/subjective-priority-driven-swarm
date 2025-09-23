@@ -142,9 +142,9 @@ def get_client():
 def main():
     print("🔧 Agent Recreation Script")
     print("=" * 50)
-    
+
     client = get_client()
-    
+
     # Agents to recreate (with token limit issues):
 '''
 
@@ -156,18 +156,18 @@ def main():
         # Delete old agent with token issues (CAUTION: This removes all conversation history)
         # client.agents.delete(agent_id="{agent_id}")
         print("   ⚠️  Old agent deletion commented out for safety")
-        
+
         # Create new agent with correct token limits
         # Note: You may need to customize persona/expertise based on the original agent
         new_agent = SPDSAgent.create_new(
             name="{agent_name}_fixed",
             persona="A helpful AI assistant",  # TODO: Customize based on original
-            expertise=["general"],  # TODO: Customize based on original  
+            expertise=["general"],  # TODO: Customize based on original
             client=client,
             model="{model}"
         )
         print(f"   ✅ Created new agent: {{new_agent.name}} with max_tokens={safe_limit}")
-        
+
     except Exception as e:
         print(f"   ❌ Failed to recreate {agent_name}: {{e}}")
 """

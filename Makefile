@@ -32,4 +32,3 @@ lint:
 
 fmt:
 	. $(VENV)/bin/activate && isort . && black .
-

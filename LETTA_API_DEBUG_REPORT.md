@@ -104,7 +104,7 @@ def _extract_agent_response_robust(self, response) -> tuple[str, bool]:
     """Extract response with detailed error tracking."""
     message_text = ""
     extraction_successful = False
-    
+
     try:
         for msg in response.messages:
             if hasattr(msg, 'tool_calls') and msg.tool_calls:
@@ -123,7 +123,7 @@ def _extract_agent_response_robust(self, response) -> tuple[str, bool]:
                         except Exception as e:
                             print(f"[Debug: Tool call extraction error: {e}]")
                             continue
-            
+
             if not extraction_successful and hasattr(msg, 'content'):
                 # Fallback to content extraction with validation
                 content = self._extract_content_safely(msg.content)
@@ -131,7 +131,7 @@ def _extract_agent_response_robust(self, response) -> tuple[str, bool]:
                     message_text = content
                     extraction_successful = True
                     break
-                    
+
         return message_text, extraction_successful
     except Exception as e:
         print(f"[Debug: Response extraction failed: {e}]")
@@ -184,7 +184,7 @@ def _assess_response_quality(self, response_text: str) -> dict:
         'substantive': any(word in response_text.lower() for word in ['because', 'think', 'believe', 'consider', 'suggest']),
         'contextual': False  # Would need topic analysis
     }
-    
+
     quality_score = sum(quality_metrics.values()) / len(quality_metrics)
     return {
         'score': quality_score,

@@ -282,7 +282,7 @@ To use an MCP server:
 2. Authenticate with your credentials.
 3. Trigger available actions through Roo workflows.
 4. Maintain security and restrict only necessary permissions.
- 
+
 ### Example: GitHub Integration
 
 ```

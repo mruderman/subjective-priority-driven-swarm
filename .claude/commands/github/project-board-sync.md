@@ -57,7 +57,7 @@ version: 1
 project:
   name: "AI Development Board"
   number: 1
-  
+
 mapping:
   # Map swarm task status to board columns
   status:
@@ -67,7 +67,7 @@ mapping:
     review: "Review"
     completed: "Done"
     blocked: "Blocked"
-    
+
   # Map agent types to labels
   agents:
     coder: "🔧 Development"
@@ -75,14 +75,14 @@ mapping:
     analyst: "📊 Analysis"
     designer: "🎨 Design"
     architect: "🏗️ Architecture"
-    
+
   # Map priority to project fields
   priority:
     critical: "🔴 Critical"
     high: "🟡 High"
     medium: "🟢 Medium"
     low: "⚪ Low"
-    
+
   # Custom fields
   fields:
     - name: "Agent Count"

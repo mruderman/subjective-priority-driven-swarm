@@ -43,7 +43,7 @@ pytest -v
 # Run only unit tests
 pytest tests/unit/
 
-# Run only integration tests  
+# Run only integration tests
 pytest tests/integration/
 
 # Run only end-to-end tests
@@ -187,7 +187,7 @@ def test_diverse_models(self, mock_letta_client):
             "embedding": "openai/text-embedding-ada-002"
         },
         {
-            "name": "Agent 2", 
+            "name": "Agent 2",
             "persona": "Another agent",
             "expertise": ["analysis"],
             "model": "anthropic/claude-3-5-sonnet-20241022",
@@ -202,7 +202,7 @@ def test_diverse_models(self, mock_letta_client):
 - **Minimum overall coverage**: 85%
 - **Critical components coverage**: 95%
   - `tools.py`
-  - `spds_agent.py` 
+  - `spds_agent.py`
   - `swarm_manager.py`
 
 ## Targets by Group
@@ -317,7 +317,7 @@ pytest --random-order
 ### Test Development Workflow
 
 1. **Write a failing test** - Red phase
-2. **Make it pass** - Green phase  
+2. **Make it pass** - Green phase
 3. **Refactor** - Clean up code and tests
 4. **Verify coverage** - Ensure new code is covered
 
