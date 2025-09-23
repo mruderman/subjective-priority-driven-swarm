@@ -648,7 +648,15 @@ def chat():
 
 @app.route("/api/agents")
 def get_agents():
-    """API endpoint to get available agents."""
+    """
+    Return a JSON list of available agents.
+    
+    When the environment variable PLAYWRIGHT_TEST == "1", returns a mocked agent list from get_mock_agents().
+    Otherwise initializes a Letta client (using self-hosted password, API key, or base URL as available), fetches agents, and returns JSON with each agent's id, name, model (or "Unknown"), and created_at date (YYYY-MM-DD or "Unknown").
+    
+    Returns:
+    	Flask Response: JSON payload {"agents": [...]} on success, or {"error": "<message>"} with HTTP 500 on failure.
+    """
     if os.getenv("PLAYWRIGHT_TEST") == "1":
         return jsonify({"agents": get_mock_agents()})
 
