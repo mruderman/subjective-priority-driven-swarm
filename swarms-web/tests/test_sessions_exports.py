@@ -8,47 +8,44 @@ Tests the following endpoints:
 """
 
 import json
-import tempfile
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
 import pytest
-from flask import Flask
 
-# Add parent directory to path to import spds modules
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+ROOT_DIR = Path(__file__).resolve().parents[2]
+SWARMS_WEB_DIR = Path(__file__).resolve().parents[1]
+if str(SWARMS_WEB_DIR) not in sys.path:
+    sys.path.insert(0, str(SWARMS_WEB_DIR))
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from spds import config
-from spds.session_store import JsonSessionStore, SessionEvent
+from spds.session_store import JsonSessionStore, SessionEvent, reset_default_session_store
 
 
 @pytest.fixture
-def app(tmp_path):
+def app(tmp_path, monkeypatch):
     """Create a test Flask app with temporary directories."""
-    # Create temporary directories
     sessions_dir = tmp_path / "sessions"
+    exports_dir = tmp_path / "exports"
     sessions_dir.mkdir()
-    
-    # Monkeypatch config to use temp directories
-    original_get_sessions_dir = config.get_sessions_dir
-    config.get_sessions_dir = lambda: sessions_dir
-    
-    # Add parent directory to Python path to import app
-    import sys
-    parent_dir = os.path.join(os.path.dirname(__file__), '..')
-    sys.path.insert(0, parent_dir)
-    
-    # Import app after monkeypatching
+    exports_dir.mkdir()
+
+    monkeypatch.setattr(config, "get_sessions_dir", lambda: sessions_dir)
+    monkeypatch.setattr(config, "DEFAULT_EXPORT_DIRECTORY", str(exports_dir))
+    reset_default_session_store()
+
+    swarms_web_dir = Path(__file__).resolve().parents[1]
+    repo_root = swarms_web_dir.parent
+    monkeypatch.syspath_prepend(str(swarms_web_dir))
+    monkeypatch.syspath_prepend(str(repo_root))
+
     from app import app as flask_app
-    
-    yield flask_app
-    
-    # Restore original function
-    config.get_sessions_dir = original_get_sessions_dir
-    # Remove from path
-    sys.path.remove(parent_dir)
+
+    return flask_app
 
 
 @pytest.fixture
@@ -239,7 +236,7 @@ class TestSessionExports:
         response = client.get(f'/api/sessions/{test_session}/exports/{filename}')
         
         assert response.status_code == 200
-        assert response.content_type == 'text/markdown'
+        assert response.content_type.startswith('text/markdown')
         assert response.headers.get('Content-Disposition') is not None
         assert filename in response.headers.get('Content-Disposition')
     

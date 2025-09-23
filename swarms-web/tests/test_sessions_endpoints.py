@@ -5,6 +5,13 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from app import app
 
 
@@ -19,6 +26,8 @@ def client():
 @pytest.fixture
 def temp_sessions_dir(monkeypatch):
     """Create a temporary sessions directory for testing."""
+    from spds.session_store import reset_default_session_store
+
     with tempfile.TemporaryDirectory() as tmpdir:
         sessions_dir = Path(tmpdir) / "sessions"
         sessions_dir.mkdir(parents=True, exist_ok=True)
@@ -28,6 +37,7 @@ def temp_sessions_dir(monkeypatch):
             return sessions_dir
         
         monkeypatch.setattr("spds.config.get_sessions_dir", mock_get_sessions_dir)
+        reset_default_session_store()
         yield sessions_dir
 
 

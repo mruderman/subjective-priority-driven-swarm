@@ -22,6 +22,7 @@ from flask import (
 )
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import BadRequest
 
 # Add parent directory to path to import existing SPDS modules
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -778,7 +779,10 @@ def get_sessions():
 def create_session():
     """Create a new session."""
     try:
-        data = request.get_json()
+        try:
+            data = request.get_json()
+        except BadRequest:
+            return jsonify({"error": "Invalid JSON payload"}), 400
         if data is None:
             return jsonify({"error": "Invalid JSON payload"}), 400
         
@@ -811,7 +815,10 @@ def create_session():
 def resume_session():
     """Resume an existing session."""
     try:
-        data = request.get_json()
+        try:
+            data = request.get_json()
+        except BadRequest:
+            return jsonify({"error": "Invalid JSON payload"}), 400
         if data is None:
             return jsonify({"error": "Invalid JSON payload"}), 400
         
@@ -952,7 +959,7 @@ def trigger_session_export(session_id):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-@app.route("/api/sessions/<session_id>/exports/<filename>")
+@app.route("/api/sessions/<session_id>/exports/<path:filename>")
 def download_session_export(session_id, filename):
     """Download a specific export file for a session."""
     try:
@@ -963,14 +970,14 @@ def download_session_export(session_id, filename):
         except ValueError:
             return jsonify({"error": "Session not found"}), 404
         
+        # Security: Prevent path traversal
+        if ".." in filename or "/" in filename or "\\" in filename:
+            return jsonify({"error": "Invalid filename"}), 400
+        
         # Security: Validate filename pattern
         if not (filename.startswith("summary_") and filename.endswith(".json")) and \
            not (filename.startswith("minutes_") and filename.endswith(".md")):
             return jsonify({"error": "Invalid filename pattern"}), 400
-        
-        # Security: Prevent path traversal
-        if ".." in filename or "/" in filename or "\\" in filename:
-            return jsonify({"error": "Invalid filename"}), 400
         
         # Get file path
         sessions_dir = config.get_sessions_dir()
