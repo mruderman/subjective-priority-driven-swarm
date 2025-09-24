@@ -1,0 +1,24 @@
+{
+  "agents": [
+    {
+      "id": "agent-1",
+      "name": "Alex Johnson",
+      "model": "openai/gpt-4",
+      "created_at": "2024-01-01"
+    },
+    {
+      "id": "agent-2",
+      "name": "Jordan Smith",
+      "model": "anthropic/claude-3",
+      "created_at": "2024-01-02"
+    },
+    {
+      "id": "agent-3",
+      "name": "Casey Lee",
+      "model": "openai/gpt-4",
+      "created_at": "2024-01-03"
+    }
+  ],
+  "secretaryMinutes": "Meeting Minutes\n- Agenda review\n- Decisions recorded",
+  "agentResponse": "AI advancements look promising with collaborative intelligence."
+}
