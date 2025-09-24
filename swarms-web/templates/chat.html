@@ -330,7 +330,12 @@ class SimpleChat {
         this.socket.off('phase_change');
         this.socket.off('agent_thinking');
         this.socket.off('export_complete');
-
+        // Secretary related events
+        this.socket.off('secretary_minutes');
+        this.socket.off('secretary_stats');
+        this.socket.off('secretary_status');
+        this.socket.off('secretary_activity');
+        
         // Connect handler - now inside setupSocketEvents
         this.socket.on('connect', () => {
             console.log('Connected to server');
@@ -405,6 +410,11 @@ class SimpleChat {
         // Minutes payload with rendered text from secretary
         this.socket.on('secretary_minutes', (data) => {
             this.updateSecretaryMinutes(data.minutes);
+        });
+
+        this.socket.on('secretary_stats', (data) => {
+            const payload = (data && (data.stats ?? data)) || {};
+            this.updateSecretaryStats(payload);
         });
     }
 
@@ -727,9 +737,19 @@ class SimpleChat {
     }
 
     formatMessageContent(content) {
-        return content
+        const escapeHtml = (s) =>
+            String(s ?? '').replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;',
+            }[c] || c));
+
+        const escaped = escapeHtml(content);
+        return escaped
             .replace(/\n/g, '<br>')
-            .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+            .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
     }
 
     showThinkingIndicator(agentName, phase = null, progress = null) {
@@ -906,10 +926,75 @@ class SimpleChat {
             minutesEl.appendChild(pre);
             minutesEl.style.display = 'block';
         }
+        const statsEl = document.getElementById('secretary-stats');
+        if (statsEl) {
+            statsEl.style.display = 'none';
+        }
         if (contentEl) {
             // Keep a small status panel, but deprioritize it visually when minutes are shown
             // No-op: leave existing content; optionally could clear if needed
         }
+    }
+
+    updateSecretaryStats(stats) {
+        const statsEl = document.getElementById('secretary-stats');
+        if (!statsEl) {
+            return;
+        }
+
+        // Hide minutes panel to avoid overlapping UIs
+        const minutesEl = document.getElementById('secretary-minutes');
+        if (minutesEl) {
+            minutesEl.style.display = 'none';
+        }
+
+        // Accessible live updates
+        statsEl.setAttribute('aria-live', 'polite');
+
+        const formatValue = (v) => {
+            if (v == null) return '';
+            if (typeof v === 'number') return new Intl.NumberFormat().format(v);
+            if (Array.isArray(v)) return v.join(', ');
+            if (typeof v === 'object') return JSON.stringify(v);
+            return String(v);
+        };
+
+        const entries = stats && typeof stats === 'object'
+            ? Object.entries(stats)
+            : [];
+
+        statsEl.innerHTML = '';
+
+        if (entries.length === 0) {
+            const emptyState = document.createElement('p');
+            emptyState.className = 'small text-muted mb-0';
+            emptyState.textContent = 'No statistics available yet.';
+            statsEl.appendChild(emptyState);
+        } else {
+            const list = document.createElement('div');
+            list.className = 'd-flex flex-column gap-1';
+
+            entries.forEach(([label, value]) => {
+                const row = document.createElement('div');
+                row.className = 'd-flex justify-content-between align-items-center';
+
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'text-muted';
+                labelSpan.textContent = label;
+
+                const valueSpan = document.createElement('span');
+                valueSpan.className = 'fw-semibold';
+                valueSpan.textContent = formatValue(value);
+
+                row.appendChild(labelSpan);
+                row.appendChild(valueSpan);
+                list.appendChild(row);
+            });
+
+            statsEl.appendChild(list);
+        }
+
+        statsEl.style.display = 'block';
     }
 
     showConnectionModal() {
