@@ -736,9 +736,19 @@ class SimpleChat {
     }
     
     formatMessageContent(content) {
-        return content
+        const escapeHtml = (s) =>
+            String(s ?? '').replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;',
+            }[c] || c));
+
+        const escaped = escapeHtml(content);
+        return escaped
             .replace(/\n/g, '<br>')
-            .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+            .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
     }
     
     showThinkingIndicator(agentName, phase = null, progress = null) {
@@ -915,6 +925,10 @@ class SimpleChat {
             minutesEl.appendChild(pre);
             minutesEl.style.display = 'block';
         }
+        const statsEl = document.getElementById('secretary-stats');
+        if (statsEl) {
+            statsEl.style.display = 'none';
+        }
         if (contentEl) {
             // Keep a small status panel, but deprioritize it visually when minutes are shown
             // No-op: leave existing content; optionally could clear if needed
@@ -926,6 +940,23 @@ class SimpleChat {
         if (!statsEl) {
             return;
         }
+
+        // Hide minutes panel to avoid overlapping UIs
+        const minutesEl = document.getElementById('secretary-minutes');
+        if (minutesEl) {
+            minutesEl.style.display = 'none';
+        }
+
+        // Accessible live updates
+        statsEl.setAttribute('aria-live', 'polite');
+
+        const formatValue = (v) => {
+            if (v == null) return '';
+            if (typeof v === 'number') return new Intl.NumberFormat().format(v);
+            if (Array.isArray(v)) return v.join(', ');
+            if (typeof v === 'object') return JSON.stringify(v);
+            return String(v);
+        };
 
         const entries = stats && typeof stats === 'object'
             ? Object.entries(stats)
@@ -952,7 +983,7 @@ class SimpleChat {
 
                 const valueSpan = document.createElement('span');
                 valueSpan.className = 'fw-semibold';
-                valueSpan.textContent = String(value);
+                valueSpan.textContent = formatValue(value);
 
                 row.appendChild(labelSpan);
                 row.appendChild(valueSpan);
