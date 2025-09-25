@@ -15,17 +15,20 @@ This microagent automatically manages open PR requests in GitHub with a comprehe
 This microagent performs the following automated workflow for GitHub pull requests:
 
 ### 1. CodeRabbitAI Review Processing
+
 - Monitor for CodeRabbitAI review submissions
 - Automatically commit any commitable suggestions from CodeRabbitAI
 - Address other concerns and reviewer comments systematically
 - Ensure all review feedback is properly handled before proceeding
 
 ### 2. Branch Conflict Resolution
+
 - Identify and resolve any outstanding PR branch conflicts with the Main branch
 - Perform necessary merges or rebases to ensure clean integration
 - Validate that all conflicts are properly resolved before proceeding to merge
 
 ### 3. Automated Merging
+
 - Merge PR branch into Main branch once all conditions are met:
   - All conflicts resolved
   - All commitable review suggestions committed
@@ -33,6 +36,7 @@ This microagent performs the following automated workflow for GitHub pull reques
 - Ensure merge is performed safely with proper validation
 
 ### 4. Post-Merge Cleanup
+
 - Delete PR branches after successful merge when safe to do so
 - Perform cleanup operations to maintain repository hygiene
 - Ensure no orphaned branches remain after successful integration
