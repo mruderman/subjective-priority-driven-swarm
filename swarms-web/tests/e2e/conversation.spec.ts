@@ -968,6 +968,5 @@ test('should cycle secretary activity status and reset after completion', async 
   });
   await expect(secretaryContent).toContainText('Summary finalized successfully!');
 
-  await page.waitForTimeout(3200);
-  await expect(secretaryContent).toContainText('Ready for more activity');
+  await expect(secretaryContent).toContainText('Ready for more activity', { timeout: 4000 });
 });
