@@ -137,6 +137,7 @@ export const test = base.extend<{
   createSessionExport: CreateSessionExportFn;
   listSessionExports: ListSessionExportsFn;
   setAgents: (agents: MockAgent[]) => Promise<void>;
+  emitSocketEvent: <T = unknown>(eventName: string, data?: T) => Promise<void>;
 }>(
   {
     mockedLetta: async ({ page }, use) => {
@@ -163,6 +164,26 @@ export const test = base.extend<{
     },
     setAgents: async ({ mockedLetta }, use) => {
       await use((agents) => mockedLetta.setAgents(agents));
+    },
+    emitSocketEvent: async ({ page }, use) => {
+      await use(async (eventName, data) => {
+        // Evaluate a small snippet in the page that calls the test-only hook `window.__TEST_EMIT`
+        // The hook itself will be provided by the mockedLetta helper (separate subtask).
+        await page.evaluate(
+          ([name, payload]) => {
+            if (typeof window !== 'undefined' && typeof (window as any)['__TEST_EMIT'] === 'function') {
+              (window as any)['__TEST_EMIT'](name, payload);
+            } else {
+              // Fail loudly in test logs if the hook is missing
+              // Keep this a console message so tests can still inspect page console if desired
+              // (Do not throw here to avoid interrupting fixture setup; tests should assert hook presence as needed)
+              // eslint-disable-next-line no-console
+              console.error('__TEST_EMIT hook not found on window');
+            }
+          },
+          [eventName, data]
+        );
+      });
     },
   }
 );
