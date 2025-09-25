@@ -175,7 +175,7 @@
                         </div>
 
                         <!-- Secretary Minutes -->
-                        <div id="secretary-minutes" style="display: none;"></div>
+                        <div id="secretary-minutes" style="display: none; font-family: Monaco, monospaced;"></div>
 
                         <!-- Secretary Stats -->
                         <div id="secretary-stats" style="display: none;"></div>
@@ -826,19 +826,48 @@ class SimpleChat {
             assessmentIndicator.remove();
         }
 
-        // Update scores in sidebar
         const scoresContainer = document.getElementById('agent-scores');
-        if (scoresContainer) {
-            scoresContainer.innerHTML = scores.map(score => `
-                <div class="agent-score-item">
-                    <span class="agent-name">${score.name}</span>
-                    <div class="score-badges">
-                        <span class="score-badge">M: ${score.motivation_score}</span>
-                        <span class="score-badge">P: ${score.priority_score}</span>
-                    </div>
-                </div>
-            `).join('');
+        const wrapper = document.getElementById('agent-scores-container');
+        if (!scoresContainer || !wrapper) return;
+
+        // Clear previous safely
+        scoresContainer.innerHTML = '';
+
+        if (!Array.isArray(scores) || scores.length === 0) {
+            wrapper.style.display = 'none';
+            return;
         }
+
+        wrapper.style.display = 'block';
+
+        scores.forEach((score) => {
+            const item = document.createElement('div');
+            item.className = 'agent-score-item';
+
+            const nameEl = document.createElement('span');
+            nameEl.className = 'agent-name';
+            nameEl.textContent = String(score?.name ?? '');
+
+            const badges = document.createElement('div');
+            badges.className = 'score-badges';
+
+            const m = document.createElement('span');
+            m.className = 'score-badge';
+            const mVal = typeof score?.motivation_score === 'number' ? score.motivation_score : 0;
+            // Normalize/clamp: assume incoming 0..1; clamp then scale to 0..100
+            m.textContent = `M: ${Math.round(Math.max(0, Math.min(1, mVal)) * 100)}`;
+
+            const p = document.createElement('span');
+            p.className = 'score-badge';
+            const pVal = typeof score?.priority_score === 'number' ? score.priority_score : 0;
+            p.textContent = `P: ${Math.round(Math.max(0, Math.min(1, pVal)) * 100)}`;
+
+            badges.appendChild(m);
+            badges.appendChild(p);
+            item.appendChild(nameEl);
+            item.appendChild(badges);
+            scoresContainer.appendChild(item);
+        });
     }
 
     updatePhase(phase) {
