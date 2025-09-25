@@ -13,7 +13,7 @@ type JsonResponse = {
   body: unknown;
 };
 
-const baseSessions: SessionMeta[] = [
+const baseSessionTemplates: SessionMeta[] = [
   {
     id: 'session-1234567890',
     title: 'Strategy Sync',
@@ -68,10 +68,25 @@ test.describe('Session management lifecycle', () => {
   let createResponseOverride: ((payload: Record<string, unknown>) => JsonResponse) | null;
   let resumeResponseOverride: ((payload: Record<string, unknown>) => JsonResponse) | null;
   let createSequence: number;
+  let sessionPrefix: string;
 
   const createRequests: Record<string, unknown>[] = [];
-  test.beforeEach(async ({ page }) => {
-    sessions = baseSessions.map((session) => ({ ...session, tags: [...session.tags] }));
+  test.beforeEach(async ({ page }, testInfo) => {
+    const uniqueSuffix = [
+      testInfo.workerIndex ?? 0,
+      testInfo.parallelIndex ?? 0,
+      testInfo.repeatEachIndex ?? 0,
+      testInfo.retry ?? 0,
+      Date.now().toString(36),
+    ].join('-');
+
+    sessionPrefix = `test-sess-A-${uniqueSuffix}`;
+
+    sessions = baseSessionTemplates.map((session, index) => ({
+      ...session,
+      id: `${sessionPrefix}-${String(index + 1).padStart(2, '0')}`,
+      tags: [...session.tags],
+    }));
     listResponseOverride = null;
     createResponseOverride = null;
     resumeResponseOverride = null;
@@ -115,6 +130,13 @@ test.describe('Session management lifecycle', () => {
         __PLAYWRIGHT_TEST?: string;
       };
 
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (storageError) {
+        console.warn('Unable to reset storage in init script', storageError);
+      }
+
       win.io = () => ({
         on() {
           return this;
@@ -131,11 +153,6 @@ test.describe('Session management lifecycle', () => {
       });
 
       win.__PLAYWRIGHT_TEST = '1';
-      try {
-        sessionStorage.setItem('sessionId', 'session-playwright');
-      } catch (error) {
-        /* ignore */
-      }
     });
 
     await page.route('**/socket.io.min.js*', async (route) => {
@@ -197,8 +214,9 @@ test.describe('Session management lifecycle', () => {
           : (body: Record<string, unknown>): JsonResponse => {
               const nowIso = '2024-02-01T10:00:00Z';
               createSequence += 1;
+              const newSessionId = `${sessionPrefix}-created-${String(createSequence).padStart(4, '0')}`;
               const newSession: SessionMeta = {
-                id: `session-created-${String(createSequence).padStart(4, '0')}`,
+                id: newSessionId,
                 title: typeof body.title === 'string' && body.title.trim() !== '' ? body.title : null,
                 created_at: nowIso,
                 last_updated: nowIso,
@@ -278,7 +296,10 @@ test.describe('Session management lifecycle', () => {
     });
 
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject(baseSessions[0]);
+    expect(items[0]).toMatchObject({
+      ...baseSessionTemplates[0],
+      id: `${sessionPrefix}-01`,
+    });
   });
 
   test('surfaces backend errors when loading sessions fails', async ({ page }) => {
@@ -289,23 +310,104 @@ test.describe('Session management lifecycle', () => {
     await expectToast(page, 'Error loading sessions: cannot list sessions');
   });
 
-  test('creates a new session and refreshes the listing', async ({ page }) => {
+  test('creates a new session, stores context, and redirects to chat', async ({ page }) => {
+    const expectedSessionId = `${sessionPrefix}-created-0001`;
+    const chatVisits: string[] = [];
+
+    await page.route('**/chat*', async (route) => {
+      chatVisits.push(route.request().url());
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<html><body><div id="chat-placeholder">Chat page ready</div></body></html>',
+      });
+    });
+
     await page.goto('/sessions');
+
+    const rows = page.locator('tbody#sessions-table-body tr.session-row');
+    await expect(rows).toHaveCount(2);
 
     await page.locator('#session-title').fill('Product Planning');
     await page.locator('#session-tags').fill('planning, roadmap');
+
+    const navigationPromise = page.waitForURL(`**/chat?sessionId=${expectedSessionId}`);
+
     await page.locator('#new-session-form button[type="submit"]').click();
 
     await expectToast(page, 'Session created successfully!');
+    await navigationPromise;
 
-    const rows = page.locator('tbody#sessions-table-body tr.session-row');
-    await expect(rows.first()).toContainText('Product Planning');
+    await expect(page.locator('#chat-placeholder')).toContainText('Chat page ready');
+
+    const storedSessionId = await page.evaluate(() => sessionStorage.getItem('sessionId'));
+    expect(storedSessionId).toBe(expectedSessionId);
+
+    const storedTopic = await page.evaluate(() => sessionStorage.getItem('topic'));
+    expect(storedTopic).toBe('Product Planning');
+
+    expect(chatVisits).toHaveLength(1);
+    expect(chatVisits[0]).toContain(`sessionId=${expectedSessionId}`);
 
     expect(createRequests).toHaveLength(1);
     expect(createRequests[0]).toMatchObject({
       title: 'Product Planning',
       tags: ['planning', 'roadmap'],
     });
+  });
+
+  test('lists sessions, creates a new one, and resumes another into chat', async ({ page }) => {
+    const createdSessionId = `${sessionPrefix}-created-0001`;
+    const resumedSessionId = `${sessionPrefix}-01`;
+    const chatVisits: string[] = [];
+
+    await page.route('**/chat*', async (route) => {
+      chatVisits.push(route.request().url());
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<html><body><div id="chat-placeholder">Chat ready</div></body></html>',
+      });
+    });
+
+    await page.goto('/sessions');
+
+    const initialRows = page.locator('tbody#sessions-table-body tr.session-row');
+    await expect(initialRows).toHaveCount(2);
+    await expect(initialRows.nth(0)).toContainText('Strategy Sync');
+    await expect(initialRows.nth(1)).toContainText('Research Backlog');
+
+    const createNavigation = page.waitForURL(`**/chat?sessionId=${createdSessionId}`);
+
+    await page.locator('#session-title').fill('Lifecycle Flow Session');
+    await page.locator('#session-tags').fill('flow, playwright');
+    await page.locator('#new-session-form button[type="submit"]').click();
+
+    await expectToast(page, 'Session created successfully!');
+    await createNavigation;
+
+    expect(chatVisits).toHaveLength(1);
+    expect(chatVisits[0]).toContain(`sessionId=${createdSessionId}`);
+
+    await page.goto('/sessions');
+
+    const updatedRows = page.locator('tbody#sessions-table-body tr.session-row');
+    await expect(updatedRows).toHaveCount(3);
+    await expect(updatedRows.first()).toContainText('Lifecycle Flow Session');
+    await expect(updatedRows.nth(1)).toContainText('Strategy Sync');
+
+    const resumeNavigation = page.waitForURL(`**/chat?sessionId=${resumedSessionId}`);
+
+    await updatedRows.nth(1).locator('button.resume-session').click();
+
+    await expectToast(page, 'Session resumed successfully!');
+    await resumeNavigation;
+
+    expect(chatVisits).toHaveLength(2);
+    expect(chatVisits[1]).toContain(`sessionId=${resumedSessionId}`);
+
+    const storedSessionId = await page.evaluate(() => sessionStorage.getItem('sessionId'));
+    expect(storedSessionId).toBe(resumedSessionId);
   });
 
   test('shows validation errors returned from create session endpoint', async ({ page }) => {
@@ -332,7 +434,11 @@ test.describe('Session management lifecycle', () => {
   });
 
   test('resumes a session successfully and redirects to chat', async ({ page }) => {
+    const resumedSessionId = `${sessionPrefix}-01`;
+    const chatVisits: string[] = [];
+
     await page.route('**/chat*', async (route) => {
+      chatVisits.push(route.request().url());
       await route.fulfill({
         status: 200,
         contentType: 'text/html',
@@ -347,10 +453,18 @@ test.describe('Session management lifecycle', () => {
 
     await page.goto('/sessions');
 
+    const navigationPromise = page.waitForURL(`**/chat?sessionId=${resumedSessionId}`);
+
     await page.locator('button.resume-session').first().click();
 
     await expectToast(page, 'Session resumed successfully!');
-    await page.waitForURL('**/chat*');
+    await navigationPromise;
+
+    expect(chatVisits).toHaveLength(1);
+    expect(chatVisits[0]).toContain(`sessionId=${resumedSessionId}`);
+
+    const storedSessionId = await page.evaluate(() => sessionStorage.getItem('sessionId'));
+    expect(storedSessionId).toBe(resumedSessionId);
   });
 
   test('shows message when attempting to resume without providing an ID', async ({ page }) => {

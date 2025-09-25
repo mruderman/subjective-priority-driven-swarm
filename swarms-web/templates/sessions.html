@@ -473,14 +473,31 @@ class SessionManager {
                 throw new Error(result.error || 'Failed to create session');
             }
 
+            const sessionId = result.id || result.session_id;
+            if (!sessionId) {
+                throw new Error('Server did not return a session ID');
+            }
+
             this.showToast('Session created successfully!', 'success');
+
+            try {
+                sessionStorage.setItem('sessionId', sessionId);
+                if (title) {
+                    sessionStorage.setItem('topic', title);
+                } else {
+                    sessionStorage.removeItem('topic');
+                }
+            } catch (storageError) {
+                console.warn('Unable to persist session context', storageError);
+            }
 
             // Clear form
             if (titleInput) titleInput.value = '';
             if (tagsInput) tagsInput.value = '';
 
-            // Reload sessions list
-            this.loadSessions();
+            setTimeout(() => {
+                window.location.href = `/chat?sessionId=${encodeURIComponent(sessionId)}`;
+            }, 300);
 
         } catch (error) {
             console.error('Error creating session:', error);
@@ -508,12 +525,23 @@ class SessionManager {
             }
 
             if (result.ok) {
+                const resumedSessionId = result.id || result.session_id || sessionId;
+                if (!resumedSessionId) {
+                    throw new Error('Server did not return a session ID');
+                }
+
                 this.showToast('Session resumed successfully!', 'success');
 
-                // Redirect to chat page after a short delay
+                try {
+                    sessionStorage.setItem('sessionId', resumedSessionId);
+                    sessionStorage.removeItem('topic');
+                } catch (storageError) {
+                    console.warn('Unable to persist session context', storageError);
+                }
+
                 setTimeout(() => {
-                    window.location.href = '/chat';
-                }, 1000);
+                    window.location.href = `/chat?sessionId=${encodeURIComponent(resumedSessionId)}`;
+                }, 300);
             } else {
                 throw new Error(result.error || 'Failed to resume session');
             }
