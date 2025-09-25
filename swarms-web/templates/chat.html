@@ -283,6 +283,14 @@ class SimpleChat {
         this.isConnected = false;
         this.agents = [];
         this.pendingAttachments = []; // Store uploaded attachments before sending
+        this.exportLabels = {
+            formal: 'Formal Minutes',
+            casual: 'Casual Notes',
+            transcript: 'Conversation Transcript',
+            actions: 'Action Items',
+            summary: 'Executive Summary',
+            data: 'Structured Data'
+        };
 
         this.init();
     }
@@ -477,6 +485,7 @@ class SimpleChat {
             button.addEventListener('click', (e) => {
                 e.preventDefault();
                 const command = e.currentTarget.dataset.command;
+                this.closeExportModal();
                 this.sendMessage(command);
             });
         });
@@ -847,11 +856,99 @@ class SimpleChat {
         }
     }
 
+    deriveExportFormat(filePath) {
+        if (!filePath) {
+            return 'unknown';
+        }
+
+        const fileName = filePath.split('/').pop() || filePath;
+        const baseName = fileName.replace(/\.[^.]+$/, '').toLowerCase();
+        const knownFormats = {
+            'board_minutes_formal': 'formal',
+            'meeting_notes_casual': 'casual',
+            'conversation_transcript': 'transcript',
+            'action_items': 'actions',
+            'executive_summary': 'summary',
+            'structured_data': 'data'
+        };
+
+        return knownFormats[baseName] || baseName;
+    }
+
+    resolveExportLabel(format) {
+        const normalized = (format || 'unknown').toLowerCase();
+        if (this.exportLabels[normalized]) {
+            return this.exportLabels[normalized];
+        }
+
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    }
+
     handleExportComplete(data) {
-        if (data.files) {
-            this.showToast(`Export complete: ${data.count} files generated`, 'success');
+        const entries = [];
+
+        if (Array.isArray(data.files)) {
+            const formats = Array.isArray(data.formats) ? data.formats : [];
+            data.files.forEach((filePath, index) => {
+                const format = formats[index] || this.deriveExportFormat(filePath);
+                entries.push({ format, file: filePath });
+            });
         } else if (data.file) {
-            this.showToast(`Export complete: ${data.format}`, 'success');
+            const format = data.format || this.deriveExportFormat(data.file);
+            entries.push({ format, file: data.file });
+        }
+
+        const resultsContainer = document.getElementById('export-results');
+        if (resultsContainer) {
+            if (entries.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-muted mb-0">No export files returned.</p>';
+            } else {
+                resultsContainer.innerHTML = entries.map(({ format, file }) => {
+                    const label = this.resolveExportLabel(format);
+                    return `
+                        <div class="export-result" data-export-format="${format}">
+                            <a href="${file}" download class="download-export d-flex align-items-center gap-2">
+                                <i class="bi bi-file-earmark-arrow-down"></i>
+                                <span>${label}</span>
+                            </a>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        if (entries.length > 1) {
+            this.showToast(`Export complete: ${entries.length} files generated`, 'success');
+        } else if (entries.length === 1) {
+            const exportLabel = this.resolveExportLabel(entries[0].format);
+            this.showToast(`Export complete: ${exportLabel}`, 'success');
+        }
+
+        const modalElement = document.getElementById('exportModal');
+        if (modalElement && window.bootstrap?.Modal) {
+            const modalInstance = window.bootstrap.Modal.getOrCreateInstance(modalElement, { backdrop: false });
+            modalInstance.show();
+        }
+    }
+
+    closeExportModal() {
+        const modalElement = document.getElementById('exportModal');
+        if (!modalElement) {
+            return;
+        }
+
+        if (window.bootstrap?.Modal) {
+            const modalInstance = window.bootstrap.Modal.getOrCreateInstance(modalElement);
+            modalInstance.hide();
+        }
+
+        modalElement.classList.remove('show');
+        modalElement.setAttribute('aria-hidden', 'true');
+        modalElement.style.display = 'none';
+
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) {
+            backdrop.remove();
         }
     }
 

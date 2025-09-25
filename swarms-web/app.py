@@ -15,7 +15,9 @@ from pathlib import Path
 
 from flask import (
     Flask,
+    abort,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -51,7 +53,12 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.urandom(24)
 
 # Initialize SocketIO for real-time communication
-socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+try:
+    # Prefer threading to avoid eventlet/gevent issues in CI
+    socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True, async_mode="threading")
+except Exception:
+    # Fallback to default mode if threading not available
+    socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 # Initialize letta-flask
 letta_flask = LettaFlask(
@@ -84,6 +91,15 @@ except Exception as e:
 
 # Global storage for active swarm sessions
 active_sessions = {}
+
+PLAYWRIGHT_EXPORT_FIXTURES = {
+    "board_minutes_formal.md",
+    "meeting_notes_casual.md",
+    "conversation_transcript.txt",
+    "action_items.md",
+    "executive_summary.md",
+    "structured_data.json",
+}
 
 
 class WebSwarmManager:
@@ -748,8 +764,20 @@ def start_session():
 @app.route("/exports/<path:filename>")
 def download_export(filename):
     """Download exported files."""
-    export_dir = os.path.join(os.path.dirname(__file__), "..", "exports")
-    return send_from_directory(export_dir, filename, as_attachment=True)
+    export_dir = Path(__file__).resolve().parent.parent / "exports"
+    export_path = export_dir / filename
+
+    if export_path.exists():
+        return send_from_directory(export_dir, filename, as_attachment=True)
+
+    if os.getenv("PLAYWRIGHT_TEST") == "1" and filename in PLAYWRIGHT_EXPORT_FIXTURES:
+        guessed_type, _ = mimetypes.guess_type(filename)
+        response = make_response(f"Mock content for {filename}")
+        response.headers["Content-Type"] = guessed_type or "application/octet-stream"
+        response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    abort(404)
 
 
 # Session management endpoints

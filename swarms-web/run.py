@@ -124,8 +124,14 @@ def main():
     try:
         from app import app, socketio
 
+        playwright_mode = os.getenv("PLAYWRIGHT_TEST") == "1"
         socketio.run(
-            app, debug=True, host="0.0.0.0", port=5002, allow_unsafe_werkzeug=True
+            app,
+            debug=not playwright_mode,
+            host="0.0.0.0",
+            port=5002,
+            allow_unsafe_werkzeug=True,
+            use_reloader=not playwright_mode,
         )
     except KeyboardInterrupt:
         print("\n👋 Shutting down SWARMS Web GUI...")

@@ -78,7 +78,7 @@ test.beforeEach(async ({ page }) => {
 
       constructor(element: HTMLElement) {
         this.element = element;
-        (this.element as any).__modalInstance = this;
+        (this.element as { __modalInstance?: BootstrapModalStub }).__modalInstance = this;
       }
 
       show() {
@@ -94,12 +94,12 @@ test.beforeEach(async ({ page }) => {
       }
 
       static getInstance(element: HTMLElement) {
-        return (element as any).__modalInstance ?? null;
+        return (element as { __modalInstance?: BootstrapModalStub }).__modalInstance ?? null;
       }
 
       static getOrCreateInstance(element: HTMLElement) {
         return (
-          (element as any).__modalInstance ??
+          (element as { __modalInstance?: BootstrapModalStub }).__modalInstance ??
           new BootstrapModalStub(element)
         );
       }
@@ -112,32 +112,37 @@ test.beforeEach(async ({ page }) => {
           Modal?: typeof BootstrapModalStub;
         };
       };
+
       if (!win.bootstrap) {
         win.bootstrap = { Toast: BootstrapToastStub, Modal: BootstrapModalStub };
-      } else {
-        if (!win.bootstrap.Toast) {
-          win.bootstrap.Toast = BootstrapToastStub;
-        }
-        if (!win.bootstrap.Modal) {
-          win.bootstrap.Modal = BootstrapModalStub;
-        }
+        return;
+      }
+
+      if (!win.bootstrap.Toast) {
+        win.bootstrap.Toast = BootstrapToastStub;
+      }
+      if (!win.bootstrap.Modal) {
+        win.bootstrap.Modal = BootstrapModalStub;
       }
     };
 
     const createSocketFactory = () => {
-      let socket: {
-        on: (event: string, callback: (payload?: unknown) => void) => typeof socket;
-        off: (event?: string) => typeof socket;
-        emit: (event: string, payload?: Record<string, unknown>) => typeof socket;
+      type Listener = (payload?: unknown) => void;
+      type SocketAPI = {
+        on: (event: string, callback: Listener) => SocketAPI;
+        off: (event?: string) => SocketAPI;
+        emit: (event: string, payload?: Record<string, unknown>) => SocketAPI;
         disconnect: () => void;
-      } | null = null;
+      };
+
+      let socket: SocketAPI | null = null;
 
       const factory = () => {
         if (socket) {
           return socket;
         }
 
-        const listeners = new Map<string, ((payload?: unknown) => void)[]>();
+        const listeners = new Map<string, Listener[]>();
 
         const ensureListeners = (event: string) => {
           if (!listeners.has(event)) {
@@ -160,13 +165,13 @@ test.beforeEach(async ({ page }) => {
           });
         };
 
-        const socketInstance = {
-          on(event: string, callback: (payload?: unknown) => void) {
+        const api: SocketAPI = {
+          on(event: string, callback: Listener) {
             ensureListeners(event).push(callback);
             if (event === 'connect') {
               setTimeout(() => callback(undefined), 0);
             }
-            return socketInstance;
+            return api;
           },
           off(event?: string) {
             if (!event) {
@@ -174,7 +179,7 @@ test.beforeEach(async ({ page }) => {
             } else {
               listeners.delete(event);
             }
-            return socketInstance;
+            return api;
           },
           emit(event: string, payload?: Record<string, unknown>) {
             if (event === 'join_session' && payload?.session_id) {
@@ -186,7 +191,7 @@ test.beforeEach(async ({ page }) => {
                 emitEvent('chat_started', {
                   topic: payload.topic,
                   mode: 'hybrid',
-                  agents: mockAgentsData.map((agent) => ({ name: agent.name, id: agent.id })),
+                  agents: mockAgentsData.map((agent: MockAgent) => ({ name: agent.name, id: agent.id })),
                   secretary_enabled: true,
                 });
               }, 50);
@@ -273,9 +278,42 @@ test.beforeEach(async ({ page }) => {
                         normalizedFormat === 'all' &&
                         Array.isArray(exportFixturesData.all)
                       ) {
+                        const allFiles = exportFixturesData.all as unknown[];
+                        const formats = allFiles.map((filePath) => {
+                          if (typeof filePath !== 'string') {
+                            return 'unknown';
+                          }
+
+                          const matchedEntry = Object.entries(exportFixturesData).find(
+                            ([key, value]) => {
+                              if (key === 'all') {
+                                return false;
+                              }
+
+                              if (typeof value === 'string') {
+                                return value === filePath;
+                              }
+
+                              if (Array.isArray(value)) {
+                                return value.includes(filePath);
+                              }
+
+                              if (value && typeof value === 'object') {
+                                const typed = value as { path?: string; filename?: string };
+                                return typed.path === filePath || typed.filename === filePath;
+                              }
+
+                              return false;
+                            }
+                          );
+
+                          return matchedEntry?.[0] ?? 'unknown';
+                        });
+
                         emitEvent('export_complete', {
                           files: exportFixturesData.all,
-                          count: (exportFixturesData.all as unknown[]).length,
+                          formats,
+                          count: allFiles.length,
                         });
                       } else {
                         const fixture =
@@ -293,9 +331,8 @@ test.beforeEach(async ({ page }) => {
                             count: fixture.length,
                           });
                         } else if (fixture && typeof fixture === 'object') {
-                          const pathValue =
-                            (fixture as { path?: string; filename?: string }).path ??
-                            (fixture as { path?: string; filename?: string }).filename;
+                          const typedFixture = fixture as { path?: string; filename?: string };
+                          const pathValue = typedFixture.path ?? typedFixture.filename;
                           emitEvent('export_complete', {
                             file: pathValue ?? `exports/${normalizedFormat}.md`,
                             format: normalizedFormat,
@@ -360,7 +397,6 @@ test.beforeEach(async ({ page }) => {
                     }, 40);
                     break;
                 }
-                }
               } else {
                 setTimeout(() => {
                   emitEvent('agent_message', {
@@ -373,16 +409,16 @@ test.beforeEach(async ({ page }) => {
               }
             }
 
-            return socketInstance;
+            return api;
           },
           disconnect() {
             listeners.clear();
           },
         };
 
-        socket = socketInstance;
-        return socketInstance;
-      };
+        socket = api;
+        return api;
+      }
 
       return factory;
     };
@@ -649,8 +685,9 @@ test('should trigger secretary exports and surface downloadable links', async ({
     {
       format: 'formal',
       trigger: async () => {
+        // UI command stays `/export minutes`; mock normalizes it to the formal export.
         await page
-          .locator('button.secretary-command[data-command="/export formal"]').first()
+          .locator('button.secretary-command[data-command="/export minutes"]').first()
           .click();
       },
     },
@@ -766,6 +803,33 @@ test('should trigger secretary exports and surface downloadable links', async ({
 
       testedDownloads.set(variant.format, href!);
     }
+
+    const closeButton = page.locator('#exportModal button[data-bs-dismiss]').first();
+    if (await closeButton.isVisible()) {
+      await closeButton.click();
+    }
+
+    await page.evaluate(() => {
+      const modalElement = document.getElementById('exportModal');
+      if (!modalElement) {
+        return;
+      }
+
+      const bootstrapGlobal = (window as unknown as { bootstrap?: { Modal?: { getOrCreateInstance: (element: Element) => { hide: () => void } } } }).bootstrap;
+      if (bootstrapGlobal?.Modal) {
+        const instance = bootstrapGlobal.Modal.getOrCreateInstance(modalElement);
+        instance.hide();
+      }
+
+      modalElement.classList.remove('show');
+      modalElement.setAttribute('aria-hidden', 'true');
+      (modalElement as HTMLElement).style.display = 'none';
+
+      const backdrop = document.querySelector('.modal-backdrop');
+      backdrop?.parentNode?.removeChild(backdrop);
+    });
+
+    await expect(exportModal).not.toBeVisible();
   }
 
   expect(testedDownloads.size).toBe(5);
