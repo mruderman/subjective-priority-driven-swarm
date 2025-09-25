@@ -23,6 +23,33 @@ export class MockedLettaController {
   }
 
   async init(): Promise<void> {
+    // Add test-only page hook early to make it available to app scripts
+    await this.page.addInitScript(() => {
+      // Test-only global hook to emit Socket.IO events when available
+      // It will attempt to emit immediately and retry once if the socket isn't ready yet.
+      window['__TEST_EMIT'] = (eventName, data) => {
+        try {
+          const tryEmit = () => {
+            const socket =
+              (window['simpleChat'] && window['simpleChat'].socket) ||
+              (window['swarmsApp'] && window['swarmsApp'].socket);
+            if (socket && typeof socket.emit === 'function') {
+              socket.emit(String(eventName), data);
+              return true;
+            }
+            return false;
+          };
+          if (!tryEmit()) {
+            // Retry after a short delay if socket not ready
+            setTimeout(tryEmit, 50);
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('TEST_EMIT error', e);
+        }
+      };
+    });
+
     await this.syncStateWithPage();
     await this.registerTestFlag();
     await this.registerSocketStub();
