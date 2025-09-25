@@ -970,3 +970,85 @@ test('should cycle secretary activity status and reset after completion', async 
 
   await expect(secretaryContent).toContainText('Ready for more activity', { timeout: 4000 });
 });
+
+test('should enforce accessible focus order and aria labels for chat controls', async ({ page }) => {
+  await startConversation(page, 'Accessibility focus order');
+
+  const filterInput = page.locator('#message-filter');
+  const messageInput = page.locator('#chat-input');
+  const sendButton = page.locator('#send-button');
+  const exportButton = page.locator('#export-minutes-button');
+
+  await expect(filterInput).toHaveAttribute('aria-label', 'Filter messages');
+  await expect(messageInput).toHaveAttribute('aria-label', 'Message composer');
+  await expect(sendButton).toHaveAttribute('aria-label', 'Send message');
+  await expect(exportButton).toHaveAttribute('aria-label', 'Export board minutes');
+
+  await page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && typeof active.blur === 'function') {
+      active.blur();
+    }
+  });
+
+  await page.keyboard.press('Tab');
+  await expect(filterInput).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(messageInput).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(sendButton).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(exportButton).toBeFocused();
+});
+
+test('should support keyboard shortcuts for filter focus, sending, and help', async ({ page }) => {
+  await startConversation(page, 'Accessibility shortcuts');
+
+  const filterInput = page.locator('#message-filter');
+  const messageInput = page.locator('#chat-input');
+
+  await page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && typeof active.blur === 'function') {
+      active.blur();
+    }
+  });
+
+  await page.keyboard.press('f');
+  await expect(filterInput).toBeFocused();
+
+  await filterInput.type('welcome');
+  const welcomeMessage = page.locator('#chat-messages .message').first();
+  await expect(welcomeMessage).toBeVisible();
+
+  await filterInput.fill('');
+  await messageInput.click();
+
+  await messageInput.fill('Enter shortcut message');
+  await messageInput.press('Enter');
+
+  const userMessages = page.locator('#chat-messages .message.user');
+  await expect(userMessages.filter({ hasText: 'Enter shortcut message' })).toHaveCount(1);
+
+  await messageInput.fill('Ctrl shortcut message');
+  await messageInput.press('Control+Enter');
+  await expect(userMessages.filter({ hasText: 'Ctrl shortcut message' })).toHaveCount(1);
+
+  await page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && typeof active.blur === 'function') {
+      active.blur();
+    }
+  });
+
+  await page.keyboard.press('Shift+Slash');
+  const helpMessage = page
+    .locator('#chat-messages .message.system')
+    .filter({ hasText: 'Available Commands' });
+  await expect(helpMessage).toHaveCount(1);
+
+  await expect(messageInput).toBeFocused();
+});
