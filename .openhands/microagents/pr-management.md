@@ -8,7 +8,7 @@ triggers: []
 
 # PR Management Microagent
 
-This microagent automatically manages open PR requests in GitHub with a comprehensive workflow for handling code reviews, conflicts, and merging.
+This microagent automatically manages open pull requests in GitHub with a comprehensive workflow for handling code reviews, conflicts, and merging.
 
 ## Workflow Overview
 
