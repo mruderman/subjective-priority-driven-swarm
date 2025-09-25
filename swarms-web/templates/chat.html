@@ -516,6 +516,92 @@ class SimpleChat {
         }
     }
 
+    getUploadEndpoint() {
+        const win = window || {};
+        const runId = typeof win.__PLAYWRIGHT_UPLOAD_RUN__ === 'string'
+            ? win.__PLAYWRIGHT_UPLOAD_RUN__.trim()
+            : '';
+
+        if (runId) {
+            const url = new URL(window.location.origin + '/api/uploads');
+            url.searchParams.set('run', runId);
+            return `${url.pathname}${url.search}`;
+        }
+
+        return '/api/uploads';
+    }
+
+    extractFilenameFromDisposition(disposition, fallback) {
+        if (!disposition || typeof disposition !== 'string') {
+            return fallback;
+        }
+
+        const encodedMatch = disposition.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+        if (encodedMatch && encodedMatch[1]) {
+            try {
+                return decodeURIComponent(encodedMatch[1].trim().replace(/^"|"$/g, ''));
+            } catch (error) {
+                console.warn('Failed to decode filename* from content-disposition', error);
+            }
+        }
+
+        const quotedMatch = disposition.match(/filename="?([^";]+)"?/i);
+        if (quotedMatch && quotedMatch[1]) {
+            return quotedMatch[1].trim();
+        }
+
+        const plainMatch = disposition.match(/filename=([^;]+)/i);
+        if (plainMatch && plainMatch[1]) {
+            return plainMatch[1].trim();
+        }
+
+        return fallback;
+    }
+
+    async handleAttachmentDownload(downloadUrl, filename, mimeType) {
+        if (!downloadUrl) {
+            return;
+        }
+
+        try {
+            const resolvedUrl = new URL(downloadUrl, window.location.origin).toString();
+            const response = await fetch(resolvedUrl);
+
+            if (!response.ok) {
+                throw new Error(`Download failed: ${response.status}`);
+            }
+
+            const blobData = await response.blob();
+            const effectiveMime = mimeType || blobData.type || 'application/octet-stream';
+            const suggestedName = this.extractFilenameFromDisposition(
+                response.headers.get('content-disposition'),
+                filename || 'download'
+            );
+
+            const blob = effectiveMime === blobData.type
+                ? blobData
+                : new Blob([blobData], { type: effectiveMime });
+
+            const objectUrl = URL.createObjectURL(blob);
+            this.showToast(`Download ready: ${suggestedName}`, 'success');
+
+            const anchor = document.createElement('a');
+            anchor.href = objectUrl;
+            anchor.download = suggestedName;
+            anchor.rel = 'noopener';
+
+            document.body.appendChild(anchor);
+            anchor.click();
+            requestAnimationFrame(() => {
+                anchor.remove();
+                URL.revokeObjectURL(objectUrl);
+            });
+        } catch (downloadError) {
+            console.error('Failed to trigger attachment download', downloadError);
+            this.showToast('Download failed', 'error');
+        }
+    }
+
     async uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -526,7 +612,7 @@ class SimpleChat {
         }
 
         try {
-            const response = await fetch('/api/uploads', {
+            const response = await fetch(this.getUploadEndpoint(), {
                 method: 'POST',
                 body: formData
             });
@@ -538,10 +624,29 @@ class SimpleChat {
             const data = await response.json();
 
             if (data.ok) {
-                this.pendingAttachments.push(data.file);
+                const downloadUrl = data.download_url || (data.file && data.file.download_url);
+                const attachment = Object.assign(
+                    {
+                        filename: file.name,
+                        mime: file.type || 'application/octet-stream',
+                        size_bytes: file.size,
+                        kind: 'document',
+                    },
+                    data.file || {}
+                );
+                attachment.download_url = downloadUrl || attachment.download_url || null;
+
+                this.pendingAttachments.push(attachment);
                 this.renderAttachments();
-                this.showToast(`File uploaded: ${data.file.filename}`, 'success');
-                return data.file;
+                this.showToast(`Upload complete: ${attachment.filename}`, 'success');
+                if (attachment.download_url) {
+                    await this.handleAttachmentDownload(
+                        attachment.download_url,
+                        attachment.filename,
+                        attachment.mime
+                    );
+                }
+                return attachment;
             } else {
                 throw new Error(data.error || 'Upload failed');
             }
