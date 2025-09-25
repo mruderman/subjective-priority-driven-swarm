@@ -684,39 +684,41 @@ class SwarmsApp {
 
     // Utility Functions
     showToast(message, type = 'info') {
-        // Create toast container if it doesn't exist
-        let toastContainer = document.getElementById('toast-container');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.id = 'toast-container';
-            toastContainer.className = 'toast-container';
-            document.body.appendChild(toastContainer);
-        }
+        const raf = window.requestAnimationFrame || ((cb) => setTimeout(cb, 0));
+        raf(() => {
+            // Create toast container if it doesn't exist
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'toast-container';
+                document.body.appendChild(toastContainer);
+            }
 
-        // Create toast
-        const toast = document.createElement('div');
-        toast.className = `toast align-items-center text-white bg-${this.getBootstrapColorClass(type)} border-0`;
-        toast.setAttribute('role', 'alert');
+            // Create toast
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-white bg-${this.getBootstrapColorClass(type)} border-0`;
+            toast.setAttribute('role', 'alert');
 
-        toast.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body">
-                    ${message}
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                            data-bs-dismiss="toast"></button>
                 </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto"
-                        data-bs-dismiss="toast"></button>
-            </div>
-        `;
+            `;
 
-        toastContainer.appendChild(toast);
+            toastContainer.appendChild(toast);
 
-        // Initialize and show toast
-        const bsToast = new bootstrap.Toast(toast);
-        bsToast.show();
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
 
-        // Remove toast element after it's hidden
-        toast.addEventListener('hidden.bs.toast', () => {
-            toast.remove();
+            // Clean up after hide
+            toast.addEventListener('hidden.bs.toast', () => {
+                toast.remove();
+            });
         });
     }
 
