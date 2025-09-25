@@ -312,7 +312,12 @@ class SimpleChat {
         console.log('Topic:', topic);
 
         // Initialize socket
-        this.socket = io();
+        // Use mocked socket in test mode if available
+        if (window.io && typeof window.io === 'function') {
+            this.socket = window.io();
+        } else {
+            this.socket = io();
+        }
         this.setupSocketEvents();
 
         // Setup UI
