@@ -62,7 +62,7 @@
                 </div>
 
                 <!-- Agent Scores Display -->
-                <div id="agent-scores-container" class="agent-scores" style="display: none;">
+                <div id="agent-scores-container" class="agent-scores hidden-by-default" hidden>
                     <h6 class="mb-2">
                         <i class="bi bi-speedometer2"></i> Agent Motivation Scores
                     </h6>
@@ -826,18 +826,37 @@ class SimpleChat {
             assessmentIndicator.remove();
         }
 
-        // Update scores in sidebar
         const scoresContainer = document.getElementById('agent-scores');
-        if (scoresContainer) {
-            scoresContainer.innerHTML = scores.map(score => `
-                <div class="agent-score-item">
-                    <span class="agent-name">${score.name}</span>
-                    <div class="score-badges">
-                        <span class="score-badge">M: ${score.motivation_score}</span>
-                        <span class="score-badge">P: ${score.priority_score}</span>
-                    </div>
+        if (!scoresContainer) {
+            return;
+        }
+
+        const normalizedScores = Array.isArray(scores) ? scores : [];
+
+        scoresContainer.innerHTML = normalizedScores.map(score => `
+            <div class="agent-score-item">
+                <span class="agent-name">${score.name}</span>
+                <div class="score-badges">
+                    <span class="score-badge">M: ${score.motivation_score}</span>
+                    <span class="score-badge">P: ${score.priority_score}</span>
                 </div>
-            `).join('');
+            </div>
+        `).join('');
+
+        const scoresWrapper = document.getElementById('agent-scores-container');
+        if (scoresWrapper) {
+            if (normalizedScores.length > 0) {
+                scoresWrapper.hidden = false;
+                scoresWrapper.removeAttribute('hidden');
+                scoresWrapper.classList.remove('hidden-by-default');
+                scoresWrapper.style.removeProperty('display');
+            } else {
+                scoresWrapper.hidden = true;
+                scoresWrapper.setAttribute('hidden', 'true');
+                scoresWrapper.classList.add('hidden-by-default');
+                scoresWrapper.style.removeProperty('display');
+                scoresContainer.innerHTML = '';
+            }
         }
     }
 
@@ -1113,18 +1132,12 @@ class SimpleChat {
     }
 
     showToast(message, type = 'info') {
-        console.log('Toast:', message, type);
-
         // Create toast container if it doesn't exist
         let toastContainer = document.getElementById('toast-container');
         if (!toastContainer) {
             toastContainer = document.createElement('div');
             toastContainer.id = 'toast-container';
             toastContainer.className = 'toast-container';
-            toastContainer.style.position = 'fixed';
-            toastContainer.style.top = '80px';
-            toastContainer.style.right = '1rem';
-            toastContainer.style.zIndex = '1050';
             document.body.appendChild(toastContainer);
         }
 
@@ -1136,7 +1149,6 @@ class SimpleChat {
         };
         const bgColor = colorMap[type] || 'primary';
 
-        // Create toast
         const toast = document.createElement('div');
         toast.className = `toast align-items-center text-white bg-${bgColor} border-0`;
         toast.setAttribute('role', 'alert');
@@ -1153,12 +1165,18 @@ class SimpleChat {
 
         toastContainer.appendChild(toast);
 
-        // Initialize and show toast
         const bsToast = new bootstrap.Toast(toast);
+        toast.classList.add('show', 'showing');
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => toast.classList.remove('showing'));
+        } else {
+            setTimeout(() => toast.classList.remove('showing'), 0);
+        }
+        toast.style.removeProperty('display');
         bsToast.show();
 
-        // Remove toast element after it's hidden
         toast.addEventListener('hidden.bs.toast', () => {
+            toast.classList.remove('show');
             toast.remove();
         });
     }
