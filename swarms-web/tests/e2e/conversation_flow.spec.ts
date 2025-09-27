@@ -29,11 +29,20 @@ test.describe('Prompt B conversation flow', () => {
       .first();
     await expect(userBubble).toBeVisible();
 
+    await chatInput.fill(userMessage);
+    await chatInput.press('Enter');
+
     await emitSocketEvent('agent_thinking', {
       agent: THINKING_AGENT,
       phase: 'response',
       progress: '1/1',
     });
+
+    const userBubble = page
+      .locator('#chat-messages .message.user')
+      .filter({ hasText: userMessage })
+      .first();
+    await expect(userBubble).toBeVisible();
 
     const thinkingIndicator = page
       .locator('.thinking-indicator')
