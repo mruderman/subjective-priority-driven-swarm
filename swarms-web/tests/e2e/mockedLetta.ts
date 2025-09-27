@@ -23,6 +23,33 @@ export class MockedLettaController {
   }
 
   async init(): Promise<void> {
+    // Add test-only page hook early to make it available to app scripts
+    await this.page.addInitScript(() => {
+      // Test-only global hook to emit Socket.IO events when available
+      // It will attempt to emit immediately and retry once if the socket isn't ready yet.
+      window['__TEST_EMIT'] = (eventName, data) => {
+        try {
+          const tryEmit = () => {
+            const socket =
+              (window['simpleChat'] && window['simpleChat'].socket) ||
+              (window['swarmsApp'] && window['swarmsApp'].socket);
+            if (socket && typeof socket.emit === 'function') {
+              socket.emit(String(eventName), data);
+              return true;
+            }
+            return false;
+          };
+          if (!tryEmit()) {
+            // Retry after a short delay if socket not ready
+            setTimeout(tryEmit, 50);
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('TEST_EMIT error', e);
+        }
+      };
+    });
+
     await this.syncStateWithPage();
     await this.registerTestFlag();
     await this.registerSocketStub();
@@ -181,19 +208,24 @@ export class MockedLettaController {
           }
         };
 
-        let socketInstance: {
-          on: (event: string, callback: (payload?: unknown) => void) => unknown;
-          off: (event?: string) => unknown;
-          emit: (event: string, payload?: Record<string, unknown>) => unknown;
+        type Listener = (payload?: unknown) => void;
+        type SocketStub = {
+          on: (event: string, callback: Listener) => SocketStub;
+          off: (event?: string) => SocketStub;
+          emit: (event: string, payload?: Record<string, unknown>) => SocketStub;
           disconnect: () => void;
-        } | null = null;
+          __playwrightEmitDirect?: (event: string, payload?: unknown) => void;
+        };
+
+        let socketInstance: SocketStub | null = null;
 
         const createSocketFactory = () => {
           if (socketInstance) {
             return socketInstance;
           }
 
-          const listeners = new Map<string, ((payload?: unknown) => void)[]>();
+          const listeners = new Map<string, Listener[]>();
+          const commandTimers = new Map<string, number[]>();
 
           const ensureListeners = (event: string) => {
             if (!listeners.has(event)) {
@@ -216,8 +248,66 @@ export class MockedLettaController {
             });
           };
 
-          const socket = {
-            on(event: string, callback: (payload?: unknown) => void) {
+          const clearCommandTimers = (commandKey?: string) => {
+            const keys = typeof commandKey === 'string' ? [commandKey] : Array.from(commandTimers.keys());
+            keys.forEach((key) => {
+              const timers = commandTimers.get(key);
+              if (timers) {
+                timers.forEach((timerId) => {
+                  try {
+                    clearTimeout(timerId);
+                  } catch (error) {
+                    console.warn('Failed to clear mock command timer', error);
+                  }
+                });
+                commandTimers.delete(key);
+              }
+            });
+          };
+
+          const scheduleCommandTasks = (
+            commandKey: string,
+            tasks: { delay: number; run: () => void }[]
+          ) => {
+            clearCommandTimers(commandKey);
+
+            if (!Array.isArray(tasks) || tasks.length === 0) {
+              return;
+            }
+
+            const activeTimers: number[] = [];
+
+            tasks.forEach((task) => {
+              const delay = typeof task.delay === 'number' ? task.delay : 0;
+              const timerId = window.setTimeout(() => {
+                try {
+                  task.run();
+                } finally {
+                  const timers = commandTimers.get(commandKey);
+                  if (timers) {
+                    const index = timers.indexOf(timerId);
+                    if (index >= 0) {
+                      timers.splice(index, 1);
+                    }
+                    if (timers.length === 0) {
+                      commandTimers.delete(commandKey);
+                    } else {
+                      commandTimers.set(commandKey, timers);
+                    }
+                  }
+                }
+              }, delay);
+
+              activeTimers.push(timerId);
+            });
+
+            if (activeTimers.length > 0) {
+              commandTimers.set(commandKey, activeTimers);
+            }
+          };
+
+          const socket: SocketStub = {
+            on(event: string, callback: Listener) {
               ensureListeners(event).push(callback);
               if (event === 'connect') {
                 setTimeout(() => callback(undefined), 0);
@@ -268,24 +358,153 @@ export class MockedLettaController {
                 const trimmed = message.trim();
 
                 if (trimmed.startsWith('/')) {
-                  if (trimmed === '/minutes') {
-                    setTimeout(() => {
-                      const minutesContainer = document.getElementById('secretary-minutes');
-                      if (minutesContainer) {
-                        minutesContainer.style.display = 'block';
-                      }
-                      emitEvent('secretary_activity', {
-                        activity: 'generating',
-                        message: '📝 Generating meeting minutes...',
-                      });
-                      emitEvent('secretary_minutes', {
-                        minutes: state.secretaryMinutes,
-                      });
-                      emitEvent('secretary_activity', {
-                        activity: 'completed',
-                        message: '✅ Meeting minutes generated!',
-                      });
-                    }, 120);
+                  const [rawCommand] = trimmed.split(/\s+/, 1);
+                  const commandKey = rawCommand.slice(1).toLowerCase();
+                  const schedule = (
+                    key: string,
+                    tasks: { delay: number; run: () => void }[]
+                  ) => scheduleCommandTasks(key, tasks);
+
+                  if (commandKey === 'minutes') {
+                    schedule(commandKey, [
+                      {
+                        delay: 60,
+                        run: () => {
+                          emitEvent('secretary_activity', {
+                            activity: 'generating',
+                            message: '📝 Generating meeting minutes...',
+                          });
+                        },
+                      },
+                      {
+                        delay: 140,
+                        run: () => {
+                          const minutesContainer = document.getElementById('secretary-minutes');
+                          if (minutesContainer) {
+                            minutesContainer.style.display = 'block';
+                          }
+                          emitEvent('secretary_minutes', {
+                            minutes: state.secretaryMinutes,
+                          });
+                        },
+                      },
+                      {
+                        delay: 220,
+                        run: () => {
+                          emitEvent('secretary_activity', {
+                            activity: 'completed',
+                            message: '✅ Meeting minutes generated!',
+                          });
+                        },
+                      },
+                    ]);
+                  } else if (commandKey === 'stats') {
+                    schedule(commandKey, [
+                      {
+                        delay: 70,
+                        run: () => {
+                          emitEvent('secretary_activity', {
+                            activity: 'generating',
+                            message: '📊 Gathering conversation statistics...',
+                          });
+                        },
+                      },
+                      {
+                        delay: 160,
+                        run: () => {
+                          const activeAgents = Array.isArray(state.agents)
+                            ? state.agents.length
+                            : 0;
+                          const respondingAgents = Math.min(activeAgents, 2);
+                          emitEvent('secretary_stats', {
+                            stats: {
+                              'Total Messages': 12,
+                              'Agents Responded': `${respondingAgents} / ${activeAgents || respondingAgents}`,
+                              'Action Items Logged': 3,
+                            },
+                          });
+                        },
+                      },
+                      {
+                        delay: 240,
+                        run: () => {
+                          emitEvent('secretary_activity', {
+                            activity: 'completed',
+                            message: '📈 Conversation stats are ready!',
+                          });
+                        },
+                      },
+                    ]);
+                  } else if (commandKey === 'memory-status') {
+                    schedule(commandKey, [
+                      {
+                        delay: 90,
+                        run: () => {
+                          const agentCount = Array.isArray(state.agents)
+                            ? state.agents.length
+                            : 0;
+                          emitEvent('secretary_status', {
+                            status: 'awareness',
+                            agent_name: 'Memory Monitor',
+                            mode: 'memory tracking',
+                            message: `Memory status summarized for ${agentCount || 0} agents.`,
+                          });
+                        },
+                      },
+                    ]);
+                  } else if (commandKey === 'memory-awareness') {
+                    schedule(commandKey, [
+                      {
+                        delay: 90,
+                        run: () => {
+                          emitEvent('secretary_status', {
+                            status: 'insight',
+                            agent_name: 'Memory Monitor',
+                            mode: 'awareness check',
+                            message: 'Agents notified about recent memory usage.',
+                          });
+                        },
+                      },
+                    ]);
+                  } else if (commandKey === 'help' || commandKey === 'commands') {
+                    schedule(commandKey, [
+                      {
+                        delay: 80,
+                        run: () => {
+                          emitEvent('system_message', {
+                            message: [
+                              '📝 Available Commands:',
+                              '',
+                              'Memory Awareness (Available Always):',
+                              '  /memory-status     - Show objective memory statistics for all agents',
+                              '  /memory-awareness  - Display neutral memory awareness information if criteria are met',
+                              '',
+                              'Secretary Commands (When Secretary Enabled):',
+                              '  /minutes           - Generate current meeting minutes',
+                              '  /stats             - Show conversation statistics',
+                              '',
+                              'Documentation: https://docs.letta.ai/commands',
+                              '  /help              - Show this help message',
+                            ].join('\n'),
+                            timestamp: new Date().toISOString(),
+                          });
+                        },
+                      },
+                    ]);
+                  } else {
+                    schedule('unknown', [
+                      {
+                        delay: 60,
+                        run: () => {
+                          emitEvent('secretary_status', {
+                            status: 'error',
+                            agent_name: 'Secretary',
+                            mode: 'command-center',
+                            message: 'Unknown command',
+                          });
+                        },
+                      },
+                    ]);
                   }
                 } else {
                   setTimeout(() => {
@@ -307,10 +526,13 @@ export class MockedLettaController {
               return socket;
             },
             disconnect() {
+              clearCommandTimers();
               listeners.clear();
               socketInstance = null;
             },
           };
+
+          socket.__playwrightEmitDirect = emitEvent;
 
           socketInstance = socket;
           return socketInstance;
@@ -319,15 +541,32 @@ export class MockedLettaController {
         ensureBootstrap();
 
         const win = window as typeof window & {
-          __playwrightCreateSocketIO?: () => unknown;
+          __playwrightCreateSocketIO?: () => SocketStub;
           io?: () => unknown;
           __PLAYWRIGHT_RESET_SOCKET?: () => void;
+          __playwrightEmitSocketEvent?: (event: string, payload?: unknown) => void;
         };
 
         win.__playwrightCreateSocketIO = () => createSocketFactory();
         win.io = () => createSocketFactory();
         win.__PLAYWRIGHT_RESET_SOCKET = () => {
+          if (socketInstance && typeof socketInstance.disconnect === 'function') {
+            try {
+              socketInstance.disconnect();
+            } catch (error) {
+              console.warn('Failed to disconnect mock socket instance', error);
+            }
+          } else {
+            clearCommandTimers();
+          }
           socketInstance = null;
+        };
+        win.__playwrightEmitSocketEvent = (event: string, payload?: unknown) => {
+          const socket = createSocketFactory();
+          const emitter = socket.__playwrightEmitDirect;
+          if (typeof emitter === 'function') {
+            emitter(event, payload);
+          }
         };
       },
       { storageKey: STORAGE_KEY }

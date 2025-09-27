@@ -1,4 +1,5 @@
 import { expect, test, Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 type MockAgent = {
   id: string;
@@ -865,6 +866,87 @@ test('should trigger secretary exports and surface downloadable links', async ({
   }
 
   expect(testedDownloads.size).toBe(5);
+});
+
+test.describe('Secretary export download handling', () => {
+  test.use({ acceptDownloads: true });
+
+  test('should request a markdown download with correct headers and content', async ({ page }) => {
+    const topic = 'Secretary download verification';
+    await startConversation(page, topic);
+
+    const sessionId = 'session-test';
+    const expectedFilename = `minutes-${sessionId}.md`;
+    const downloadBody = [
+      '# Meeting Minutes',
+      '',
+      `Session: ${sessionId}`,
+      `Topic: ${topic}`,
+      'Generated: 2024-02-29T10:00:00Z',
+    ].join('\n');
+
+    const requestedUrls: string[] = [];
+
+    await page.route('**/exports/**', async (route) => {
+      requestedUrls.push(route.request().url());
+      await route.fulfill({
+        status: 200,
+        body: downloadBody,
+        headers: {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${expectedFilename}"`,
+        },
+      });
+    });
+
+    const exportButton = page
+      .locator('button.secretary-command[data-command="/export minutes"]').first();
+    await expect(exportButton).toBeEnabled();
+
+    await exportButton.click();
+
+    const exportModal = page.locator('#exportModal');
+    await expect(exportModal).toBeVisible();
+
+    const toastContainer = page.locator('#toast-container');
+    await expect(toastContainer).toContainText('Export complete: Formal Minutes');
+
+    const downloadLink = exportModal.locator('a.download-export').first();
+    await expect(downloadLink).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await downloadLink.click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe(expectedFilename);
+    expect(await download.failure()).toBeNull();
+    const response = await download.response();
+    expect(response).not.toBeNull();
+    const headers = response?.headers() ?? {};
+    expect(headers['content-type']).toContain('text/markdown');
+    expect(headers['content-disposition']).toContain(expectedFilename);
+
+    const downloadedPath = await download.path();
+    expect(downloadedPath).not.toBeNull();
+    if (downloadedPath) {
+      const fileContents = await readFile(downloadedPath, 'utf-8');
+      expect(fileContents).toContain('# Meeting Minutes');
+      expect(fileContents).toContain(`Session: ${sessionId}`);
+      expect(fileContents).toContain(`Topic: ${topic}`);
+    }
+
+    expect(requestedUrls.length).toBeGreaterThanOrEqual(1);
+    expect(requestedUrls[requestedUrls.length - 1]).toContain('/exports/');
+
+    await expect(exportButton).toBeEnabled();
+
+    const closeButton = exportModal.locator('button[data-bs-dismiss]').first();
+    if (await closeButton.isVisible()) {
+      await closeButton.click();
+    }
+
+    await expect(exportModal).not.toBeVisible();
+  });
 });
 
 test('should reflect secretary mode toggles in the sidebar', async ({ page }) => {

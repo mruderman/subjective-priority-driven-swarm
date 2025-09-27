@@ -21,6 +21,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     send_from_directory,
     session,
     url_for,
@@ -1230,17 +1231,21 @@ def upload_file():
             f"File upload saved: session_id={session_id}, filename={unique_filename}, mime={mime_type}, size={bytes_written}"
         )
 
+        download_url = url_for("download_uploaded_file", path_rel=path_rel)
+
         return (
             jsonify(
                 {
                     "ok": True,
                     "session_id": session_id,
+                    "download_url": download_url,
                     "file": {
                         "filename": unique_filename,
                         "path_rel": path_rel,
                         "mime": mime_type or "application/octet-stream",
                         "size_bytes": bytes_written,
                         "kind": kind,
+                        "download_url": download_url,
                     },
                 }
             ),
@@ -1250,6 +1255,39 @@ def upload_file():
     except Exception as e:
         logger.error(f"File upload failed: {e}")
         return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+
+
+@app.route("/api/uploads/<path:path_rel>", methods=["GET"])
+def download_uploaded_file(path_rel: str):
+    """Stream a previously uploaded file with consistent metadata."""
+    try:
+        sessions_dir = config.get_sessions_dir().resolve()
+        target_path = (sessions_dir / path_rel).resolve()
+
+        try:
+            target_path.relative_to(sessions_dir)
+        except ValueError:
+            abort(404)
+
+        if not target_path.exists() or not target_path.is_file():
+            abort(404)
+
+        mime_type, _ = mimetypes.guess_type(str(target_path))
+        mime_type = mime_type or "application/octet-stream"
+
+        response = send_file(
+            target_path,
+            mimetype=mime_type,
+            as_attachment=True,
+            download_name=target_path.name,
+            conditional=True,
+        )
+        response.headers["Content-Length"] = str(target_path.stat().st_size)
+        return response
+
+    except Exception as exc:
+        logger.error(f"Error downloading uploaded file '{path_rel}': {exc}")
+        abort(500)
 
 
 # Message endpoint with attachments support
