@@ -73,11 +73,11 @@ test.describe('Session management lifecycle', () => {
   const createRequests: Record<string, unknown>[] = [];
   test.beforeEach(async ({ page }, testInfo) => {
     const uniqueSuffix = [
-      testInfo.workerIndex ?? 0,
-      testInfo.parallelIndex ?? 0,
-      testInfo.repeatEachIndex ?? 0,
-      testInfo.retry ?? 0,
+      testInfo.workerIndex,
+      testInfo.repeatEachIndex,
+      testInfo.retry,
       Date.now().toString(36),
+      Math.random().toString(36).slice(2, 8),
     ].join('-');
 
     sessionPrefix = `test-sess-A-${uniqueSuffix}`;
