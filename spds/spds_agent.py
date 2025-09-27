@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from . import config, tools
 from .letta_api import letta_call
+from .message import ConversationMessage, messages_to_flat_format
 from .session_tracking import (
     track_action,
     track_decision,
@@ -280,9 +281,9 @@ class SPDSAgent:
                     if conversation_history
                     else "Please use the perform_subjective_assessment tool if available, or respond using send_message with this exact format:\n"
                 )
-                # Adjust conversation reference based on whether there's actual history
+                # Adjust conversation reference to emphasize current conversation context
                 conversation_reference = (
-                    f"Based on our conversation about \"{topic}\""
+                    f"Based on our current conversation (which started as \"{topic}\" but may have evolved)"
                     if conversation_history
                     else f"Regarding the topic \"{topic}\""
                 )
@@ -305,7 +306,7 @@ Do not include any other text or explanation - just the scores in the exact form
 """
                 
                 assessment_prompt = f"""
-{assessment_context}{conversation_reference}, please assess your motivation to contribute using the send_message tool.
+{assessment_context}{conversation_reference}, please assess your motivation to contribute to the CURRENT conversation state.
 {retry_instruction}
 
 {memory_claim}
@@ -318,13 +319,15 @@ URGENCY: X
 IMPORTANCE_TO_GROUP: X
 
 Where:
-1. IMPORTANCE_TO_SELF: How personally significant is this topic to you?
-2. PERCEIVED_GAP: Are there crucial points missing from the discussion?
-3. UNIQUE_PERSPECTIVE: Do you have insights others haven't shared?
-4. EMOTIONAL_INVESTMENT: How much do you care about the outcome?
-5. EXPERTISE_RELEVANCE: How applicable is your domain knowledge?
-6. URGENCY: How time-sensitive is this topic or risk of misunderstanding?
-7. IMPORTANCE_TO_GROUP: What's the potential impact on group understanding?
+1. IMPORTANCE_TO_SELF: How personally significant is the CURRENT conversation direction to you?
+2. PERCEIVED_GAP: Are there crucial points missing from the RECENT discussion?
+3. UNIQUE_PERSPECTIVE: Do you have insights that haven't been shared in the CURRENT conversation?
+4. EMOTIONAL_INVESTMENT: How much do you care about the current discussion outcome?
+5. EXPERTISE_RELEVANCE: How applicable is your domain knowledge to what's being discussed NOW?
+6. URGENCY: How time-sensitive are the current discussion points?
+7. IMPORTANCE_TO_GROUP: What's the potential impact on the group's current understanding?
+
+Focus on the EVOLVING conversation, not just the original topic. Consider what has actually been discussed recently and whether you can add value to the current direction.
 
 Please respond with the exact format shown above, providing numeric scores (0-10) for each dimension. If you have access to the perform_subjective_assessment tool, you may use it instead for more accurate assessment.
 """
@@ -335,13 +338,13 @@ Please respond with the exact format shown above, providing numeric scores (0-10
                     else ""
                 )
                 memory_claim = (
-                    "You have access to our full conversation history in your memory. Please review what has been discussed and rate each dimension from 0-10:\n"
+                    "You have access to our full conversation history in your memory. Please review the CURRENT conversation state and rate each dimension from 0-10:\n"
                     if conversation_history
                     else "Please review the topic below and rate each dimension from 0-10.\n"
                 )
-                # Adjust conversation reference based on whether there's actual history
+                # Adjust conversation reference to emphasize current conversation context
                 conversation_reference = (
-                    f"Based on our conversation about \"{topic}\""
+                    f"Based on our current conversation (which started as \"{topic}\" but may have evolved)"
                     if conversation_history
                     else f"Regarding the topic \"{topic}\""
                 )
@@ -355,17 +358,19 @@ Your previous response was incomplete or unclear. Please provide numeric scores 
 """
                 
                 assessment_prompt = f"""
-{assessment_context}{conversation_reference}, please assess your motivation to contribute.
+{assessment_context}{conversation_reference}, please assess your motivation to contribute to the CURRENT conversation state.
 
 {memory_claim}
 {retry_instruction}
-1. IMPORTANCE_TO_SELF: How personally significant is this topic to you?
-2. PERCEIVED_GAP: Are there crucial points missing from the discussion?
-3. UNIQUE_PERSPECTIVE: Do you have insights others haven't shared?
-4. EMOTIONAL_INVESTMENT: How much do you care about the outcome?
-5. EXPERTISE_RELEVANCE: How applicable is your domain knowledge?
-6. URGENCY: How time-sensitive is this topic or risk of misunderstanding?
-7. IMPORTANCE_TO_GROUP: What's the potential impact on group understanding?
+1. IMPORTANCE_TO_SELF: How personally significant is the CURRENT conversation direction to you?
+2. PERCEIVED_GAP: Are there crucial points missing from the RECENT discussion?
+3. UNIQUE_PERSPECTIVE: Do you have insights that haven't been shared in the CURRENT conversation?
+4. EMOTIONAL_INVESTMENT: How much do you care about the current discussion outcome?
+5. EXPERTISE_RELEVANCE: How applicable is your domain knowledge to what's being discussed NOW?
+6. URGENCY: How time-sensitive are the current discussion points?
+7. IMPORTANCE_TO_GROUP: What's the potential impact on the group's current understanding?
+
+Focus on the EVOLVING conversation, not just the original topic. Consider what has actually been discussed recently and whether you can add value to the current direction.
 
 Respond ONLY with numbers in this exact format:
 IMPORTANCE_TO_SELF: X
@@ -384,7 +389,7 @@ IMPORTANCE_TO_GROUP: X
                     actor=self.name,
                     action_type="assessment_request",
                     details={
-                        "topic": topic,
+                        "topic": original_topic,
                         "has_conversation_history": bool(conversation_history),
                         "has_tools": has_tools,
                     },
@@ -725,11 +730,16 @@ IMPORTANCE_TO_GROUP: X
 
         return response_text
 
-    def assess_motivation_and_priority(self, topic: str):
-        """Performs the full assessment and calculates motivation and priority scores."""
-        # Ensure the topic is passed as the 'topic' parameter and not accidentally
-        # treated as conversation_history by positional args.
-        self._get_full_assessment(topic=topic)
+    def assess_motivation_and_priority(self, recent_messages: list[ConversationMessage], original_topic: str):
+        """Performs the full assessment and calculates motivation and priority scores.
+        
+        Args:
+            recent_messages: List of ConversationMessage objects since agent's last turn
+            original_topic: The original meeting topic for context
+        """
+        # Convert recent messages to conversation history format and pass with original topic
+        conversation_history = messages_to_flat_format(recent_messages) if recent_messages else ""
+        self._get_full_assessment(conversation_history=conversation_history, topic=original_topic)
 
         assessment = self.last_assessment
         self.motivation_score = (
@@ -752,7 +762,7 @@ IMPORTANCE_TO_GROUP: X
             actor=self.name,
             decision_type="motivation_assessment",
             details={
-                "topic": topic,
+                "topic": original_topic,
                 "motivation_score": self.motivation_score,
                 "priority_score": self.priority_score,
                 "participation_threshold": config.PARTICIPATION_THRESHOLD,

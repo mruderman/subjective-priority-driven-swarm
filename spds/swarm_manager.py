@@ -2,6 +2,7 @@
 
 import time
 import uuid
+from datetime import datetime
 
 from letta_client import Letta
 from letta_client.errors import NotFoundError
@@ -11,6 +12,7 @@ from .config import logger
 from .export_manager import ExportManager
 from .letta_api import letta_call
 from .memory_awareness import create_memory_awareness_for_agent
+from .message import ConversationMessage, convert_history_to_messages, messages_to_flat_format, get_new_messages_since_index
 from .secretary_agent import SecretaryAgent
 from .session_tracking import track_action, track_message, track_system_event
 from .spds_agent import SPDSAgent
@@ -136,16 +138,16 @@ class SwarmManager:
         """Backward-compatible accessor for conversation history.
 
         Returns a flattened newline-separated string of 'Speaker: message' lines.
-        Tests and UI code expect a string, so present the canonical internal
-        _history in that form here.
+        Tests and UI code expect a string, so convert ConversationMessage objects
+        to the legacy string format.
         """
-        return "\n".join(f"{s}: {m}" for s, m in self._history)
+        return messages_to_flat_format(self._history)
 
     @conversation_history.setter
     def conversation_history(self, value):
-        # Allow tests to set an initial empty string or a pre-filled list/str.
+        # Handle various input formats and convert to ConversationMessage objects
         if isinstance(value, str):
-            # Convert empty string to empty list; otherwise parse lines into tuples.
+            # Convert empty string to empty list; otherwise parse lines into tuples then ConversationMessage
             if not value:
                 self._history = []
             else:
@@ -157,27 +159,43 @@ class SwarmManager:
                     else:
                         s, m = "System", ln
                     tuples.append((s, m))
-                self._history = tuples
+                # Convert tuples to ConversationMessage objects
+                self._history = convert_history_to_messages(tuples)
         elif isinstance(value, list):
-            self._history = value
+            # Check if it's already ConversationMessage objects or legacy tuples
+            if value and isinstance(value[0], ConversationMessage):
+                self._history = value
+            else:
+                # Legacy tuple format, convert to ConversationMessage objects
+                self._history = convert_history_to_messages(value)
         else:
-            # Best-effort: try to coerce
+            # Best-effort: try to coerce to list then convert
             try:
-                self._history = list(value)
+                list_value = list(value)
+                if list_value and isinstance(list_value[0], ConversationMessage):
+                    self._history = list_value
+                else:
+                    self._history = convert_history_to_messages(list_value)
             except Exception:
                 self._history = []
 
-    def _get_filtered_conversation_history(self, agent):
-        """Get conversation history filtered to only include messages after the agent's last message."""
+    def get_new_messages_since_last_turn(self, agent) -> list[ConversationMessage]:
+        """Get conversation messages that are new since the agent's last turn.
+        
+        This method enables incremental message delivery to agents, replacing the
+        old string-based filtering approach with structured ConversationMessage objects.
+        
+        Args:
+            agent: SPDSAgent with last_message_index attribute
+            
+        Returns:
+            List of ConversationMessage objects since agent's last turn
+        """
         # Defensive: some test doubles may not have last_message_index set.
         last_idx = getattr(agent, "last_message_index", -1)
-
-        # If agent hasn't spoken, return the whole history as a string.
-        if last_idx < 0:
-            return "\n".join(f"{s}: {m}" for s, m in self._history)
-
-        filtered = self._history[last_idx + 1 :]
-        return "\n".join(f"{s}: {m}" for s, m in filtered)
+        
+        # Use helper function to get new messages since the last index
+        return get_new_messages_since_index(self._history, last_idx)
 
     def _normalize_agent_message(self, message_text: str) -> str:
         """Normalize agent output for downstream display and tests.
@@ -197,12 +215,18 @@ class SwarmManager:
         return message_text
 
     def _append_history(self, speaker: str, message: str) -> None:
-        """Append a (speaker, message) entry to conversation_history in a backward-compatible way.
+        """Append a ConversationMessage to history with current timestamp.
 
-        If conversation_history is still the legacy string, convert it into a list on first append.
+        Creates a ConversationMessage object from speaker and message parameters
+        and appends it to the structured history.
         """
-        # Append directly to canonical list
-        self._history.append((speaker, message))
+        # Create ConversationMessage with current timestamp
+        conversation_message = ConversationMessage(
+            sender=speaker,
+            content=message,
+            timestamp=datetime.now()
+        )
+        self._history.append(conversation_message)
 
     def _call_agent_message_create(
         self,
@@ -616,12 +640,36 @@ class SwarmManager:
             )
             return False
 
+    def _get_filtered_conversation_history(self, agent):
+        """
+        Get incremental conversation history for an agent since their last turn.
+        
+        Uses the new ConversationMessage system to provide only the messages
+        that have occurred since the agent's last turn, enabling incremental
+        delivery while maintaining backward compatibility with existing agent interfaces.
+        
+        Args:
+            agent: The agent to get filtered history for
+            
+        Returns:
+            str: Flattened conversation history string format compatible with agent.speak()
+        """
+        # Get new messages since agent's last turn using the existing method
+        recent_messages = self.get_new_messages_since_last_turn(agent)
+        
+        # Convert ConversationMessage objects to flat format for agent compatibility
+        if recent_messages:
+            from .message import messages_to_flat_format
+            return messages_to_flat_format(recent_messages)
+        else:
+            return ""
+
     def _agent_turn(self, topic: str):
         """
-        Evaluate motivation and priority for each agent with respect to the provided topic, build an ordered list of motivated agents (priority_score > 0), and invoke the mode-specific turn handler (_hybrid_turn, _all_speak_turn, _sequential_turn, or _pure_priority_turn). If no agents are motivated the method returns without further action. The method updates agent internal scores and triggers side-effectful turn handlers which append to the shared conversation state and notify the secretary when present.
+        Evaluate motivation and priority for each agent based on recent conversation context and original topic, build an ordered list of motivated agents (priority_score > 0), and invoke the mode-specific turn handler (_hybrid_turn, _all_speak_turn, _sequential_turn, or _pure_priority_turn). If no agents are motivated the method returns without further action. The method updates agent internal scores and triggers side-effectful turn handlers which append to the shared conversation state and notify the secretary when present.
 
         Parameters:
-            topic (str): The meeting topic or prompt used to assess agent motivation.
+            topic (str): The original meeting topic for context.
 
         Returns:
             None
@@ -631,7 +679,10 @@ class SwarmManager:
         )
         start_time = time.time()
         for agent in self.agents:
-            agent.assess_motivation_and_priority(topic)
+            # Get recent messages since agent's last turn for dynamic assessment
+            recent_messages = self.get_new_messages_since_last_turn(agent)
+            # Assess motivation based on current conversation context + original topic
+            agent.assess_motivation_and_priority(recent_messages, topic)
             self._emit(
                 f"  - {agent.name}: Motivation Score = {agent.motivation_score}, Priority Score = {agent.priority_score:.2f}"
             )
@@ -929,20 +980,20 @@ class SwarmManager:
                     level="error",
                 )
 
-        # Build response prompt context from current conversation history
-        # Build a string view containing initial responses appended to the prior history
-        history_with_initials = self.conversation_history
-        response_prompt_addition = "\nNow that you've heard everyone's initial thoughts, please consider how you might respond."
-
+        # Phase 2: Response round - agents react to each other's ideas
+        # Use incremental delivery for consistency with Phase 1
         for i, agent in enumerate(motivated_agents, 1):
             self._emit(
                 f"\n({i}/{len(motivated_agents)}) {agent.name} - Responding to the discussion..."
             )
             try:
                 start_time = time.time()
-                # conversation_history is a flattened string already; append the instruction.
+                # Use filtered history for incremental delivery (consistent with Phase 1)
+                filtered_history = self._get_filtered_conversation_history(agent)
+                # Add response instruction to the filtered history
+                response_instruction = "\nNow that you've heard everyone's initial thoughts, please consider how you might respond."
                 response = agent.speak(
-                    conversation_history=history_with_initials + response_prompt_addition
+                    conversation_history=filtered_history + response_instruction
                 )
                 duration = time.time() - start_time
                 self._emit(

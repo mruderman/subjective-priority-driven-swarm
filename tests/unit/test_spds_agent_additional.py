@@ -64,8 +64,10 @@ def test_assess_motivation_and_priority_uses_last_assessment(monkeypatch):
     # Monkeypatch _get_full_assessment so it doesn't call external
     monkeypatch.setattr(agent, "_get_full_assessment", lambda *a, **k: None)
 
-    # Call assess
-    agent.assess_motivation_and_priority(topic="T")
+    # Call assess with new signature
+    recent_messages = []  # Empty list for this test
+    original_topic = "T"
+    agent.assess_motivation_and_priority(recent_messages, original_topic)
 
     assert agent.motivation_score == 8 + 7 + 6 + 5 + 4
     if agent.motivation_score >= 10:

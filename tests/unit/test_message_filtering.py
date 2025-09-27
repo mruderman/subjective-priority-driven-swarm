@@ -12,8 +12,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-# Import ConversationMessage from integration test for now
-from tests.integration.test_conversation_refactor import ConversationMessage
+# Import ConversationMessage from the actual message module
+from spds.message import ConversationMessage
 
 
 class MockAgent:
@@ -33,7 +33,7 @@ class TestMessageFiltering:
         messages = []
         base_time = datetime(2024, 1, 15, 10, 0, 0)
         
-        speakers = ["You", "Agent1", "Agent2", "Agent3", "You", "Agent1", "You", "Agent2", "Agent3", "You"]
+        speakers = ["You", "Agent1", "Agent2", "Agent3"]
         
         for i in range(length):
             speaker = speakers[i % len(speakers)]
@@ -59,7 +59,7 @@ class TestMessageFiltering:
         # Should get messages from index 4 onwards
         assert len(new_messages) == 4  # Messages 4, 5, 6, 7
         assert new_messages[0].content == "Message 5: This is You speaking in the conversation."
-        assert new_messages[-1].content == "Message 8: This is You speaking in the conversation."
+        assert new_messages[-1].content == "Message 8: This is Agent3 speaking in the conversation."
     
     def test_first_time_speaker_gets_all_messages(self):
         """Test that agents speaking for the first time get full conversation history."""
@@ -76,7 +76,7 @@ class TestMessageFiltering:
         # Should get all messages since it's the first time
         assert len(new_messages) == 5
         assert new_messages[0].content == "Message 1: This is You speaking in the conversation."
-        assert new_messages[-1].content == "Message 5: This is Agent1 speaking in the conversation."
+        assert new_messages[-1].content == "Message 5: This is You speaking in the conversation."
     
     def test_agent_at_end_of_conversation(self):
         """Test agent that spoke last gets no new messages."""
@@ -211,6 +211,22 @@ class TestMessageIndexTracking:
 
 class TestMessageFilteringPerformance:
     """Test performance characteristics of message filtering."""
+    
+    def create_conversation_history(self, length: int = 10) -> list[ConversationMessage]:
+        """Create a test conversation history."""
+        messages = []
+        base_time = datetime(2024, 1, 15, 10, 0, 0)
+        
+        speakers = ["You", "Agent1", "Agent2", "Agent3"]
+        
+        for i in range(length):
+            speaker = speakers[i % len(speakers)]
+            content = f"Message {i+1}: This is {speaker} speaking in the conversation."
+            timestamp = base_time + timedelta(seconds=i * 30)  # 30 seconds apart
+            
+            messages.append(ConversationMessage(speaker, content, timestamp))
+        
+        return messages
     
     def test_filtering_performance_large_conversations(self):
         """Test filtering performance with large conversation histories."""

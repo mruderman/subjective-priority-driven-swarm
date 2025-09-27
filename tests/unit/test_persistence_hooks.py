@@ -128,8 +128,10 @@ class TestPersistenceHooks:
                     },
                 )
 
-                # Call assess_motivation_and_priority
-                agent.assess_motivation_and_priority("test topic")
+                # Call assess_motivation_and_priority with new signature
+                recent_messages = []  # Empty list for this test
+                original_topic = "test topic"
+                agent.assess_motivation_and_priority(recent_messages, original_topic)
 
                 # Verify tracking was called
                 assert mock_store.save_event.called

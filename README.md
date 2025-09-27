@@ -1,19 +1,21 @@
-# Intrinsic Motivation-Driven Swarm (IMDS)
+# Subjective Priority-Driven Swarm (SPDS)
 
 Multi-agent group chat with real Letta agents. Use a modern Web GUI or a friendly CLI to run authentic multi-agent discussions with live minutes and exports.
 
-# Intrinsic Motivation-Driven Swarm (IMDS)
+## Overview
 
-This project implements a multi-agent group chat system based on their subjective Intrinsivc Motivation-Driven Swarm (IMDS) framework, using real computational beings from a Letta ADE server. Available as both a CLI application and a modern web interface, it features intuitive agent selection and multiple conversation modes for rich, dynamic discussions.
+This project implements a multi-agent group chat system using the Subjective Priority-Driven Swarm (SPDS) framework, where AI agents autonomously decide when to contribute to conversations based on internal priority calculations. Built on the Letta platform, it features real computational beings from a Letta ADE server. Available as both a CLI application and a modern web interface, it features intuitive agent selection and multiple conversation modes for rich, dynamic discussions.
 
-**Key Innovation**: Agents use their own LLM models to perform real subjective assessment of conversations, creating authentic computational personalities that naturally respond, agree, disagree, and build on each other's ideas.
+**🎉 Major Update**: Successfully completed conversation logic refactor (September 2025) - now featuring dynamic, context-aware agent interactions with natural conversation flow and incremental message delivery.
 
-## 🎭 Direct Responses Conversation Modes
+**Key Innovation**: Agents use their own LLM models to perform real subjective assessment of conversations, creating authentic computational personalities that naturally respond, agree, disagree, and build on each other's ideas. The system now uses recent conversation context instead of static topics for more relevant and engaging interactions.
+
+## 🎭 Conversation Modes
 
 **🔄 Hybrid Mode (Recommended)**: Two-phase conversations
 - **Phase 1**: All motivated agents share independent thoughts on an initial topic or question.
 
-- **Phase 2**: Agents respond to each other's ideas with rebuttals, agreements, or new insights/
+- **Phase 2**: Agents respond to each other's ideas with rebuttals, agreements, or new insights
 
 **👥 All-Speak Mode**: Fast-paced group discussions
 - All motivated agents respond in priority order
@@ -34,10 +36,12 @@ This project implements a multi-agent group chat system based on their subjectiv
 - **🎭 Multiple Conversation Modes**: Four distinct modes for different discussion dynamics
 - **📝 Secretary Agent**: AI-powered meeting documentation using real Letta agent intelligence
 - **📋 Meeting Minutes**: Both formal board minutes and casual discussion notes
-- **🧠 Real Agent Introspection**: Agents use their own LLM models for authentic conversation assessment
-- **🔄 Natural Group Dynamics**: Agents respond, agree, disagree, and build on each other's ideas, and weigh any potentially emerging egos.
-- **⚡ Motivations-Based Responses**: Dynamic turn-taking based on agent intrinsic motivation.
+- **🧠 Real Agent Assessment**: Agents use their own LLM models for authentic conversation evaluation
+- **🔄 Natural Group Dynamics**: Agents respond, agree, disagree, and build on each other's ideas
+- **⚡ Priority-Based Responses**: Dynamic turn-taking based on agent motivation calculations
 - **💾 Multi-Format Export**: Export conversations, minutes, transcripts, and summaries
+- **🚀 Dynamic Context Awareness**: Agents evaluate conversation relevance using recent messages instead of static topics
+- **📊 Incremental Message Delivery**: Efficient message processing with ConversationMessage architecture
 
 ### Interface Options
 - **🖥️ Command Line Interface**: Interactive terminal application with checkbox selection
@@ -68,22 +72,22 @@ pip install -r requirements.txt
 python3 -m spds.main
 ```
 
-## Minimal Config
-Set in a `.env` or your shell (see docs/INSTALL.md):
+## Configuration
+
+Set environment variables in a `.env` file:
 ```bash
 LETTA_PASSWORD=your-server-password
 LETTA_BASE_URL=http://localhost:8283
 LETTA_ENVIRONMENT=SELF_HOSTED   # or LETTA_CLOUD
 ```
 
-## Documentation
-- Installation & setup: docs/INSTALL.md
-- Web GUI guide: docs/WEB_GUI.md
-- CLI guide: docs/CLI.md
-- Architecture overview: docs/ARCHITECTURE.md
-- Troubleshooting: docs/TROUBLESHOOTING.md
+See `.env.example` for complete configuration options.
 
-Tip: If web deps fail with a `typing>=3.10.0.0` error from `letta-flask`, see docs/TROUBLESHOOTING.md for safe workarounds (use local shim or `pip install --no-deps`).
+## Troubleshooting
+
+If you encounter installation errors with `letta-flask` dependencies, try:
+- Use the local shim: run web server from repo root
+- Install without dependencies: `pip install --no-deps git+https://github.com/letta-ai/letta-flask.git`
 
 ## Contributing
 Pull requests welcome! Please run tests/linters before submitting.

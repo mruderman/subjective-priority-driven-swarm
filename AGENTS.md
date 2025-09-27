@@ -1,13 +1,16 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `spds/` – Core Python package (CLI, agents, config, exports, integrations, session management).
+- `spds/` – Core Python package (CLI, agents, config, exports, integrations, session management, message architecture).
+- `spds/message.py` – ConversationMessage dataclass system for structured messaging and incremental delivery ✅ **RECENTLY REFACTORED**.
 - `spds/integrations/` – External tool integrations (Composio, MCP, registry management).
 - `swarms-web/` – Flask web UI with WebSocket support (`app.py`, `run.py`, `templates/`, `static/`, E2E tests).
 - `tests/` – Comprehensive Pytest suite (unit, integration, e2e tests with fixtures).
 - `exports/` – Generated minutes/transcripts (organized by sessions).
 - Root configs: `pyproject.toml`, `.flake8`, `pytest.ini`, `.pre-commit-config.yaml`, `Makefile`.
 - Agent configs: `creative_swarm.json`, `openai_swarm.json`, `tool_swarm.json`, `vision_swarm.json`.
+
+**🎉 Recent Major Achievement**: Completed conversation logic refactor (September 2025) - implemented dynamic, context-aware agent interactions with ConversationMessage architecture for incremental delivery.
 
 ## Build, Test, and Development Commands
 - Create env and install: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
@@ -56,9 +59,8 @@ Continuity policy:
   - To reuse a secretary, set `SECRETARY_AGENT_ID` or `SECRETARY_AGENT_NAME`.
 - For the secretary, reuse via `SECRETARY_AGENT_ID` or `SECRETARY_AGENT_NAME`. Creation is blocked when ephemerals are disabled.
 
-Troubleshooting note:
+## Troubleshooting
 
-If you run into an installation error when setting up the web UI related to
-`letta-flask` (for example, a `typing>=3.10.0.0` requirement error), see the
-Troubleshooting section in `README.md` for workarounds (local shim, install
-without-deps, or editing the upstream package metadata).
+If you encounter installation errors when setting up the web UI related to `letta-flask` (for example, a `typing>=3.10.0.0` requirement error), see the Troubleshooting section in `README.md` for workarounds:
+- Use the local shim: run web server from repo root
+- Install without dependencies: `pip install --no-deps git+https://github.com/letta-ai/letta-flask.git`

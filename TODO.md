@@ -1,7 +1,10 @@
-# TODO - SWARMS Project
+# TODO - SPDS Project
 
-This document tracks the progress and future direction of the SWARMS project.
-Last updated: 2025-09-18
+This document tracks the progress and future direction of the Subjective Priority-Driven Swarm (SPDS) project.
+Last updated: September 27, 2025
+
+**🎉 Major Milestone Achieved**: Conversation Logic Refactor completed successfully! 
+The SPDS system now features dynamic, context-aware agent interactions with improved natural conversation flow.
 
 ## Phase 1: Live Testing — COMPLETED
 
@@ -22,9 +25,9 @@ Last updated: 2025-09-18
 - [x] Fix tool call use with default Letta tools
 - [x] Verify across providers (Anthropic, OpenAI, Together models, etc.)
 
-## Phase 2: Logging & Observability — COMPLETED
+## Phase 2: Core Infrastructure — COMPLETED
 
-Implemented centralized, configurable logging in `spds/config.py` and added performance/timing instrumentation across `spds/swarm_manager.py`.
+Implemented centralized, configurable logging in `spds/config.py` and added performance/timing instrumentation across `spds/swarm_manager.py`. Also completed ConversationMessage system implementation.
 
 ### Completed Tasks ✓
 - [x] Python logging module with env-configurable level (`LOG_LEVEL`)
@@ -34,24 +37,36 @@ Implemented centralized, configurable logging in `spds/config.py` and added perf
 - [x] Performance timing for agent creation, assessments, LLM responses
 - [x] Slow-operation warnings (e.g., >5s)
 - [x] `logs/` ignored via `.gitignore`
+- [x] ConversationMessage system for structured messaging
+- [x] Incremental message delivery infrastructure
+- [x] Backward compatibility maintained
 
-## Next Up (High Priority) — Optimized Order
+## Phase 3: Fix Round Cycling Problem — ✅ COMPLETED
+
+Successfully implemented dynamic context assessment and incremental message delivery.
+
+1) Agent assessment refactor ✅ COMPLETED
+   - [x] Update `assess_motivation_and_priority()` to use recent messages
+   - [x] Modify `_get_full_assessment()` for dynamic context
+   - [x] Remove static topic references in motivation calculation
+
+2) Conversation mode updates ✅ COMPLETED
+   - [x] Update `_agent_turn()` to pass recent messages
+   - [x] Modify conversation modes for incremental message delivery
+   - [x] Remove generic prompts, enable context-aware interactions
+
+## Next Up (High Priority)
 
 1) Environment variable alignment (quick win, unblocks docs/UX)
    - [ ] Unify `LETTA_PASSWORD` and `LETTA_SERVER_PASSWORD` (support both; prefer `LETTA_PASSWORD`)
    - [ ] Update docs (`README.md`, `.env.example`) and add code shim
 
-2) Agent profile schema validation (stability before features)
-   - [ ] Define Pydantic model for `AGENT_PROFILES`
-   - [ ] Validate on startup with clear error messages
-   - [ ] Tests for invalid/missing fields
-
-3) Error/timeout handling consolidation (foundation for reliability)
+2) Error/timeout handling consolidation (foundation for reliability)
    - [ ] Central wrapper for Letta calls (timeouts, retry/backoff, logging)
    - [ ] Apply across agents/secretary paths
    - [ ] Unit tests for transient failures and timeouts
 
-4) Conversation persistence and resume (build on #3)
+3) Conversation persistence and resume
    - [ ] Add session IDs; persist conversation state (JSON/DB)
    - [ ] CLI/Web: list sessions and resume
    - [ ] Export/restore secretary state (minutes, actions, decisions)

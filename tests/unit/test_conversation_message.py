@@ -12,9 +12,8 @@ from unittest.mock import patch
 
 import pytest
 
-# Import the ConversationMessage class from the refactor test file for now
-# This will be moved to spds/message.py in the actual implementation
-from tests.integration.test_conversation_refactor import ConversationMessage
+# Import the ConversationMessage class from the actual implementation
+from spds.message import ConversationMessage
 
 
 class TestConversationMessageBasics:

@@ -72,6 +72,7 @@ pre-commit run --all-files
 11. **Integration System** (`integrations/`): External tool integrations (Composio, MCP) with registry management
 12. **Agent Profiles** (`profiles_schema.py`): Pydantic schemas for agent profile validation
 13. **Memory Awareness** (`memory_awareness.py`): Agent memory management utilities respecting autonomy
+14. **Message Architecture** (`message.py`): Structured ConversationMessage system for incremental delivery
 
 ### Key Design Patterns
 - **Agent-based Architecture**: Each agent has unique persona, expertise, and state
@@ -80,6 +81,7 @@ pre-commit run --all-files
 - **Secretary Integration**: Optional neutral observer for meeting documentation
 - **Dual Meeting Formats**: Formal board minutes and casual group discussion notes
 - **Interactive UX**: Checkbox-based agent selection with conversation mode and meeting type options
+- **Structured Message System**: ConversationMessage objects enable incremental delivery and context-aware assessment
 
 ### Important Configuration
 - **PARTICIPATION_THRESHOLD**: Minimum priority score (default: 30) for agent to speak
@@ -97,7 +99,8 @@ This project prioritizes continuity of agent experience over disposable workflow
 
 ## Development Notes
 
-### Current State
+### Current State (September 2025)
+- **🎉 Conversation Logic Refactor Completed**: Successfully implemented dynamic, context-aware agent interactions
 - **Real Agent Assessment**: Agents use their own LLMs for conversation evaluation (no more simulated logic)
 - **Interactive Agent Selection**: Checkbox UI for selecting agents from Letta server
 - **Four Conversation Modes**: Hybrid, All-Speak, Sequential, Pure Priority
@@ -108,6 +111,10 @@ This project prioritizes continuity of agent experience over disposable workflow
 - **Fixed Agent Response Issues**: Improved prompting for initial vs response phases in hybrid mode
 - **Token Limit Management**: Implemented proper stateful agent architecture using Letta's memory system
 - **Automatic Error Recovery**: Agent message history reset when token limits are exceeded
+- **ConversationMessage Architecture**: Structured message system implemented with incremental delivery
+- **Backward Compatibility**: Full compatibility maintained for existing conversation history interfaces
+- **Dynamic Context Assessment**: Agents now evaluate conversation relevance using recent messages instead of static topics
+- **Natural Conversation Flow**: Eliminated repetitive assessment patterns for more engaging interactions
 
 ### Web GUI Setup
 The project now includes a web GUI in the `swarms-web` directory:
@@ -163,6 +170,7 @@ spds/
 ├── session_tracking.py        # Session lifecycle tracking
 ├── profiles_schema.py         # Agent profile validation schemas
 ├── memory_awareness.py        # Memory management utilities
+├── message.py                 # ConversationMessage dataclass and utilities for structured messaging
 ├── setup.sh                   # Docker setup script
 └── integrations/              # External tool integrations
     ├── __init__.py
@@ -392,5 +400,5 @@ See `AGENT_MEMORY_AUTONOMY.md` for comprehensive documentation on memory managem
 
 ### References and Context
 - Starting point for Letta development context: @References/Letta-Primer.md
-- Use Cotnext7 MCP server for Letta main repo or Letta SDKs for additional information
-- Use sequential thinking mcp server tools as much as possible for every task.
+- Use Context7 MCP server for Letta main repo or Letta SDKs for additional information
+- Use sequential thinking MCP server tools as much as possible for every task

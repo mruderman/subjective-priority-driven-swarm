@@ -780,7 +780,10 @@ IMPORTANCE_TO_GROUP: 8"""
         agent.last_assessment = sample_assessment
 
         with patch.object(agent, "_get_full_assessment") as mock_assess:
-            agent.assess_motivation_and_priority("test topic")
+            # Updated to use new signature with recent_messages and original_topic
+            recent_messages = []  # Empty list for this test
+            original_topic = "test topic"
+            agent.assess_motivation_and_priority(recent_messages, original_topic)
 
         # Calculate expected motivation score (sum of first 5 dimensions)
         expected_motivation = 8 + 6 + 7 + 5 + 9  # = 35
@@ -814,7 +817,10 @@ IMPORTANCE_TO_GROUP: 8"""
         agent.last_assessment = low_assessment
 
         with patch.object(agent, "_get_full_assessment") as mock_assess:
-            agent.assess_motivation_and_priority("test topic")
+            # Updated to use new signature with recent_messages and original_topic
+            recent_messages = []  # Empty list for this test
+            original_topic = "test topic"
+            agent.assess_motivation_and_priority(recent_messages, original_topic)
 
         expected_motivation = 2 + 1 + 2 + 1 + 3  # = 9 (below threshold of 50)
         assert agent.motivation_score == expected_motivation
