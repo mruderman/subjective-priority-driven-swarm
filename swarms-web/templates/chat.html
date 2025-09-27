@@ -353,7 +353,7 @@ class SimpleChat {
         this.pendingAttachments = []; // Store uploaded attachments before sending
         this.messageLimit = CHAT_MESSAGE_CHAR_LIMIT;
         window.__CHAT_MESSAGE_LIMIT__ = this.messageLimit;
-        this.lastTrimmedMessage = null;
+        this.lastTrimmedMessage = null;       
         this.currentFilterText = '';
         this.exportLabels = {
             formal: 'Formal Minutes',
@@ -534,6 +534,7 @@ class SimpleChat {
         if (filterInput) {
             filterInput.addEventListener('input', (event) => {
                 const target = event.target;
+                const value = typeof target?.value === 'string' ? target.value : '';
                 const value = target && typeof target.value === 'string' ? target.value : '';
                 this.currentFilterText = value.trim().toLowerCase();
                 this.applyMessageFilter();
