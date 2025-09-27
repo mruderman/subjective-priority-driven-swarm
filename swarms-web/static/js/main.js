@@ -542,7 +542,9 @@ class SwarmsApp {
         // Update scores in sidebar if available
         const scoresContainer = document.getElementById('agent-scores');
         if (scoresContainer) {
-            scoresContainer.innerHTML = scores.map(score => `
+            const normalizedScores = Array.isArray(scores) ? scores : [];
+
+            scoresContainer.innerHTML = normalizedScores.map(score => `
                 <div class="agent-score-item">
                     <span class="agent-name">${score.name}</span>
                     <div class="score-badges">
@@ -551,6 +553,22 @@ class SwarmsApp {
                     </div>
                 </div>
             `).join('');
+
+            const scoresWrapper = document.getElementById('agent-scores-container');
+            if (scoresWrapper) {
+                if (normalizedScores.length > 0) {
+                    scoresWrapper.hidden = false;
+                    scoresWrapper.removeAttribute('hidden');
+                    scoresWrapper.classList.remove('hidden-by-default');
+                    scoresWrapper.style.removeProperty('display');
+                } else {
+                    scoresWrapper.hidden = true;
+                    scoresWrapper.setAttribute('hidden', 'true');
+                    scoresWrapper.classList.add('hidden-by-default');
+                    scoresWrapper.style.removeProperty('display');
+                    scoresContainer.innerHTML = '';
+                }
+            }
         }
     }
 
@@ -712,11 +730,16 @@ class SwarmsApp {
 
             toastContainer.appendChild(toast);
 
+            // Initialize and show toast with Bootstrap animation support
             const bsToast = new bootstrap.Toast(toast);
+            toast.classList.add('show', 'showing');
+            requestAnimationFrame(() => toast.classList.remove('showing'));
+            toast.style.removeProperty('display');
             bsToast.show();
 
-            // Clean up after hide
+            // Remove toast element after it's hidden to avoid DOM buildup
             toast.addEventListener('hidden.bs.toast', () => {
+                toast.classList.remove('show');
                 toast.remove();
             });
         });

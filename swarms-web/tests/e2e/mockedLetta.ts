@@ -208,19 +208,23 @@ export class MockedLettaController {
           }
         };
 
-        let socketInstance: {
-          on: (event: string, callback: (payload?: unknown) => void) => unknown;
-          off: (event?: string) => unknown;
-          emit: (event: string, payload?: Record<string, unknown>) => unknown;
+        type Listener = (payload?: unknown) => void;
+        type SocketStub = {
+          on: (event: string, callback: Listener) => SocketStub;
+          off: (event?: string) => SocketStub;
+          emit: (event: string, payload?: Record<string, unknown>) => SocketStub;
           disconnect: () => void;
-        } | null = null;
+          __playwrightEmitDirect?: (event: string, payload?: unknown) => void;
+        };
+
+        let socketInstance: SocketStub | null = null;
 
         const createSocketFactory = () => {
           if (socketInstance) {
             return socketInstance;
           }
 
-          const listeners = new Map<string, ((payload?: unknown) => void)[]>();
+          const listeners = new Map<string, Listener[]>();
 
           const ensureListeners = (event: string) => {
             if (!listeners.has(event)) {
@@ -243,8 +247,8 @@ export class MockedLettaController {
             });
           };
 
-          const socket = {
-            on(event: string, callback: (payload?: unknown) => void) {
+          const socket: SocketStub = {
+            on(event: string, callback: Listener) {
               ensureListeners(event).push(callback);
               if (event === 'connect') {
                 setTimeout(() => callback(undefined), 0);
@@ -339,6 +343,8 @@ export class MockedLettaController {
             },
           };
 
+          socket.__playwrightEmitDirect = emitEvent;
+
           socketInstance = socket;
           return socketInstance;
         };
@@ -346,15 +352,23 @@ export class MockedLettaController {
         ensureBootstrap();
 
         const win = window as typeof window & {
-          __playwrightCreateSocketIO?: () => unknown;
+          __playwrightCreateSocketIO?: () => SocketStub;
           io?: () => unknown;
           __PLAYWRIGHT_RESET_SOCKET?: () => void;
+          __playwrightEmitSocketEvent?: (event: string, payload?: unknown) => void;
         };
 
         win.__playwrightCreateSocketIO = () => createSocketFactory();
         win.io = () => createSocketFactory();
         win.__PLAYWRIGHT_RESET_SOCKET = () => {
           socketInstance = null;
+        };
+        win.__playwrightEmitSocketEvent = (event: string, payload?: unknown) => {
+          const socket = createSocketFactory();
+          const emitter = socket.__playwrightEmitDirect;
+          if (typeof emitter === 'function') {
+            emitter(event, payload);
+          }
         };
       },
       { storageKey: STORAGE_KEY }

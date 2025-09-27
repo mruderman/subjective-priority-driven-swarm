@@ -1,4 +1,5 @@
 import { expect, test, Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 type MockAgent = {
   id: string;
@@ -135,6 +136,10 @@ test.beforeEach(async ({ page }) => {
         disconnect: () => void;
       };
 
+      type TestableSocketAPI = SocketAPI & {
+        __emitDirect?: (event: string, payload?: unknown) => void;
+      };
+
       let socket: SocketAPI | null = null;
 
       const factory = () => {
@@ -165,7 +170,7 @@ test.beforeEach(async ({ page }) => {
           });
         };
 
-        const api: SocketAPI = {
+        const api: TestableSocketAPI = {
           on(event: string, callback: Listener) {
             ensureListeners(event).push(callback);
             if (event === 'connect') {
@@ -416,6 +421,7 @@ test.beforeEach(async ({ page }) => {
           },
         };
 
+        api.__emitDirect = emitEvent;
         socket = api;
         return api;
       }
@@ -427,6 +433,7 @@ test.beforeEach(async ({ page }) => {
 
     const win = window as typeof window & {
       __playwrightCreateSocketIO?: () => () => unknown;
+      __playwrightEmitSocketEvent?: (event: string, payload?: unknown) => void;
       io?: () => unknown;
       __PLAYWRIGHT_TEST?: string;
     };
@@ -434,6 +441,15 @@ test.beforeEach(async ({ page }) => {
     win.__playwrightCreateSocketIO = createSocketFactory;
     const socketFactory = createSocketFactory();
     win.io = () => socketFactory();
+    win.__playwrightEmitSocketEvent = (event: string, payload?: unknown) => {
+      const socketInstance = socketFactory();
+      const emitter = (socketInstance as {
+        __emitDirect?: (event: string, payload?: unknown) => void;
+      }).__emitDirect;
+      if (typeof emitter === 'function') {
+        emitter(event, payload);
+      }
+    };
   }, { agents: mockAgents, exports: exportFixtures });
 
   await page.route('**/socket.io.min.js*', async (route) => {
@@ -521,15 +537,32 @@ const startConversation = async (page: Page, topic = 'Exploring AI collaboration
   await page.locator('.mode-card').first().click();
   await page.locator('#topic').fill(topic);
 
-  await page.locator('#start-chat-btn').click();
-
-  await page.waitForResponse('**/api/start_session');
+  await Promise.all([
+    page.waitForResponse('**/api/start_session'),
+    page.locator('#start-chat-btn').click(),
+  ]);
   await expect(page.locator('#chat-input')).toBeVisible();
 };
 
 const sendSlashCommand = async (page: Page, command: string) => {
   await page.locator('#chat-input').fill(command);
   await page.locator('#send-button').click();
+};
+
+const emitSocketEvent = async (
+  page: Page,
+  event: string,
+  payload?: Record<string, unknown>
+) => {
+  await page.evaluate(
+    ([eventName, eventPayload]) => {
+      const win = window as typeof window & {
+        __playwrightEmitSocketEvent?: (name: string, data?: unknown) => void;
+      };
+      win.__playwrightEmitSocketEvent?.(eventName, eventPayload);
+    },
+    [event, payload] as const
+  );
 };
 
 test('should load the main page and display agent selection cards', async ({ page }) => {
@@ -835,6 +868,87 @@ test('should trigger secretary exports and surface downloadable links', async ({
   expect(testedDownloads.size).toBe(5);
 });
 
+test.describe('Secretary export download handling', () => {
+  test.use({ acceptDownloads: true });
+
+  test('should request a markdown download with correct headers and content', async ({ page }) => {
+    const topic = 'Secretary download verification';
+    await startConversation(page, topic);
+
+    const sessionId = 'session-test';
+    const expectedFilename = `minutes-${sessionId}.md`;
+    const downloadBody = [
+      '# Meeting Minutes',
+      '',
+      `Session: ${sessionId}`,
+      `Topic: ${topic}`,
+      'Generated: 2024-02-29T10:00:00Z',
+    ].join('\n');
+
+    const requestedUrls: string[] = [];
+
+    await page.route('**/exports/**', async (route) => {
+      requestedUrls.push(route.request().url());
+      await route.fulfill({
+        status: 200,
+        body: downloadBody,
+        headers: {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${expectedFilename}"`,
+        },
+      });
+    });
+
+    const exportButton = page
+      .locator('button.secretary-command[data-command="/export minutes"]').first();
+    await expect(exportButton).toBeEnabled();
+
+    await exportButton.click();
+
+    const exportModal = page.locator('#exportModal');
+    await expect(exportModal).toBeVisible();
+
+    const toastContainer = page.locator('#toast-container');
+    await expect(toastContainer).toContainText('Export complete: Formal Minutes');
+
+    const downloadLink = exportModal.locator('a.download-export').first();
+    await expect(downloadLink).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await downloadLink.click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe(expectedFilename);
+    expect(await download.failure()).toBeNull();
+    const response = await download.response();
+    expect(response).not.toBeNull();
+    const headers = response?.headers() ?? {};
+    expect(headers['content-type']).toContain('text/markdown');
+    expect(headers['content-disposition']).toContain(expectedFilename);
+
+    const downloadedPath = await download.path();
+    expect(downloadedPath).not.toBeNull();
+    if (downloadedPath) {
+      const fileContents = await readFile(downloadedPath, 'utf-8');
+      expect(fileContents).toContain('# Meeting Minutes');
+      expect(fileContents).toContain(`Session: ${sessionId}`);
+      expect(fileContents).toContain(`Topic: ${topic}`);
+    }
+
+    expect(requestedUrls.length).toBeGreaterThanOrEqual(1);
+    expect(requestedUrls[requestedUrls.length - 1]).toContain('/exports/');
+
+    await expect(exportButton).toBeEnabled();
+
+    const closeButton = exportModal.locator('button[data-bs-dismiss]').first();
+    if (await closeButton.isVisible()) {
+      await closeButton.click();
+    }
+
+    await expect(exportModal).not.toBeVisible();
+  });
+});
+
 test('should reflect secretary mode toggles in the sidebar', async ({ page }) => {
   await startConversation(page, 'Secretary mode toggles');
 
@@ -845,4 +959,96 @@ test('should reflect secretary mode toggles in the sidebar', async ({ page }) =>
 
   await page.locator('button.secretary-command[data-command="/casual"]').first().click();
   await expect(secretaryContent).toContainText('Mode: casual');
+});
+
+test('should render thinking indicators and replace them with formatted agent responses', async ({ page }) => {
+  await startConversation(page, 'Agent thinking feedback');
+
+  await emitSocketEvent(page, 'agent_thinking', {
+    agent: 'Alex Johnson',
+    phase: 'analysis',
+    progress: '50%',
+  });
+
+  const indicator = page.locator('#chat-messages .thinking-indicator');
+  await expect(indicator).toContainText('Alex Johnson is thinking');
+  await expect(indicator).toContainText('analysis thoughts');
+  await expect(indicator).toContainText('50%');
+
+  await emitSocketEvent(page, 'agent_message', {
+    speaker: 'Alex Johnson',
+    message: 'Consider visiting https://example.com\nfor more details.',
+    timestamp: new Date().toISOString(),
+    phase: 'analysis',
+  });
+
+  await expect(indicator).toHaveCount(0);
+
+  const formattedMessage = page
+    .locator('#chat-messages .message.agent')
+    .filter({ hasText: 'Consider visiting' })
+    .first();
+  await expect(formattedMessage.locator('a[href="https://example.com"]')).toBeVisible();
+  await expect(formattedMessage.locator('br')).toHaveCount(1);
+  await expect(
+    formattedMessage.locator('.message-content')
+  ).toContainText('for more details.');
+});
+
+test('should surface assessment progress and display agent motivation scores', async ({ page }) => {
+  await startConversation(page, 'Scoring agents collaboratively');
+
+  await emitSocketEvent(page, 'assessing_agents', {});
+  await expect(page.locator('#assessment-indicator')).toBeVisible();
+
+  await emitSocketEvent(page, 'agent_scores', {
+    scores: [
+      { name: 'Alex Johnson', motivation_score: 0.91, priority_score: 0.83 },
+      { name: 'Jordan Smith', motivation_score: 0.74, priority_score: 0.68 },
+      { name: 'Casey Lee', motivation_score: 0.66, priority_score: 0.71 },
+    ],
+  });
+
+  await expect(page.locator('#assessment-indicator')).toHaveCount(0);
+
+  const scoreEntries = page.locator('#agent-scores .agent-score-item');
+  await expect(scoreEntries).toHaveCount(3);
+  await expect(scoreEntries.nth(0)).toContainText('Alex Johnson');
+  await expect(scoreEntries.nth(0)).toContainText('M: 0.91');
+  await expect(scoreEntries.nth(0)).toContainText('P: 0.83');
+});
+
+test('should update the phase indicator when receiving phase change events', async ({ page }) => {
+  await startConversation(page, 'Phase progression validation');
+
+  const phaseIndicator = page.locator('#phase-indicator');
+
+  await emitSocketEvent(page, 'phase_change', { phase: 'initial_responses' });
+  await expect(phaseIndicator).toHaveText('Initial Responses');
+
+  await emitSocketEvent(page, 'phase_change', { phase: 'pure_priority' });
+  await expect(phaseIndicator).toHaveText('Pure Priority Mode');
+
+  await emitSocketEvent(page, 'phase_change', { phase: 'custom-variant' });
+  await expect(phaseIndicator).toHaveText('custom-variant');
+});
+
+test('should cycle secretary activity status and reset after completion', async ({ page }) => {
+  await startConversation(page, 'Secretary activity lifecycle');
+
+  const secretaryContent = page.locator('#secretary-content');
+
+  await emitSocketEvent(page, 'secretary_activity', {
+    activity: 'generating',
+    message: 'Generating a synthesized summary...',
+  });
+  await expect(secretaryContent).toContainText('Generating a synthesized summary...');
+
+  await emitSocketEvent(page, 'secretary_activity', {
+    activity: 'completed',
+    message: 'Summary finalized successfully!',
+  });
+  await expect(secretaryContent).toContainText('Summary finalized successfully!');
+
+  await expect(secretaryContent).toContainText('Ready for more activity', { timeout: 4000 });
 });
