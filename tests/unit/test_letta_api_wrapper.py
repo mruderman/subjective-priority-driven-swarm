@@ -4,7 +4,9 @@ import logging
 import time
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
+from letta_client.core.api_error import ApiError
 
 from spds.letta_api import letta_call, with_letta_resilience
 
@@ -168,6 +170,51 @@ class TestLettaCall:
             letta_call("test.operation", mock_fn)
 
         assert "Letta operation 'test.operation' failed after 4 attempts" in caplog.text
+
+    def test_retry_on_api_error_500(self, monkeypatch):
+        """ApiError with 5xx status should be retried."""
+        mock_fn = MagicMock()
+        mock_fn.side_effect = [
+            ApiError(status_code=500, body={"detail": "server error"}, headers={}),
+            "success",
+        ]
+
+        monkeypatch.setattr(time, "sleep", lambda _: None)
+        monkeypatch.setattr("random.random", lambda: 0.1)
+
+        result = letta_call("test.operation", mock_fn)
+
+        assert result == "success"
+        assert mock_fn.call_count == 2
+
+    def test_no_retry_on_api_error_client_side(self, monkeypatch):
+        """ApiError with non-retryable status should not retry."""
+        mock_fn = MagicMock()
+        mock_fn.side_effect = ApiError(
+            status_code=409, body={"detail": "conflict"}, headers={}
+        )
+
+        monkeypatch.setattr(time, "sleep", lambda _: None)
+
+        with pytest.raises(ApiError):
+            letta_call("test.operation", mock_fn)
+
+        assert mock_fn.call_count == 1
+
+    def test_retry_on_remote_protocol_error(self, monkeypatch):
+        """httpx.RemoteProtocolError should trigger a retry."""
+        mock_fn = MagicMock()
+        mock_fn.side_effect = [
+            httpx.RemoteProtocolError("disconnect"),
+            "ok",
+        ]
+
+        monkeypatch.setattr(time, "sleep", lambda _: None)
+
+        result = letta_call("test.operation", mock_fn)
+
+        assert result == "ok"
+        assert mock_fn.call_count == 2
 
     def test_debug_logging_on_attempt_start(self, caplog):
         """Test that debug logging occurs on attempt start."""

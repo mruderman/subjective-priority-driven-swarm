@@ -38,6 +38,8 @@ def mock_letta_client():
     # Mock tool operations
     client.tools = Mock()
     client.tools.create_from_function = Mock()
+    client.tools.upsert_from_function = Mock()
+    client.tools.list = Mock(return_value=[])
 
     return client
 
@@ -143,6 +145,27 @@ def mock_message_response():
                 id="msg-test-123",
                 role="assistant",
                 content=[{"type": "text", "text": "Test response"}],
+            )
+        ]
+    )
+
+@pytest.fixture
+def mock_send_message_response():
+    """Mock response with send_message tool call."""
+    return SimpleNamespace(
+        messages=[
+            SimpleNamespace(
+                id="msg-test-123",
+                tool_calls=[
+                    SimpleNamespace(
+                        function=SimpleNamespace(
+                            name="send_message",
+                            arguments='{"message": "Test response"}'
+                        )
+                    )
+                ],
+                tool_return=None,
+                content=None,
             )
         ]
     )

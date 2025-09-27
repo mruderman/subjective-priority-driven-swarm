@@ -353,6 +353,37 @@ def get_session_autoflush_events() -> int:
     return int(os.getenv("SESSION_AUTOFLUSH_EVENTS", "1"))
 
 
+# Tool schema/export behavior
+def get_tools_use_pydantic_schemas() -> bool:
+    """
+    Whether to pass Pydantic classes to Letta when creating tools.
+
+    Default is False to avoid requiring Pydantic inside Letta's isolated
+    tool execution environment. When False, only JSON schema will be sent.
+    Enable by setting SPDS_TOOLS_USE_PYDANTIC_SCHEMAS=true if your backend
+    supports it and the tool sandbox has Pydantic installed.
+    """
+    return os.getenv("SPDS_TOOLS_USE_PYDANTIC_SCHEMAS", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def get_tools_use_return_model() -> bool:
+    """
+    Whether to pass return_model to Letta when creating tools.
+
+    Default is False to avoid backend/sandbox dependencies on local models.
+    Enable by setting SPDS_TOOLS_USE_RETURN_MODEL=true if supported.
+    """
+    return os.getenv("SPDS_TOOLS_USE_RETURN_MODEL", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
 # Integrations Configuration
 def get_integrations_enabled() -> bool:
     """

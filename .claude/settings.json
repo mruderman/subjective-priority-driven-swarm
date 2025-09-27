@@ -1,36 +1,34 @@
 {
   "env": {
-    "CLAUDE_FLOW_AUTO_COMMIT": "false",
-    "CLAUDE_FLOW_AUTO_PUSH": "false",
-    "CLAUDE_FLOW_HOOKS_ENABLED": "true",
-    "CLAUDE_FLOW_TELEMETRY_ENABLED": "true",
-    "CLAUDE_FLOW_REMOTE_EXECUTION": "true",
-    "CLAUDE_FLOW_GITHUB_INTEGRATION": "true"
+    "CLAUDE_FLOW_AUTO_COMMIT": false,
+    "CLAUDE_FLOW_AUTO_PUSH": false,
+    "CLAUDE_FLOW_HOOKS_ENABLED": true,
+    "CLAUDE_FLOW_TELEMETRY_ENABLED": true,
+    "CLAUDE_FLOW_REMOTE_EXECUTION": true,
+    "CLAUDE_FLOW_GITHUB_INTEGRATION": true
   },
   "permissions": {
     "allow": [
-      "Bash(npx claude-flow *)",
+      "Bash(npx claude-flow :*)",
       "Bash(npm run lint)",
       "Bash(npm run test:*)",
-      "Bash(npm test *)",
+      "Bash(npm test :*)",
       "Bash(git status)",
-      "Bash(git diff *)",
-      "Bash(git log *)",
-      "Bash(git add *)",
-      "Bash(git commit *)",
+      "Bash(git diff :*)",
+      "Bash(git log :*)",
+      "Bash(git add :*)",
+      "Bash(git commit :*)",
       "Bash(git push)",
-      "Bash(git config *)",
-      "Bash(gh *)",
-      "Bash(node *)",
-      "Bash(which *)",
+      "Bash(git config :*)",
+      "Bash(gh :*)",
+      "Bash(node :*)",
+      "Bash(which :*)",
       "Bash(pwd)",
-      "Bash(ls *)"
+      "Bash(ls :*)"
     ],
     "deny": [
       "Bash(rm -rf /)",
-      "Bash(curl * | bash)",
-      "Bash(wget * | sh)",
-      "Bash(eval *)"
+      "Bash(eval :*)"
     ]
   },
   "hooks": {

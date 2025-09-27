@@ -6,6 +6,11 @@ import socket
 import time
 from typing import Any, Callable, Optional, Tuple, Type
 
+try:
+    from letta_client.core.api_error import ApiError
+except ImportError:  # pragma: no cover
+    ApiError = None  # type: ignore
+
 from . import config
 
 logger = logging.getLogger(__name__)
@@ -75,6 +80,7 @@ def letta_call(
             retryable_exceptions += (
                 httpx.ReadTimeout,
                 httpx.ConnectError,
+                httpx.RemoteProtocolError,
             )
         except ImportError:
             pass
@@ -114,6 +120,11 @@ def letta_call(
 
             # Check if this is a retryable exception
             is_retryable = isinstance(e, retryable_exceptions)
+
+            if not is_retryable and ApiError is not None and isinstance(e, ApiError):
+                retryable_status_codes = {429, 500, 502, 503, 504}
+                if getattr(e, "status_code", None) in retryable_status_codes:
+                    is_retryable = True
 
             if not is_retryable:
                 # Non-retryable error - log and re-raise immediately

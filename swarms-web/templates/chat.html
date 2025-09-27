@@ -535,7 +535,6 @@ class SimpleChat {
             filterInput.addEventListener('input', (event) => {
                 const target = event.target;
                 const value = typeof target?.value === 'string' ? target.value : '';
-                const value = target && typeof target.value === 'string' ? target.value : '';
                 this.currentFilterText = value.trim().toLowerCase();
                 this.applyMessageFilter();
             });

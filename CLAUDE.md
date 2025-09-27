@@ -393,3 +393,4 @@ See `AGENT_MEMORY_AUTONOMY.md` for comprehensive documentation on memory managem
 ### References and Context
 - Starting point for Letta development context: @References/Letta-Primer.md
 - Use Cotnext7 MCP server for Letta main repo or Letta SDKs for additional information
+- Use sequential thinking mcp server tools as much as possible for every task.

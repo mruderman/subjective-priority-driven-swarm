@@ -3,7 +3,7 @@
 import inspect
 import json
 import logging
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Type
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,8 @@ def build_tool_create_kwargs(
     name: str,
     description: Optional[str] = None,
     return_model: Optional[type] = None,
+    args_schema: Optional[Type[BaseModel]] = None,
+    json_schema: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Prepare kwargs for Letta's tools.create_from_function across SDK versions."""
 
@@ -36,13 +38,32 @@ def build_tool_create_kwargs(
 
     param_names = _normalized_param_names(create_fn)
 
+    supports_name = "name" in param_names or not param_names
+    supports_description = "description" in param_names or not param_names
+    supports_args_schema = "args_schema" in param_names or not param_names
+    supports_json_schema = "json_schema" in param_names or not param_names
+
     def _with_common_kwargs(target_kw: str) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             target_kw: func_callable,
-            "name": name,
         }
-        if description is not None:
+        if supports_name:
+            payload["name"] = name
+        if description is not None and supports_description:
             payload["description"] = description
+        return payload
+
+    def _attach_schema(payload: Dict[str, Any]) -> Dict[str, Any]:
+        if args_schema is not None:
+            schema = json_schema
+            if schema is None and hasattr(args_schema, "model_json_schema"):
+                schema = args_schema.model_json_schema()
+            if supports_args_schema:
+                payload["args_schema"] = args_schema
+            if schema is not None and supports_json_schema:
+                payload["json_schema"] = schema
+        elif json_schema is not None and supports_json_schema:
+            payload["json_schema"] = json_schema
         return payload
 
     # Prioritize 'function' parameter for legacy compatibility
@@ -50,10 +71,13 @@ def build_tool_create_kwargs(
         payload = _with_common_kwargs("function")
         if return_model is not None and "return_model" in param_names:
             payload["return_model"] = return_model
-        return payload
+        return _attach_schema(payload)
 
     if "func" in param_names:
-        return _with_common_kwargs("func")
+        payload = _with_common_kwargs("func")
+        if return_model is not None and "return_model" in param_names:
+            payload["return_model"] = return_model
+        return _attach_schema(payload)
 
     # Fallback when signature is not introspectable (e.g. mocks, builtins)
     # Default to legacy 'function=' parameter for compatibility
@@ -61,7 +85,7 @@ def build_tool_create_kwargs(
     if return_model is not None:
         # Always include return_model in fallback for legacy compatibility
         fallback_payload["return_model"] = return_model
-    return fallback_payload
+    return _attach_schema(fallback_payload)
 
 
 class SubjectiveAssessment(BaseModel):
@@ -92,9 +116,24 @@ class SubjectiveAssessment(BaseModel):
     )
 
 
+class SubjectiveAssessmentInput(BaseModel):
+    """Input schema for perform_subjective_assessment tool calls."""
+
+    topic: str = Field(..., description="Conversation topic or agenda focus")
+    conversation_history: str = Field(
+        ...,
+        description="Recent transcript or summary the agent should consider",
+    )
+    agent_persona: str = Field(..., description="Agent persona description")
+    agent_expertise: list[str] = Field(
+        ...,
+        description="List of expertise areas relevant to this agent",
+    )
+
+
 def perform_subjective_assessment(
     topic: str, conversation_history: str, agent_persona: str, agent_expertise: list
-) -> SubjectiveAssessment:
+):
     """
     Performs a holistic, subjective assessment of the conversation to determine motivation and priority for speaking.
     This single assessment evaluates all dimensions of the agent's internal state.
@@ -103,6 +142,13 @@ def perform_subjective_assessment(
     The agent will use this tool to assess its motivation to speak.
     """
     import json
+    
+    # Create a fallback SubjectiveAssessment class for tool execution context
+    # This is necessary because when executed as a tool, the module-level class may not be available
+    class FallbackSubjectiveAssessment:
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
 
     expertise_str = (
         ", ".join(agent_expertise) if agent_expertise else "general knowledge"
@@ -182,7 +228,7 @@ Return ONLY a JSON object with these exact keys and integer values 0-10.
     )
 
     # Create a somewhat intelligent assessment based on content analysis
-    assessment = SubjectiveAssessment(
+    assessment = FallbackSubjectiveAssessment(
         importance_to_self=personal_relevance,
         perceived_gap=8 if has_question else (6 if needs_perspective else 4),
         unique_perspective=min(10, expertise_score + 3),

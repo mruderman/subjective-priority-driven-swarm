@@ -176,7 +176,7 @@ class WebSwarmManager:
     def process_user_message(self, message):
         """Process user message and trigger agent responses."""
         # Add to conversation history
-        self.swarm.conversation_history += f"You: {message}\n"
+        self.swarm._append_history("You", message)
 
         # Let secretary observe
         if self.swarm.secretary:
@@ -456,7 +456,7 @@ class WebSwarmManager:
                 )
 
                 # Add to conversation history
-                self.swarm.conversation_history += f"{agent.name}: {message_text}\n"
+                self.swarm._append_history(agent.name, message_text)
 
                 # Update all agent memories with this response
                 self.swarm._update_agent_memories(message_text, agent.name)
@@ -473,20 +473,11 @@ class WebSwarmManager:
                     )
 
             except Exception as e:
-                fallback = "I find the different perspectives here really interesting."
-
-                self.emit_message(
-                    "agent_message",
-                    {
-                        "speaker": agent.name,
-                        "message": fallback,
-                        "timestamp": datetime.now().isoformat(),
-                        "phase": "response",
-                        "error": True,
-                    },
-                )
-
-                self.swarm.conversation_history += f"{agent.name}: {fallback}\n"
+                error_message = f"Error during response round for {agent.name}: {e}"
+                self.emit_message("error", {"message": error_message})
+                self.swarm._append_history(agent.name, f"Error: {e}")
+                if hasattr(agent, "last_message_index"):
+                    agent.last_message_index = len(self.swarm._history) - 1
 
     def _web_all_speak_turn(self, motivated_agents):
         """All-speak mode with WebSocket updates."""
@@ -511,7 +502,7 @@ class WebSwarmManager:
                     },
                 )
 
-                self.swarm.conversation_history += f"{agent.name}: {message_text}\n"
+                self.swarm._append_history(agent.name, message_text)
 
                 # Update all agent memories with this response
                 self.swarm._update_agent_memories(message_text, agent.name)
@@ -532,7 +523,7 @@ class WebSwarmManager:
                     },
                 )
 
-                self.swarm.conversation_history += f"{agent.name}: {fallback}\n"
+                self.swarm._append_history(agent.name, fallback)
 
     def _web_sequential_turn(self, motivated_agents):
         """Sequential mode with WebSocket updates."""
@@ -550,8 +541,9 @@ class WebSwarmManager:
         self.emit_message("agent_thinking", {"agent": speaker.name})
 
         try:
+            filtered_history = self.swarm._get_filtered_conversation_history(speaker)
             response = speaker.speak(
-                conversation_history=self.swarm.conversation_history
+                conversation_history=filtered_history
             )
             message_text = self.swarm._extract_agent_response(response)
 
@@ -564,7 +556,7 @@ class WebSwarmManager:
                 },
             )
 
-            self.swarm.conversation_history += f"{speaker.name}: {message_text}\n"
+            self.swarm._append_history(speaker.name, message_text)
 
             # Update all agent memories with this response
             self.swarm._update_agent_memories(message_text, speaker.name)
@@ -585,7 +577,7 @@ class WebSwarmManager:
                 },
             )
 
-            self.swarm.conversation_history += f"{speaker.name}: {fallback}\n"
+            self.swarm._append_history(speaker.name, fallback)
 
     def _web_pure_priority_turn(self, motivated_agents):
         """Pure priority mode with WebSocket updates."""
@@ -594,8 +586,9 @@ class WebSwarmManager:
         self.emit_message("agent_thinking", {"agent": speaker.name})
 
         try:
+            filtered_history = self.swarm._get_filtered_conversation_history(speaker)
             response = speaker.speak(
-                conversation_history=self.swarm.conversation_history
+                conversation_history=filtered_history
             )
             message_text = self.swarm._extract_agent_response(response)
 
@@ -608,7 +601,7 @@ class WebSwarmManager:
                 },
             )
 
-            self.swarm.conversation_history += f"{speaker.name}: {message_text}\n"
+            self.swarm._append_history(speaker.name, message_text)
 
             # Update all agent memories with this response
             self.swarm._update_agent_memories(message_text, speaker.name)
@@ -629,7 +622,7 @@ class WebSwarmManager:
                 },
             )
 
-            self.swarm.conversation_history += f"{speaker.name}: {fallback}\n"
+            self.swarm._append_history(speaker.name, fallback)
 
 
 # Routes

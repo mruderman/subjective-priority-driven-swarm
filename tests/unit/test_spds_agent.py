@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from letta_client.core.api_error import ApiError
 from letta_client.types import (
     AgentState,
     EmbeddingConfig,
@@ -41,10 +42,7 @@ def mk_agent_state(
         tags=[],
         model=model,
         embedding="openai/text-embedding-ada-002",
-    )
-
-
-from letta_client.errors import NotFoundError
+)
 
 from spds import tools
 from spds.spds_agent import SPDSAgent
@@ -262,7 +260,8 @@ class TestSPDSAgent:
         # Accept both new (func=) and legacy (function=, return_model=) signatures
         mock_letta_client.tools.create_from_function.assert_called_once()
         _, kwargs = mock_letta_client.tools.create_from_function.call_args
-        assert kwargs.get("name") == "perform_subjective_assessment"
+        if "name" in kwargs:
+            assert kwargs["name"] == "perform_subjective_assessment"
         assert (
             kwargs.get("description")
             == "Perform a holistic subjective assessment of the conversation"
@@ -271,6 +270,10 @@ class TestSPDSAgent:
             kwargs.get("func") == tools.perform_subjective_assessment
             or kwargs.get("function") == tools.perform_subjective_assessment
         )
+        if "args_schema" in kwargs:
+            assert kwargs["args_schema"] is tools.SubjectiveAssessmentInput
+        elif "json_schema" in kwargs:
+            assert kwargs["json_schema"] == tools.SubjectiveAssessmentInput.model_json_schema()
         mock_letta_client.agents.tools.attach.assert_called_once_with(
             agent_id="ag-test-999", tool_id="tool-assessment-999"
         )
@@ -278,6 +281,219 @@ class TestSPDSAgent:
         # Agent should remain the original state since attach failed
         assert agent.agent == agent_state
 
+    def test_ensure_assessment_tool_conflict_uses_upsert(self, mock_letta_client):
+        """On 409 conflict, fall back to upsert_from_function."""
+        agent_state = mk_agent_state(
+            id="ag-conflict-001",
+            name="Conflict Agent",
+            system="Test system",
+            model="openai/gpt-4",
+        )
+
+        conflict_error = ApiError(status_code=409, body={"detail": "exists"})
+        mock_letta_client.tools.create_from_function.side_effect = conflict_error
+
+        fallback_tool = Tool(
+            id="tool-existing-001",
+            name="perform_subjective_assessment",
+            description="Existing assessment tool",
+        )
+        mock_letta_client.tools.upsert_from_function.return_value = fallback_tool
+
+        updated_agent_state = mk_agent_state(
+            id="ag-conflict-001",
+            name="Conflict Agent",
+            system="Test system",
+            model="openai/gpt-4",
+            tools=[fallback_tool],
+        )
+        mock_letta_client.agents.tools.attach.return_value = updated_agent_state
+
+        agent = SPDSAgent(agent_state, mock_letta_client)
+
+        mock_letta_client.tools.create_from_function.assert_called_once()
+        mock_letta_client.tools.upsert_from_function.assert_called_once()
+        mock_letta_client.tools.list.assert_not_called()
+        assert agent.assessment_tool == fallback_tool
+        assert agent.agent == updated_agent_state
+        args, kwargs = mock_letta_client.tools.upsert_from_function.call_args
+        if "args_schema" in kwargs:
+            assert kwargs["args_schema"] is tools.SubjectiveAssessmentInput
+        elif "json_schema" in kwargs:
+            assert kwargs["json_schema"] == tools.SubjectiveAssessmentInput.model_json_schema()
+
+    def test_ensure_assessment_tool_conflict_reuses_existing_tool(self, mock_letta_client):
+        """If upsert fails, reuse matching tool from list lookup."""
+        agent_state = mk_agent_state(
+            id="ag-conflict-lookup",
+            name="Conflict Lookup Agent",
+            system="Test system",
+            model="openai/gpt-4",
+        )
+
+        conflict_error = ApiError(status_code=409, body={"detail": "exists"})
+        mock_letta_client.tools.create_from_function.side_effect = conflict_error
+        mock_letta_client.tools.upsert_from_function.side_effect = RuntimeError("upsert failed")
+
+        existing_tool = Tool(
+            id="tool-existing-lookup",
+            name="perform_subjective_assessment",
+            description="Existing tool",
+        )
+        mock_letta_client.tools.list.return_value = [existing_tool]
+
+        updated_agent_state = mk_agent_state(
+            id="ag-conflict-lookup",
+            name="Conflict Lookup Agent",
+            system="Test system",
+            model="openai/gpt-4",
+            tools=[existing_tool],
+        )
+        mock_letta_client.agents.tools.attach.return_value = updated_agent_state
+
+        agent = SPDSAgent(agent_state, mock_letta_client)
+
+        mock_letta_client.tools.create_from_function.assert_called_once()
+        mock_letta_client.tools.upsert_from_function.assert_called_once()
+        mock_letta_client.tools.list.assert_called_once()
+        _, list_kwargs = mock_letta_client.tools.list.call_args
+        assert list_kwargs.get("name") == "perform_subjective_assessment"
+        assert agent.assessment_tool == existing_tool
+        assert agent.agent == updated_agent_state
+
+    def test_get_full_assessment_disables_tool_on_invalid_error(
+        self, mock_letta_client, monkeypatch
+    ):
+        """Invalid tool errors should detach the tool and fall back locally."""
+        tool = Tool(
+            id="tool-invalid-123",
+            name="perform_subjective_assessment",
+            description="assessment",
+        )
+        mock_letta_client.tools.create_from_function.return_value = tool
+        mock_letta_client.agents.tools.attach.return_value = mk_agent_state(
+            id="ag-invalid",
+            name="Agent",
+            system="System",
+            model="openai/gpt-4",
+            tools=[tool],
+        )
+
+        agent_state = mk_agent_state(
+            id="ag-invalid",
+            name="Agent",
+            system="System",
+            model="openai/gpt-4",
+        )
+
+        agent = SPDSAgent(agent_state, mock_letta_client)
+        agent.assessment_tool = tool
+        mock_letta_client.agents.tools.detach.return_value = mk_agent_state(
+            id="ag-invalid",
+            name="Agent",
+            system="System",
+            model="openai/gpt-4",
+            tools=[],
+        )
+
+        calls = {"count": 0}
+
+        def fake_letta_call(operation, fn, **kwargs):
+            if operation == "agents.tools.detach":
+                return mock_letta_client.agents.tools.detach(**kwargs)
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise ApiError(status_code=500, body={"detail": "invalid tools"})
+            return SimpleNamespace(messages=[])
+
+        monkeypatch.setattr("spds.spds_agent.letta_call", fake_letta_call)
+
+        sentinel_assessment = tools.SubjectiveAssessment(
+            importance_to_self=6,
+            perceived_gap=5,
+            unique_perspective=5,
+            emotional_investment=5,
+            expertise_relevance=6,
+            urgency=5,
+            importance_to_group=5,
+        )
+        monkeypatch.setattr(
+            "spds.spds_agent.tools.perform_subjective_assessment",
+            Mock(return_value=sentinel_assessment),
+        )
+
+        agent._get_full_assessment("history", "topic")
+
+        assert agent.assessment_tool is None
+        assert agent._assessment_tool_disabled is True
+        assert agent.last_assessment == sentinel_assessment
+        mock_letta_client.agents.tools.detach.assert_called_once()
+        # With retry logic, we now have 3 calls: initial + retry + fallback
+        assert calls["count"] == 3
+
+    def test_speak_retries_without_tool_on_invalid_error(
+        self, mock_letta_client, monkeypatch
+    ):
+        """Agent speech should retry without the assessment tool when backend rejects it."""
+        tool = Tool(
+            id="tool-invalid-456",
+            name="perform_subjective_assessment",
+            description="assessment",
+        )
+        mock_letta_client.tools.create_from_function.return_value = tool
+        mock_letta_client.agents.tools.attach.return_value = mk_agent_state(
+            id="ag-speak",
+            name="Speaker",
+            system="System",
+            model="openai/gpt-4",
+            tools=[tool],
+        )
+
+        agent_state = mk_agent_state(
+            id="ag-speak",
+            name="Speaker",
+            system="System",
+            model="openai/gpt-4",
+        )
+
+        agent = SPDSAgent(agent_state, mock_letta_client)
+        agent.assessment_tool = tool
+        mock_letta_client.agents.tools.detach.return_value = mk_agent_state(
+            id="ag-speak",
+            name="Speaker",
+            system="System",
+            model="openai/gpt-4",
+            tools=[],
+        )
+
+        messages = SimpleNamespace(
+            messages=[
+                SimpleNamespace(
+                    tool_calls=[],
+                    tool_return=None,
+                    content=[{"text": "Response"}],
+                    message_type="assistant_message",
+                )
+            ]
+        )
+
+        call_counter = {"count": 0}
+
+        def fake_letta_call(operation, fn, **kwargs):
+            if operation.startswith("agents.tools.detach"):
+                return fn(**kwargs)
+            call_counter["count"] += 1
+            if call_counter["count"] == 1:
+                raise ApiError(status_code=500, body={"detail": "invalid tools"})
+            return messages
+
+        monkeypatch.setattr("spds.spds_agent.letta_call", fake_letta_call)
+
+        result = agent.speak("history", mode="initial", topic="topic")
+
+        assert isinstance(result, SimpleNamespace)
+        mock_letta_client.agents.tools.detach.assert_called_once()
+        assert call_counter["count"] == 2
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
     @patch("spds.spds_agent.track_action", Mock())
     def test_get_full_assessment_with_tool_return(
@@ -431,6 +647,126 @@ class TestSPDSAgent:
         )
         assert agent.last_assessment == sample_assessment
 
+    def test_get_full_assessment_with_new_message_format(
+        self, mock_letta_client, sample_agent_state, sample_assessment
+    ):
+        """Test assessment parsing works with new Letta message format (tool_call_message)."""
+        from unittest.mock import patch
+        import json
+        
+        agent = SPDSAgent(sample_agent_state, mock_letta_client)
+        agent._tools_supported = True
+        
+        # Mock response with new message format
+        assessment_text = """IMPORTANCE_TO_SELF: 8
+PERCEIVED_GAP: 6
+UNIQUE_PERSPECTIVE: 7
+EMOTIONAL_INVESTMENT: 5
+EXPERTISE_RELEVANCE: 9
+URGENCY: 7
+IMPORTANCE_TO_GROUP: 8"""
+        
+        response = SimpleNamespace(
+            messages=[
+                SimpleNamespace(
+                    message_type="tool_call_message",
+                    tool_call=SimpleNamespace(
+                        function=SimpleNamespace(
+                            name="send_message",
+                            arguments=json.dumps({"message": assessment_text})
+                        )
+                    )
+                )
+            ]
+        )
+        mock_letta_client.agents.messages.create.return_value = response
+
+        agent._get_full_assessment("conversation", "topic")
+
+        # Verify the assessment was parsed correctly
+        assert agent.last_assessment.importance_to_self == 8
+        assert agent.last_assessment.perceived_gap == 6
+        assert agent.last_assessment.unique_perspective == 7
+        assert agent.last_assessment.emotional_investment == 5
+        assert agent.last_assessment.expertise_relevance == 9
+        assert agent.last_assessment.urgency == 7
+        assert agent.last_assessment.importance_to_group == 8
+
+    def test_assessment_prompt_formatting_empty_vs_non_empty_history(
+        self, mock_letta_client, sample_agent_state
+    ):
+        """Test that assessment prompts are formatted correctly for empty vs non-empty conversation history."""
+        from unittest.mock import patch
+        
+        agent = SPDSAgent(sample_agent_state, mock_letta_client)
+        agent._tools_supported = True
+        
+        # Test with empty conversation history (new session)
+        with patch.object(agent, 'client') as mock_client:
+            mock_client.agents.messages.create.return_value = SimpleNamespace(
+                messages=[
+                    SimpleNamespace(
+                        message_type="tool_call_message",
+                        tool_call=SimpleNamespace(
+                            function=SimpleNamespace(
+                                name="send_message",
+                                arguments='{"message": "IMPORTANCE_TO_SELF: 5"}'
+                            )
+                        )
+                    )
+                ]
+            )
+            
+            # Capture the actual prompt being sent
+            actual_prompt = None
+            def capture_prompt(**kwargs):
+                nonlocal actual_prompt
+                actual_prompt = kwargs['messages'][0]['content']
+                return SimpleNamespace(messages=[])
+            
+            mock_client.agents.messages.create.side_effect = capture_prompt
+            
+            agent._get_full_assessment(conversation_history="", topic="test topic")
+            
+            # Verify prompt doesn't mention "conversation about" for empty history
+            assert actual_prompt is not None
+            assert "Regarding the topic \"test topic\"" in actual_prompt
+            assert "Based on our conversation about" not in actual_prompt
+        
+        # Test with non-empty conversation history (ongoing session)
+        with patch.object(agent, 'client') as mock_client:
+            mock_client.agents.messages.create.return_value = SimpleNamespace(
+                messages=[
+                    SimpleNamespace(
+                        message_type="tool_call_message",
+                        tool_call=SimpleNamespace(
+                            function=SimpleNamespace(
+                                name="send_message",
+                                arguments='{"message": "IMPORTANCE_TO_SELF: 5"}'
+                            )
+                        )
+                    )
+                ]
+            )
+            
+            # Capture the actual prompt being sent
+            actual_prompt = None
+            def capture_prompt(**kwargs):
+                nonlocal actual_prompt
+                actual_prompt = kwargs['messages'][0]['content']
+                return SimpleNamespace(messages=[])
+            
+            mock_client.agents.messages.create.side_effect = capture_prompt
+            
+            conversation_history = "User: Hello\nAgent: Hi there!"
+            agent._get_full_assessment(conversation_history=conversation_history, topic="test topic")
+            
+            # Verify prompt mentions "conversation about" for non-empty history
+            assert actual_prompt is not None
+            assert "Based on our conversation about \"test topic\"" in actual_prompt
+            assert "Regarding the topic" not in actual_prompt
+            assert "User: Hello\nAgent: Hi there!" in actual_prompt
+
     @patch("spds.spds_agent.config")
     def test_assess_motivation_and_priority_above_threshold(
         self, mock_config, mock_letta_client, sample_agent_state, sample_assessment
@@ -485,9 +821,31 @@ class TestSPDSAgent:
         assert agent.priority_score == 0  # Should be 0 when below threshold
 
     def test_speak_method(
+        self, mock_letta_client, sample_agent_state, mock_send_message_response
+    ):
+        """Test the speak method with proper send_message tool call."""
+        agent = SPDSAgent(sample_agent_state, mock_letta_client)
+        mock_letta_client.agents.messages.create.return_value = mock_send_message_response
+
+        conversation_history = "Previous conversation content"
+        response = agent.speak(conversation_history)
+
+        # Verify correct API call
+        mock_letta_client.agents.messages.create.assert_called_once_with(
+            agent_id="ag-test-123",
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{conversation_history}\nBased on my assessment, here is my contribution:",
+                }
+            ],
+        )
+        assert response == mock_send_message_response
+
+    def test_speak_method_without_send_message(
         self, mock_letta_client, sample_agent_state, mock_message_response
     ):
-        """Test the speak method."""
+        """Test the speak method when agent responds directly without send_message tool (should be accepted)."""
         agent = SPDSAgent(sample_agent_state, mock_letta_client)
         mock_letta_client.agents.messages.create.return_value = mock_message_response
 
@@ -504,7 +862,16 @@ class TestSPDSAgent:
                 }
             ],
         )
-        assert response == mock_message_response
+        
+        # Should return wrapped response since direct response is now accepted
+        assert hasattr(response, 'messages')
+        assert len(response.messages) > 0
+        assert hasattr(response.messages[0], 'tool_calls')
+        assert len(response.messages[0].tool_calls) > 0
+        assert response.messages[0].tool_calls[0].function.name == 'send_message'
+        # Should contain the original response text, not an error
+        args = json.loads(response.messages[0].tool_calls[0].function.arguments)
+        assert args['message'] == 'Test response'
 
     def test_speak_with_tools_history_prompt(self, mock_letta_client, mock_tool_state):
         """History prompts should mention send_message when tools are present."""
