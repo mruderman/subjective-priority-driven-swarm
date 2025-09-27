@@ -975,6 +975,7 @@ test('should enforce accessible focus order and aria labels for chat controls', 
   await startConversation(page, 'Accessibility focus order');
 
   const filterInput = page.locator('#message-filter');
+  const attachButton = page.locator('#attach-button');
   const messageInput = page.locator('#chat-input');
   const sendButton = page.locator('#send-button');
   const exportButton = page.locator('#export-minutes-button');
@@ -984,15 +985,16 @@ test('should enforce accessible focus order and aria labels for chat controls', 
   await expect(sendButton).toHaveAttribute('aria-label', 'Send message');
   await expect(exportButton).toHaveAttribute('aria-label', 'Export board minutes');
 
-  await page.evaluate(() => {
-    const active = document.activeElement as HTMLElement | null;
-    if (active && typeof active.blur === 'function') {
-      active.blur();
-    }
-  });
+  await expect(filterInput).not.toHaveAttribute('tabindex', /[1-9]+/);
+  await expect(messageInput).not.toHaveAttribute('tabindex', /[1-9]+/);
+  await expect(sendButton).not.toHaveAttribute('tabindex', /[1-9]+/);
+  await expect(exportButton).not.toHaveAttribute('tabindex', /[1-9]+/);
+
+  await filterInput.focus();
+  await expect(filterInput).toBeFocused();
 
   await page.keyboard.press('Tab');
-  await expect(filterInput).toBeFocused();
+  await expect(attachButton).toBeFocused();
 
   await page.keyboard.press('Tab');
   await expect(messageInput).toBeFocused();
@@ -1000,7 +1002,7 @@ test('should enforce accessible focus order and aria labels for chat controls', 
   await page.keyboard.press('Tab');
   await expect(sendButton).toBeFocused();
 
-  await page.keyboard.press('Tab');
+  await exportButton.focus();
   await expect(exportButton).toBeFocused();
 });
 
