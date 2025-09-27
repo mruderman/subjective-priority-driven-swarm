@@ -919,8 +919,7 @@ test.describe('Secretary export download handling', () => {
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toBe(expectedFilename);
-    await expect(download.failure()).resolves.toBeNull();
-
+    expect(await download.failure()).toBeNull();
     const response = await download.response();
     expect(response).not.toBeNull();
     const headers = response?.headers() ?? {};
