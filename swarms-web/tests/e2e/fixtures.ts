@@ -33,6 +33,11 @@ type CreateSessionFn = (overrides?: CreateSessionPayload) => Promise<SessionSumm
 type ListSessionsFn = (options?: { limit?: number }) => Promise<SessionSummary[]>;
 type CreateSessionExportFn = (sessionId: string) => Promise<CreateExportResponse>;
 type ListSessionExportsFn = (sessionId: string, options?: { limit?: number }) => Promise<SessionExport[]>;
+type EmitSocketEventFn = (
+  event: string,
+  payload?: Record<string, unknown>
+) => Promise<void>;
+type SetAgentResponseFn = (response: string) => Promise<void>;
 
 const defaultSessionPayload = (): Required<CreateSessionPayload> => ({
   title: 'Playwright Session',
@@ -137,6 +142,8 @@ export const test = base.extend<{
   createSessionExport: CreateSessionExportFn;
   listSessionExports: ListSessionExportsFn;
   setAgents: (agents: MockAgent[]) => Promise<void>;
+  emitSocketEvent: EmitSocketEventFn;
+  setAgentResponse: SetAgentResponseFn;
 }>(
   {
     mockedLetta: async ({ page }, use) => {
@@ -163,6 +170,22 @@ export const test = base.extend<{
     },
     setAgents: async ({ mockedLetta }, use) => {
       await use((agents) => mockedLetta.setAgents(agents));
+    },
+    emitSocketEvent: async ({ page }, use) => {
+      await use(async (event, payload) => {
+        await page.evaluate(
+          ([eventName, eventPayload]) => {
+            const win = window as typeof window & {
+              __playwrightEmitSocketEvent?: (name: string, data?: unknown) => void;
+            };
+            win.__playwrightEmitSocketEvent?.(eventName, eventPayload);
+          },
+          [event, payload] as const
+        );
+      });
+    },
+    setAgentResponse: async ({ mockedLetta }, use) => {
+      await use((response) => mockedLetta.setAgentResponse(response));
     },
   }
 );

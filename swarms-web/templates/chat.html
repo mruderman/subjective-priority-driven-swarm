@@ -78,6 +78,26 @@
                         <div class="d-flex flex-wrap gap-2" id="attachment-chips"></div>
                     </div>
 
+                    <div id="token-limit-banner" class="alert alert-warning d-flex align-items-start gap-3 py-2 px-3 mb-2" role="status" hidden>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Message trimmed to stay within token limits.
+                            </div>
+                            <div class="small text-muted" data-role="trim-summary">
+                                Sent <span data-role="trimmed-count">0</span> of <span data-role="original-count">0</span> characters.
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <button type="button" id="show-trimmed-full" class="btn btn-sm btn-outline-dark" disabled>
+                                Show full message
+                            </button>
+                            <button type="button" id="dismiss-trimmed-banner" class="btn btn-sm btn-link text-decoration-none">
+                                Dismiss
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="input-group">
                         <div class="input-group-prepend">
                             <button class="btn btn-outline-secondary" type="button" id="attach-button"
@@ -267,6 +287,29 @@
     </div>
 </div>
 
+<!-- Trimmed Message Modal -->
+<div class="modal fade" id="trimmedMessageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-file-text"></i> Full message content
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Only the first <span id="trimmed-message-count">0</span> characters were sent to the agents to avoid token limits.
+                </p>
+                <pre id="trimmed-message-full" class="border rounded p-3 mb-0" style="white-space: pre-wrap;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Toast container for notifications -->
 <div id="toast-container" class="toast-container"></div>
 {% endblock %}
@@ -274,6 +317,14 @@
 {% block extra_scripts %}
 <script>
 document.body.setAttribute('data-page', 'chat');
+
+const DEFAULT_CHAT_MESSAGE_CHAR_LIMIT = 24000;
+const parsedChatLimit = Number(document.body?.dataset?.maxChatChars ?? NaN);
+const CHAT_MESSAGE_CHAR_LIMIT =
+    Number.isFinite(parsedChatLimit) && parsedChatLimit > 0
+        ? Math.floor(parsedChatLimit)
+        : DEFAULT_CHAT_MESSAGE_CHAR_LIMIT;
+window.__CHAT_MESSAGE_LIMIT__ = CHAT_MESSAGE_CHAR_LIMIT;
 
 // Simple self-contained chat functionality
 class SimpleChat {
@@ -283,6 +334,9 @@ class SimpleChat {
         this.isConnected = false;
         this.agents = [];
         this.pendingAttachments = []; // Store uploaded attachments before sending
+        this.messageLimit = CHAT_MESSAGE_CHAR_LIMIT;
+        window.__CHAT_MESSAGE_LIMIT__ = this.messageLimit;
+        this.lastTrimmedMessage = null;
         this.exportLabels = {
             formal: 'Formal Minutes',
             casual: 'Casual Notes',
@@ -485,6 +539,22 @@ class SimpleChat {
             });
         }
 
+        const dismissTrimmedButton = document.getElementById('dismiss-trimmed-banner');
+        if (dismissTrimmedButton) {
+            dismissTrimmedButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.clearTrimmedWarning();
+            });
+        }
+
+        const showTrimmedButton = document.getElementById('show-trimmed-full');
+        if (showTrimmedButton) {
+            showTrimmedButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.openTrimmedModal();
+            });
+        }
+
         // Setup secretary commands
         document.querySelectorAll('.secretary-command').forEach(button => {
             button.addEventListener('click', (e) => {
@@ -494,6 +564,8 @@ class SimpleChat {
                 this.sendMessage(command);
             });
         });
+
+        this.renderTrimmedBanner();
 
         // Show connection modal initially
         this.showConnectionModal();
@@ -516,6 +588,92 @@ class SimpleChat {
         }
     }
 
+    getUploadEndpoint() {
+        const win = window || {};
+        const runId = typeof win.__PLAYWRIGHT_UPLOAD_RUN__ === 'string'
+            ? win.__PLAYWRIGHT_UPLOAD_RUN__.trim()
+            : '';
+
+        if (runId) {
+            const url = new URL(window.location.origin + '/api/uploads');
+            url.searchParams.set('run', runId);
+            return `${url.pathname}${url.search}`;
+        }
+
+        return '/api/uploads';
+    }
+
+    extractFilenameFromDisposition(disposition, fallback) {
+        if (!disposition || typeof disposition !== 'string') {
+            return fallback;
+        }
+
+        const encodedMatch = disposition.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+        if (encodedMatch && encodedMatch[1]) {
+            try {
+                return decodeURIComponent(encodedMatch[1].trim().replace(/^"|"$/g, ''));
+            } catch (error) {
+                console.warn('Failed to decode filename* from content-disposition', error);
+            }
+        }
+
+        const quotedMatch = disposition.match(/filename="?([^";]+)"?/i);
+        if (quotedMatch && quotedMatch[1]) {
+            return quotedMatch[1].trim();
+        }
+
+        const plainMatch = disposition.match(/filename=([^;]+)/i);
+        if (plainMatch && plainMatch[1]) {
+            return plainMatch[1].trim();
+        }
+
+        return fallback;
+    }
+
+    async handleAttachmentDownload(downloadUrl, filename, mimeType) {
+        if (!downloadUrl) {
+            return;
+        }
+
+        try {
+            const resolvedUrl = new URL(downloadUrl, window.location.origin).toString();
+            const response = await fetch(resolvedUrl);
+
+            if (!response.ok) {
+                throw new Error(`Download failed: ${response.status}`);
+            }
+
+            const blobData = await response.blob();
+            const effectiveMime = mimeType || blobData.type || 'application/octet-stream';
+            const suggestedName = this.extractFilenameFromDisposition(
+                response.headers.get('content-disposition'),
+                filename || 'download'
+            );
+
+            const blob = effectiveMime === blobData.type
+                ? blobData
+                : new Blob([blobData], { type: effectiveMime });
+
+            const objectUrl = URL.createObjectURL(blob);
+            this.showToast(`Download ready: ${suggestedName}`, 'success');
+
+            const anchor = document.createElement('a');
+            anchor.href = objectUrl;
+            anchor.download = suggestedName;
+            anchor.rel = 'noopener';
+
+            document.body.appendChild(anchor);
+            anchor.click();
+            requestAnimationFrame(() => {
+                anchor.remove();
+                URL.revokeObjectURL(objectUrl);
+            });
+        } catch (downloadError) {
+            console.error('Failed to trigger attachment download', downloadError);
+            this.showToast('Download failed', 'error');
+        }
+    }
+
     async uploadFile(file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -526,7 +684,7 @@ class SimpleChat {
         }
 
         try {
-            const response = await fetch('/api/uploads', {
+            const response = await fetch(this.getUploadEndpoint(), {
                 method: 'POST',
                 body: formData
             });
@@ -538,10 +696,29 @@ class SimpleChat {
             const data = await response.json();
 
             if (data.ok) {
-                this.pendingAttachments.push(data.file);
+                const downloadUrl = data.download_url || (data.file && data.file.download_url);
+                const attachment = Object.assign(
+                    {
+                        filename: file.name,
+                        mime: file.type || 'application/octet-stream',
+                        size_bytes: file.size,
+                        kind: 'document',
+                    },
+                    data.file || {}
+                );
+                attachment.download_url = downloadUrl || attachment.download_url || null;
+
+                this.pendingAttachments.push(attachment);
                 this.renderAttachments();
-                this.showToast(`File uploaded: ${data.file.filename}`, 'success');
-                return data.file;
+                this.showToast(`Upload complete: ${attachment.filename}`, 'success');
+                if (attachment.download_url) {
+                    await this.handleAttachmentDownload(
+                        attachment.download_url,
+                        attachment.filename,
+                        attachment.mime
+                    );
+                }
+                return attachment;
             } else {
                 throw new Error(data.error || 'Upload failed');
             }
@@ -603,17 +780,146 @@ class SimpleChat {
         document.getElementById('attachment-preview').style.display = 'none';
     }
 
+    applyMessageLimit(messageText) {
+        const limit = Number.isFinite(this.messageLimit) && this.messageLimit > 0
+            ? Math.floor(this.messageLimit)
+            : CHAT_MESSAGE_CHAR_LIMIT;
+
+        const normalized = typeof messageText === 'string' ? messageText : String(messageText ?? '');
+
+        if (!normalized) {
+            return { message: '', trimmed: false };
+        }
+
+        if (normalized.length <= limit) {
+            return { message: normalized, trimmed: false };
+        }
+
+        const trimmedMessage = normalized.slice(0, limit);
+        return { message: trimmedMessage, trimmed: true };
+    }
+
+    showTrimmedWarning(originalMessage, trimmedMessage) {
+        this.lastTrimmedMessage = {
+            original: originalMessage,
+            trimmed: trimmedMessage,
+            limit: this.messageLimit
+        };
+
+        this.renderTrimmedBanner();
+        this.showToast('Message trimmed to stay within token limits.', 'warning');
+    }
+
+    clearTrimmedWarning() {
+        if (!this.lastTrimmedMessage) {
+            this.renderTrimmedBanner();
+            return;
+        }
+
+        this.lastTrimmedMessage = null;
+        this.renderTrimmedBanner();
+    }
+
+    renderTrimmedBanner() {
+        const banner = document.getElementById('token-limit-banner');
+        const trimmedCount = banner ? banner.querySelector('[data-role="trimmed-count"]') : null;
+        const originalCount = banner ? banner.querySelector('[data-role="original-count"]') : null;
+        const summary = banner ? banner.querySelector('[data-role="trim-summary"]') : null;
+        const showButton = document.getElementById('show-trimmed-full');
+
+        if (!banner) {
+            return;
+        }
+
+        if (this.lastTrimmedMessage) {
+            const { original, trimmed } = this.lastTrimmedMessage;
+            if (trimmedCount) {
+                trimmedCount.textContent = this.formatCount(trimmed.length);
+            }
+            if (originalCount) {
+                originalCount.textContent = this.formatCount(original.length);
+            }
+            if (summary) {
+                summary.setAttribute('aria-live', 'polite');
+            }
+
+            banner.hidden = false;
+            banner.style.display = 'flex';
+            if (showButton) {
+                showButton.disabled = false;
+            }
+        } else {
+            banner.hidden = true;
+            banner.style.display = 'none';
+            if (trimmedCount) {
+                trimmedCount.textContent = '0';
+            }
+            if (originalCount) {
+                originalCount.textContent = '0';
+            }
+            if (summary) {
+                summary.removeAttribute('aria-live');
+            }
+            if (showButton) {
+                showButton.disabled = true;
+            }
+        }
+    }
+
+    openTrimmedModal() {
+        if (!this.lastTrimmedMessage) {
+            return;
+        }
+
+        const modalElement = document.getElementById('trimmedMessageModal');
+        const messageContainer = document.getElementById('trimmed-message-full');
+        const countElement = document.getElementById('trimmed-message-count');
+
+        if (messageContainer) {
+            messageContainer.textContent = this.lastTrimmedMessage.original;
+        }
+
+        if (countElement) {
+            countElement.textContent = this.formatCount(this.lastTrimmedMessage.trimmed.length);
+        }
+
+        if (!modalElement) {
+            return;
+        }
+
+        if (window.bootstrap?.Modal) {
+            const instance = window.bootstrap.Modal.getOrCreateInstance(modalElement, { backdrop: 'static' });
+            instance.show();
+        } else {
+            modalElement.classList.add('show');
+            modalElement.style.display = 'block';
+            modalElement.removeAttribute('aria-hidden');
+        }
+    }
+
+    formatCount(value) {
+        try {
+            return new Intl.NumberFormat().format(value);
+        } catch (error) {
+            return String(value);
+        }
+    }
+
     sendMessage(message = null) {
         const chatInput = document.getElementById('chat-input');
-        if (!chatInput && !message) return;
+        if (!chatInput && message === null) return;
 
-        const messageText = message || chatInput.value.trim();
-        if (!messageText && this.pendingAttachments.length === 0) return;
+        const rawValue = typeof message === 'string' ? message : (chatInput ? chatInput.value : '');
+        const normalizedMessage = typeof message === 'string' ? rawValue : rawValue.trim();
+
+        if (!normalizedMessage && this.pendingAttachments.length === 0) return;
+
+        const { message: limitedMessage, trimmed } = this.applyMessageLimit(normalizedMessage);
 
         // Prepare message data
         const messageData = {
             session_id: this.sessionId,
-            message: messageText || ""
+            message: limitedMessage || ''
         };
 
         // Include attachments if any
@@ -621,8 +927,14 @@ class SimpleChat {
             messageData.attachments = this.pendingAttachments;
         }
 
+        if (trimmed) {
+            this.showTrimmedWarning(normalizedMessage, limitedMessage);
+        } else {
+            this.clearTrimmedWarning();
+        }
+
         // Clear input if it was from the input field
-        if (!message && chatInput) {
+        if (message === null && chatInput) {
             chatInput.value = '';
             chatInput.style.height = 'auto';
         }
@@ -634,7 +946,7 @@ class SimpleChat {
                 this.sendMessageWithAttachments(messageData);
             } else {
                 // For text-only messages, use WebSocket
-                console.log('Sending text message:', messageText);
+                console.log('Sending text message:', limitedMessage);
                 this.socket.emit('user_message', messageData);
             }
         }
