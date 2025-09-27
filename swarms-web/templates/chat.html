@@ -49,6 +49,18 @@
                 </div>
             </div>
 
+            <div class="filter-toolbar border-bottom bg-light-subtle px-3 py-2">
+                <label for="message-filter" class="form-label visually-hidden">Filter messages</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text" id="message-filter-icon">
+                        <i class="bi bi-funnel" aria-hidden="true"></i>
+                    </span>
+                    <input type="search" id="message-filter" class="form-control"
+                           placeholder="Filter messages (press &ldquo;f&rdquo; to focus)"
+                           aria-label="Filter messages" aria-describedby="message-filter-icon">
+                </div>
+            </div>
+
             <!-- Messages Area -->
             <div class="card-body p-0 position-relative">
                 <div id="chat-messages" class="chat-messages">
@@ -101,14 +113,18 @@
                     <div class="input-group">
                         <div class="input-group-prepend">
                             <button class="btn btn-outline-secondary" type="button" id="attach-button"
-                                    title="Attach files" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
+                                    title="Attach files" aria-label="Attach files"
+                                    style="border-top-right-radius: 0; border-bottom-right-radius: 0;">
                                 <i class="bi bi-paperclip"></i>
                             </button>
                         </div>
+                        <label for="chat-input" class="visually-hidden">Message composer</label>
                         <textarea id="chat-input" class="form-control chat-input"
                                   placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+                                  aria-label="Message composer"
                                   rows="2" style="border-top-left-radius: 0; border-bottom-left-radius: 0;"></textarea>
-                        <button class="btn btn-primary" type="button" id="send-button">
+                        <button class="btn btn-primary" type="button" id="send-button"
+                                aria-label="Send message">
                             <i class="bi bi-send"></i>
                         </button>
                     </div>
@@ -195,7 +211,7 @@
                         </div>
 
                         <!-- Secretary Minutes -->
-                        <div id="secretary-minutes" style="display: none; font-family: Monaco, monospaced;"></div>
+                        <div id="secretary-minutes" style="display: none;"></div>
 
                         <!-- Secretary Stats -->
                         <div id="secretary-stats" style="display: none;"></div>
@@ -214,7 +230,8 @@
                     <div class="card-body">
                         <div class="d-grid gap-2">
                             <button type="button" class="btn btn-outline-primary btn-sm secretary-command"
-                                    data-command="/export minutes">
+                                    data-command="/export minutes" id="export-minutes-button"
+                                    aria-label="Export board minutes">
                                 <i class="bi bi-file-earmark-text"></i> Board Minutes
                             </button>
                             <button type="button" class="btn btn-outline-primary btn-sm secretary-command"
@@ -337,6 +354,7 @@ class SimpleChat {
         this.messageLimit = CHAT_MESSAGE_CHAR_LIMIT;
         window.__CHAT_MESSAGE_LIMIT__ = this.messageLimit;
         this.lastTrimmedMessage = null;
+        this.currentFilterText = '';
         this.exportLabels = {
             formal: 'Formal Minutes',
             casual: 'Casual Notes',
@@ -490,6 +508,7 @@ class SimpleChat {
         const sendButton = document.getElementById('send-button');
         const attachButton = document.getElementById('attach-button');
         const fileInput = document.getElementById('file-input');
+        const filterInput = document.getElementById('message-filter');
 
         if (chatInput && sendButton) {
             // Handle Enter key
@@ -509,6 +528,15 @@ class SimpleChat {
             chatInput.addEventListener('input', function() {
                 this.style.height = 'auto';
                 this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+        }
+
+        if (filterInput) {
+            filterInput.addEventListener('input', (event) => {
+                const target = event.target;
+                const value = target && typeof target.value === 'string' ? target.value : '';
+                this.currentFilterText = value.trim().toLowerCase();
+                this.applyMessageFilter();
             });
         }
 
@@ -576,6 +604,47 @@ class SimpleChat {
             console.log('Joining session:', this.sessionId);
             this.socket.emit('join_session', { session_id: this.sessionId });
         }
+    }
+
+    focusChatInput() {
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            chatInput.focus();
+        }
+    }
+
+    focusFilterInput() {
+        const filterInput = document.getElementById('message-filter');
+        if (filterInput) {
+            filterInput.focus();
+            if (typeof filterInput.select === 'function') {
+                filterInput.select();
+            }
+        }
+    }
+
+    applyMessageFilter() {
+        const messagesContainer = document.getElementById('chat-messages');
+        if (!messagesContainer) {
+            return;
+        }
+
+        const normalizedFilter = this.currentFilterText;
+        const messages = messagesContainer.querySelectorAll('.message');
+
+        messages.forEach((message) => {
+            const element = message;
+            const text = (element.textContent || '').toLowerCase();
+            const shouldShow = !normalizedFilter || text.includes(normalizedFilter);
+
+            if (shouldShow) {
+                element.removeAttribute('aria-hidden');
+                element.style.removeProperty('display');
+            } else {
+                element.setAttribute('aria-hidden', 'true');
+                element.style.display = 'none';
+            }
+        });
     }
 
     startChat(topic) {
@@ -1051,6 +1120,7 @@ class SimpleChat {
         `;
 
         messagesContainer.appendChild(messageElement);
+        this.applyMessageFilter();
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
         // Show agent scores container when agents respond
@@ -1524,22 +1594,58 @@ document.addEventListener('DOMContentLoaded', () => {
     window.simpleChat = new SimpleChat();
 });
 
-// Keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-    // Ctrl/Cmd + Enter to send message
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        const sendButton = document.getElementById('send-button');
-        if (sendButton) {
-            sendButton.click();
-        }
+const isTextEntryTarget = (target) => {
+    if (!target) {
+        return false;
     }
 
-    // Escape to focus input
-    if (e.key === 'Escape') {
-        const chatInput = document.getElementById('chat-input');
-        if (chatInput) {
-            chatInput.focus();
+    const element = target instanceof HTMLElement ? target : null;
+    if (!element) {
+        return false;
+    }
+
+    const tagName = element.tagName;
+    if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
+        return true;
+    }
+
+    return element.isContentEditable === true;
+};
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    const simpleChat = window.simpleChat;
+    const typingTarget = isTextEntryTarget(e.target);
+
+    // Ctrl/Cmd + Enter to send message
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (simpleChat && typeof simpleChat.sendMessage === 'function') {
+            simpleChat.sendMessage();
         }
+        return;
+    }
+
+    if (e.key === 'Escape') {
+        simpleChat?.focusChatInput();
+        return;
+    }
+
+    if (!simpleChat) {
+        return;
+    }
+
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'f' && !typingTarget) {
+        e.preventDefault();
+        simpleChat.focusFilterInput();
+        return;
+    }
+
+    const isHelpShortcut = (!e.ctrlKey && !e.metaKey && (e.key === '?' || (e.key === '/' && e.shiftKey))) && !typingTarget;
+    if (isHelpShortcut) {
+        e.preventDefault();
+        simpleChat.sendMessage('/help');
+        simpleChat.focusChatInput();
     }
 });
 </script>
