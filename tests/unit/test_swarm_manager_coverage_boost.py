@@ -147,7 +147,7 @@ def test_agent_turn_no_motivated_prints(capsys):
         name="A",
         priority_score=0.0,
         motivation_score=0,
-        assess_motivation_and_priority=lambda t: None,
+        assess_motivation_and_priority=lambda t, u: None,
     )
     mgr.agents = [a]
     mgr.conversation_mode = "hybrid"

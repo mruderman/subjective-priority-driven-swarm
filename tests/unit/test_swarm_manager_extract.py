@@ -82,6 +82,8 @@ def test_sequential_fairness_prints():
     with patch("spds.swarm_manager.SPDSAgent.create_new") as create_new:
         a = DummyAgent("A")
         b = DummyAgent("B")
+        a.assess_motivation_and_priority = Mock(return_value=(25, 8.0))
+        b.assess_motivation_and_priority = Mock(return_value=(25, 8.0))
         a.priority_score = 10
         b.priority_score = 20
         create_new.side_effect = [a, b]
@@ -119,6 +121,8 @@ def test_pure_priority_mode():
     with patch("spds.swarm_manager.SPDSAgent.create_new") as create_new:
         a = DummyAgent("A")
         b = DummyAgent("B")
+        a.assess_motivation_and_priority = Mock(return_value=(25, 8.0))
+        b.assess_motivation_and_priority = Mock(return_value=(25, 8.0))
         a.priority_score = 10
         b.priority_score = 20
         create_new.side_effect = [a, b]

@@ -131,6 +131,16 @@ class TestCurrentAssessmentProblem:
 
 class TestNewAssessmentPattern:
     """Tests for the new dynamic context-aware assessment pattern."""
+
+    def _extract_keywords_from_messages(self, messages):
+        """Extract simple keywords from message content for testing"""
+        content = " ".join(msg.content for msg in messages)
+        # Simple keyword extraction for testing
+        keywords = []
+        for word in content.lower().split():
+            if len(word) > 3 and word not in ["the", "and", "for", "with"]:
+                keywords.append(word)
+        return keywords[:5]  # Return top 5 keywords
     
     def test_new_assessment_with_recent_messages(self):
         """Test the new assessment pattern with recent message context."""
@@ -154,11 +164,6 @@ class TestNewAssessmentPattern:
                 agent.motivation_score = 25  # Lower for general topics
             
             agent.priority_score = 8.0
-        
-        def _extract_keywords_from_messages(self, messages):
-            """Helper to extract keywords from recent messages."""
-            content = " ".join(msg.content for msg in messages)
-            return [word for word in content.lower().split() if len(word) > 3]
         
         # Simulate evolving conversation
         conversation_evolution = [
@@ -319,7 +324,7 @@ Please assess your motivation and priority to participate in this discussion."""
         def generate_limited_context_prompt(recent_messages: list, original_topic: str, max_messages: int = 5):
             """Generate prompt with limited context window."""
             # Limit to most recent messages to manage context size
-            limited_messages = recent_messages[-max_messages:] if len(recent_messages) > max_messages else recent_messages
+            limited_messages = recent_messages[-max_messages:]
             
             context_summary = f"Recent conversation ({len(limited_messages)} messages):\n"
             context_summary += "\n".join(f"  {msg}" for msg in limited_messages)
@@ -348,7 +353,7 @@ Please assess your motivation and priority to participate in this discussion."""
         assert prompt_data["context_limited"] is True
         assert "Message 16" in prompt_data["context_summary"]  # Should include last 5 messages
         assert "Message 20" in prompt_data["context_summary"]
-        assert "Message 1" not in prompt_data["context_summary"]  # Should not include early messages
+        assert "Message 1:" not in prompt_data["context_summary"]  # Should not include early messages
 
 
 class TestAssessmentScoreCalculation:

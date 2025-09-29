@@ -763,7 +763,7 @@ IMPORTANCE_TO_GROUP: 8"""
             
             # Verify prompt mentions "conversation about" for non-empty history
             assert actual_prompt is not None
-            assert "Based on our conversation about \"test topic\"" in actual_prompt
+            assert "Based on our current conversation (which started as \"test topic\" but may have evolved)" in actual_prompt
             assert "Regarding the topic" not in actual_prompt
             assert "User: Hello\nAgent: Hi there!" in actual_prompt
 

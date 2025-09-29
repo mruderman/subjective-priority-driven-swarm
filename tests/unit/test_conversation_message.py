@@ -64,23 +64,21 @@ class TestConversationMessageBasics:
     
     def test_empty_content_handling(self):
         """Test handling of empty or whitespace-only content."""
-        # Empty content
-        msg_empty = ConversationMessage(
-            sender="Dave",
-            content="",
-            timestamp=datetime.now()
-        )
-        assert msg_empty.content == ""
-        assert str(msg_empty) == "Dave: "
+        # Test that empty content raises ValueError
+        with pytest.raises(ValueError, match="Message content cannot be empty"):
+            ConversationMessage(
+                sender="Dave",
+                content="",
+                timestamp=datetime.now()
+            )
         
-        # Whitespace-only content
-        msg_whitespace = ConversationMessage(
-            sender="Eve",
-            content="   \n\t  ",
-            timestamp=datetime.now()
-        )
-        assert msg_whitespace.content == "   \n\t  "
-        assert "Eve:" in str(msg_whitespace)
+        # Test whitespace-only content also raises ValueError
+        with pytest.raises(ValueError, match="Message content cannot be empty"):
+            ConversationMessage(
+                sender="Eve",
+                content="   \n\t  ",
+                timestamp=datetime.now()
+            )
     
     def test_special_characters_in_content(self):
         """Test handling of special characters in message content."""

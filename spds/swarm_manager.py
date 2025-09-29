@@ -3,6 +3,7 @@
 import time
 import uuid
 from datetime import datetime
+from typing import List
 
 from letta_client import Letta
 from letta_client.errors import NotFoundError
@@ -52,13 +53,36 @@ class SwarmManager:
         Raises:
             ValueError: If no agents are loaded/created or if conversation_mode is not one of the valid modes.
         """
+        import uuid
+        import time
+        import logging
+        from datetime import datetime
+        from letta_client import Letta
+        from letta_client.errors import NotFoundError
+        from . import config
+        from .config import logger
+        from .export_manager import ExportManager
+        from .letta_api import letta_call
+        from .memory_awareness import create_memory_awareness_for_agent
+        from .message import ConversationMessage, convert_history_to_messages, messages_to_flat_format, get_new_messages_since_index
+        # NOTE: Do NOT re-import SecretaryAgent here; use the module-level import so tests
+        # can patch spds.swarm_manager.SecretaryAgent. Re-importing would bypass mocks.
+        from .session_tracking import track_action, track_message, track_system_event
+        from .spds_agent import SPDSAgent
+
         self.client = client
         self.agents = []
         self.enable_secretary = enable_secretary
         self.secretary = None
+        # Ensure meeting and secretary configuration attributes are initialized so
+        # downstream methods (e.g. _start_meeting/_end_meeting) can safely access them.
+        self.conversation_mode = conversation_mode
+        self.secretary_mode = secretary_mode
+        self.meeting_type = meeting_type
         self.export_manager = ExportManager()
         # Track whether the Letta client supports the optional otid parameter; lazily detected.
         self._agent_messages_supports_otid = None
+        self._history: List[ConversationMessage] = []
 
         logger.info(f"Initializing SwarmManager in {conversation_mode} mode.")
 
@@ -82,13 +106,6 @@ class SwarmManager:
             )
 
         logger.info(f"Swarm initialized with {len(self.agents)} agents.")
-
-        # Internal canonical history storage as a list of (speaker, message) tuples.
-        # Expose a backward-compatible string view via the conversation_history property.
-        self._history = []
-        self.last_speaker = None  # For fairness tracking
-        self.conversation_mode = conversation_mode
-        self.meeting_type = meeting_type
 
         # Initialize secretary if enabled
         if enable_secretary:
@@ -654,7 +671,7 @@ class SwarmManager:
         Returns:
             str: Flattened conversation history string format compatible with agent.speak()
         """
-        # Get new messages since agent's last turn using the existing method
+        # Get new messages since agent's last turn for dynamic assessment
         recent_messages = self.get_new_messages_since_last_turn(agent)
         
         # Convert ConversationMessage objects to flat format for agent compatibility
@@ -674,6 +691,8 @@ class SwarmManager:
         Returns:
             None
         """
+        if not hasattr(self, "_history"):
+            self._history = []
         self._emit(
             f"--- Assessing agent motivations ({self.conversation_mode.upper()} mode) ---"
         )
@@ -748,27 +767,38 @@ class SwarmManager:
         try:
             for msg in response.messages:
                 # Check for tool_call_message type with send_message tool (new format)
-                if hasattr(msg, "message_type") and msg.message_type == "tool_call_message":
+                if (
+                    hasattr(msg, "message_type")
+                    and msg.message_type == "tool_call_message"
+                ):
                     if hasattr(msg, "tool_call") and msg.tool_call:
-                        if hasattr(msg.tool_call, "function") and msg.tool_call.function.name == "send_message":
+                        if (
+                            hasattr(msg.tool_call, "function")
+                            and msg.tool_call.function.name == "send_message"
+                        ):
                             try:
                                 import json
-                                args = json.loads(msg.tool_call.function.arguments)
+
+                                try:
+                                    args = json.loads(msg.tool_call.function.arguments)
+                                except json.JSONDecodeError:
+                                    args = None
+
                                 candidate = args.get("message", "").strip()
                                 # Accept any non-empty message from tool call
                                 if candidate:
                                     message_text = candidate
                                     extraction_successful = True
                                     break
-                            except json.JSONDecodeError as e:
-                                logger.warning(f"JSON parse error in tool call: {e}")
+                            except json.JSONDecodeError:
                                 continue
-                            except Exception as e:
-                                logger.warning(f"Tool call extraction error: {e}")
-                                continue
-                
+
                 # Check for tool calls first (send_message) - legacy format
-                if not extraction_successful and hasattr(msg, "tool_calls") and msg.tool_calls:
+                if (
+                    not message_text
+                    and hasattr(msg, "tool_calls")
+                    and msg.tool_calls
+                ):
                     for tool_call in msg.tool_calls:
                         if (
                             hasattr(tool_call, "function")
@@ -777,18 +807,22 @@ class SwarmManager:
                             try:
                                 import json
 
-                                args = json.loads(tool_call.function.arguments)
-                                candidate = args.get("message", "").strip()
+                                try:
+                                    args = json.loads(tool_call.function.arguments)
+                                except json.JSONDecodeError:
+                                    args = None
+
+                                candidate = (
+                                    args.get("message", "").strip()
+                                    if args and args.get("message")
+                                    else ""
+                                )
                                 # Accept any non-empty message from tool call
                                 if candidate:
                                     message_text = candidate
                                     extraction_successful = True
                                     break
-                            except json.JSONDecodeError as e:
-                                logger.warning(f"JSON parse error in tool call: {e}")
-                                continue
-                            except Exception as e:
-                                logger.warning(f"Tool call extraction error: {e}")
+                            except Exception:
                                 continue
 
                 # Only proceed if we haven't successfully extracted a message yet
@@ -1036,7 +1070,7 @@ class SwarmManager:
 
     def _all_speak_turn(self, motivated_agents: list, topic: str):
         """
-        Have every motivated agent speak in descending priority order, appending each response to the shared conversation history.
+        Have every motivated agent speak in descending priority order, appending each response to the shared conversation_history.
 
         For each agent in motivated_agents (expected to be SPDSAgent-like objects with a .name and .priority_score):
         - Requests a response using the current conversation_history so later speakers can see earlier replies.

@@ -48,6 +48,8 @@ def build_manager_with_agents(mode, agents):
 def test_all_speak_mode_two_agents():
     a = DummyAgent("A", prio=20)
     b = DummyAgent("B", prio=10)
+    a.assess_motivation_and_priority = Mock(return_value=(25, 8.0))
+    b.assess_motivation_and_priority = Mock(return_value=(25, 8.0))
     mgr = build_manager_with_agents("all_speak", [a, b])
     captured = StringIO()
     sys.stdout = captured
@@ -73,6 +75,8 @@ def test_hybrid_turn_error_in_response():
 
     a = DummyAgent("A", prio=20)
     b = ErrAgent("B", prio=10)
+    a.assess_motivation_and_priority = Mock(return_value=(25, 8.0))
+    b.assess_motivation_and_priority = Mock(return_value=(25, 8.0))
     mgr = build_manager_with_agents("hybrid", [a, b])
     captured = StringIO()
     sys.stdout = captured

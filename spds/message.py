@@ -26,7 +26,8 @@ class ConversationMessage:
         """Validate message data after initialization."""
         if not self.sender:
             raise ValueError("Message sender cannot be empty")
-        if not self.content:
+        # Reject empty or whitespace-only content
+        if not self.content or not str(self.content).strip():
             raise ValueError("Message content cannot be empty")
         if not isinstance(self.timestamp, datetime):
             raise TypeError("Message timestamp must be a datetime object")

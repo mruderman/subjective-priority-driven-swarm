@@ -52,14 +52,17 @@ def test_agent_turn_dispatches_modes(mock_letta_client):
         a1.name = "A"
         a1.agent = SimpleNamespace(id="a1")
         a1.priority_score = 5
+        a1.last_message_index = 0
         a2 = Mock()
         a2.name = "B"
         a2.agent = SimpleNamespace(id="a2")
         a2.priority_score = 3
+        a2.last_message_index = 0
         a3 = Mock()
         a3.name = "C"
         a3.agent = SimpleNamespace(id="a3")
         a3.priority_score = 1
+        a3.last_message_index = 0
         mock_create.side_effect = [a1, a2, a3]
 
         mgr = SwarmManager(

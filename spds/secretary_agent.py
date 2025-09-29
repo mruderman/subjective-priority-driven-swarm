@@ -46,6 +46,9 @@ class SecretaryAgent:
         self.mode = mode  # "formal", "casual", or "adaptive"
         self.agent = None
         self.meeting_metadata = {}
+        self.conversation_log: List[Any] = []
+        self.action_items: List[Dict[str, Any]] = []
+        self.decisions: List[Dict[str, Any]] = []
 
         # Create the secretary agent
         self._create_secretary_agent()
@@ -171,6 +174,9 @@ class SecretaryAgent:
             "conversation_mode": None,  # Will be set by SwarmManager
         }
 
+        # For backward compatibility, log meeting start
+        self.conversation_log.append(("system", f"Meeting started: {topic}"))
+
         # Send meeting start message to the secretary agent
         meeting_start_message = (
             f"A new {meeting_type} meeting has started.\n"
@@ -278,6 +284,9 @@ class SecretaryAgent:
         if not self.agent:
             return
 
+        # For backward compatibility, log the message
+        self.conversation_log.append((speaker, message))
+
         # Format message for the secretary
         formatted_message = f"{speaker}: {message}"
 
@@ -318,6 +327,8 @@ class SecretaryAgent:
         self, description: str, assignee: str = None, due_date: str = None
     ):
         """Manually add an action item through the secretary agent."""
+        # For backward compatibility
+        self.action_items.append(description)
         if not self.agent:
             print(f"⚠️ Secretary agent not available")
             return
@@ -352,6 +363,8 @@ class SecretaryAgent:
 
     def add_decision(self, decision: str, context: str = None):
         """Manually record a decision through the secretary agent."""
+        # For backward compatibility
+        self.decisions.append({"decision": decision, "context": context})
         if not self.agent:
             print(f"⚠️ Secretary agent not available")
             return

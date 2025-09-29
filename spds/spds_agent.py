@@ -389,7 +389,7 @@ IMPORTANCE_TO_GROUP: X
                     actor=self.name,
                     action_type="assessment_request",
                     details={
-                        "topic": original_topic,
+                        "topic": topic,
                         "has_conversation_history": bool(conversation_history),
                         "has_tools": has_tools,
                     },
@@ -567,6 +567,8 @@ IMPORTANCE_TO_GROUP: X
                     continue
 
                 print(f"  [Error getting assessment from {self.name}: {e}]")
+                self._assessment_tool_disabled = True
+                self.assessment_tool = None
                 self.last_assessment = tools.perform_subjective_assessment(
                     topic, conversation_history, self.persona, self.expertise
                 )
@@ -653,7 +655,14 @@ IMPORTANCE_TO_GROUP: X
         else:
             error_content = f"⚠️ **Error encountered**: {error_message}\n\nThe agent was unable to respond due to a technical issue."
         
-        return self._wrap_response_with_send_message(error_content)
+        return SimpleNamespace(
+            messages=[
+                {
+                    "role": "assistant",
+                    "content": error_content,
+                }
+            ]
+        )
 
     def _ensure_send_message_response(self, response, message_text: str):
         if not message_text:
