@@ -3,7 +3,7 @@
 import time
 import uuid
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from letta_client import Letta
 from letta_client.errors import NotFoundError
@@ -700,8 +700,33 @@ class SwarmManager:
         for agent in self.agents:
             # Get recent messages since agent's last turn for dynamic assessment
             recent_messages = self.get_new_messages_since_last_turn(agent)
-            # Assess motivation based on current conversation context + original topic
-            agent.assess_motivation_and_priority(recent_messages, topic)
+            # Assess motivation based on current conversation context + original topic.
+            # Support multiple possible signatures for assess_motivation_and_priority to
+            # remain backward-compatible with tests and older agent implementations.
+            try:
+                import inspect
+
+                sig = inspect.signature(agent.assess_motivation_and_priority)
+                # Count only positional parameters (bound methods will not include `self`)
+                pos_params = [
+                    p
+                    for p in sig.parameters.values()
+                    if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+                ]
+                if len(pos_params) >= 2:
+                    agent.assess_motivation_and_priority(recent_messages, topic)
+                elif len(pos_params) == 1:
+                    # Older tests/mocks expect only (topic)
+                    agent.assess_motivation_and_priority(topic)
+                else:
+                    # No parameters - call without args
+                    agent.assess_motivation_and_priority()
+            except Exception:
+                # Fallback: try the two-arg call first, then the single-arg call.
+                try:
+                    agent.assess_motivation_and_priority(recent_messages, topic)
+                except TypeError:
+                    agent.assess_motivation_and_priority(topic)
             self._emit(
                 f"  - {agent.name}: Motivation Score = {agent.motivation_score}, Priority Score = {agent.priority_score:.2f}"
             )
