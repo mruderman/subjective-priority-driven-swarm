@@ -23,6 +23,15 @@ python -m spds.main --agent-names "Project Manager Alex" "Designer Jordan"
 python -m spds.main --swarm-config creative_swarm.json
 ```
 
+### Session Management
+```bash
+# List saved sessions
+python -m spds.main sessions list
+
+# Resume a prior session
+python -m spds.main sessions resume <SESSION_ID>
+```
+
 ### Setup and Installation
 ```bash
 # Install dependencies
@@ -31,6 +40,44 @@ pip install -r requirements.txt
 # Deploy Letta ADE server (if self-hosting)
 cd spds && bash setup.sh
 ```
+
+### Letta Server Tool Dependencies (CRITICAL)
+
+The SPDS assessment tool (`perform_subjective_assessment`) requires **pydantic** to be installed in the Letta server's tool execution environment. This is separate from the client-side Python environment.
+
+**Symptoms of Missing Dependency:**
+- Agents respond with "I have some thoughts but I'm having trouble phrasing them"
+- Error logs show `ModuleNotFoundError: No module named 'pydantic'`
+- Assessment tool fails to execute on the server
+
+**Fix for Self-Hosted Letta Server:**
+```bash
+# On the Letta server (via SSH or docker exec)
+docker compose exec letta /app/letta_tools_env/shared-tools-env/bin/pip install pydantic
+
+# Or if using a different virtual environment path:
+docker compose exec letta bash
+source $TOOL_EXEC_VENV_NAME/bin/activate
+pip install pydantic
+
+# Restart the Letta server to ensure changes take effect
+docker compose restart letta
+```
+
+**Diagnostic Tool:**
+```bash
+# Check agent configuration and test tool execution environment
+python -m spds.diagnostics.check_agent_config --agent-name Jack
+
+# Test tool execution environment for pydantic and other dependencies
+python -m spds.diagnostics.check_agent_config --test-tools
+
+# Check all agents on the server
+python -m spds.diagnostics.check_agent_config --all
+```
+
+**Note for Letta Cloud Users:**
+Letta Cloud environments already have pydantic and other common dependencies pre-installed. This fix is only needed for self-hosted Letta servers.
 
 ### Testing and Quality Assurance
 ```bash
@@ -73,6 +120,7 @@ pre-commit run --all-files
 12. **Agent Profiles** (`profiles_schema.py`): Pydantic schemas for agent profile validation
 13. **Memory Awareness** (`memory_awareness.py`): Agent memory management utilities respecting autonomy
 14. **Message Architecture** (`message.py`): Structured ConversationMessage system for incremental delivery
+15. **Diagnostics** (`diagnostics/`): Agent configuration checking and tool execution environment testing
 
 ### Key Design Patterns
 - **Agent-based Architecture**: Each agent has unique persona, expertise, and state
@@ -117,16 +165,17 @@ This project prioritizes continuity of agent experience over disposable workflow
 - **Natural Conversation Flow**: Eliminated repetitive assessment patterns for more engaging interactions
 
 ### Web GUI Setup
-The project now includes a web GUI in the `swarms-web` directory:
+The project includes a web GUI in the `swarms-web` directory:
 
 ```bash
-# Install letta-flask from GitHub (not on PyPI)
-cd /path/to/letta-flask
-pip install -e .
+# Install web dependencies
+pip install -r swarms-web/requirements.txt
+# If needed, install letta-flask without deps (see README Troubleshooting)
+pip install --no-deps git+https://github.com/letta-ai/letta-flask.git
 
 # Run the web GUI
 cd swarms-web
-python app.py  # Runs on http://localhost:5002
+python run.py  # http://localhost:5002
 ```
 
 **Web GUI Features:**
@@ -145,9 +194,13 @@ python app.py  # Runs on http://localhost:5002
 - **Secretary Implementation Fixed**: Completely rewrote secretary to use proper Letta API patterns with real AI-powered meeting documentation
 
 ### Required Setup
-1. Set `LETTA_API_KEY` in `config.py`
-2. Configure `LETTA_ENVIRONMENT` ("SELF_HOSTED" or "LETTA_CLOUD")
-3. If self-hosting, ensure Docker setup with proper environment variables:
+1. Create a local `.env` with server credentials (do not commit secrets):
+   - `LETTA_API_KEY=<your_letta_api_key>` (for Letta Cloud) or
+   - `LETTA_PASSWORD=<your_server_password>` (for self-hosted), optional fallback `LETTA_SERVER_PASSWORD`
+   - `LETTA_BASE_URL=http://localhost:8283`
+   - `LETTA_ENVIRONMENT=SELF_HOSTED` (or `LETTA_CLOUD`)
+   See `.env.example` and `spds/config.py` for details.
+2. If self-hosting, ensure Docker setup with appropriate environment:
    - `TOOL_EXEC_DIR`
    - `TOOL_EXEC_VENV_NAME`
 

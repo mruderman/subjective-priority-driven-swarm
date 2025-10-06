@@ -42,6 +42,7 @@ from spds.export_manager import (
     export_session_to_json,
     export_session_to_markdown,
 )
+from spds.message import get_new_messages_since_index
 from spds.secretary_agent import SecretaryAgent
 from spds.session_context import set_current_session_id
 from spds.session_store import get_default_session_store
@@ -307,8 +308,35 @@ class WebSwarmManager:
         # Assess motivations
         self.emit_message("assessing_agents", {})
 
-        for agent in self.swarm.agents:
-            agent.assess_motivation_and_priority(topic)
+        try:
+            for agent in self.swarm.agents:
+                # Get messages since this agent's last turn
+                recent_messages = self.swarm.get_new_messages_since_last_turn(agent)
+
+                # Use the same backward-compatible approach as SwarmManager
+                try:
+                    import inspect
+                    sig = inspect.signature(agent.assess_motivation_and_priority)
+                    pos_params = [
+                        p for p in sig.parameters.values()
+                        if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                    ]
+                    if len(pos_params) >= 2:
+                        agent.assess_motivation_and_priority(recent_messages, topic)
+                    else:
+                        agent.assess_motivation_and_priority(topic)
+                except Exception:
+                    # Fallback: try two-arg call first, then single-arg
+                    try:
+                        agent.assess_motivation_and_priority(recent_messages, topic)
+                    except TypeError:
+                        agent.assess_motivation_and_priority(topic)
+        except Exception as e:
+            logger.error(f"Error during agent assessment: {e}", exc_info=True)
+            self.emit_message("system_message", {
+                "message": f"Error assessing agents: {str(e)}"
+            })
+            return
 
         motivated_agents = sorted(
             [agent for agent in self.swarm.agents if agent.priority_score > 0],

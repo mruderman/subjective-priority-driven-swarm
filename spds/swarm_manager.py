@@ -16,7 +16,7 @@ from .memory_awareness import create_memory_awareness_for_agent
 from .message import ConversationMessage, convert_history_to_messages, messages_to_flat_format, get_new_messages_since_index
 from .secretary_agent import SecretaryAgent
 from .session_tracking import track_action, track_message, track_system_event
-from .spds_agent import SPDSAgent
+from .spds_agent import SPDSAgent, format_group_message
 
 
 class SwarmManager:
@@ -214,20 +214,42 @@ class SwarmManager:
         # Use helper function to get new messages since the last index
         return get_new_messages_since_index(self._history, last_idx)
 
-    def _normalize_agent_message(self, message_text: str) -> str:
+    def _normalize_agent_message(self, message_text: str, agent=None) -> str:
         """Normalize agent output for downstream display and tests.
 
         If an agent returned an error-wrapped message (produced by SPDSAgent when
         encountering errors), map it to a short human-friendly fallback so
         existing tests that expect the simple fallback string continue to pass.
         We still log the original message via logger for diagnostics.
+
+        Args:
+            message_text: The message text to normalize
+            agent: Optional SPDSAgent instance for enhanced logging
+
+        Returns:
+            Normalized message text
         """
         if not message_text:
             return message_text
         # Detect our SPDSAgent error wrapper pattern
-        if "Error encountered" in message_text or message_text.strip().startswith("Error:") or message_text.strip().startswith("⚠️"):
+        is_error = (
+            "Error encountered" in message_text
+            or message_text.strip().startswith("Error:")
+            or message_text.strip().startswith("⚠️")
+        )
+
+        if is_error:
             logger = config.logger
-            logger.debug(f"Agent produced error-wrapped message: {message_text}")
+            # Log full error BEFORE normalizing for debugging
+            logger.warning(
+                f"Normalizing error response from {agent.name if agent else 'unknown agent'}",
+                extra={
+                    "agent_name": agent.name if agent else "unknown",
+                    "agent_id": agent.agent.id if agent else "unknown",
+                    "original_message": message_text,
+                    "message_preview": message_text[:200],
+                }
+            )
             return "I have some thoughts but I'm having trouble phrasing them."
         return message_text
 
@@ -497,15 +519,21 @@ class SwarmManager:
         self, message: str, speaker: str = "User", max_retries=3
     ):
         """
-        Broadcast a user message to every agent to update their memory, with retries and error handling.
+        Broadcast a group message to every agent to update their memory, with retries and error handling.
 
-        Sends a message of the form "<speaker>: <message>" to each agent's message store. Retries transient failures with exponential backoff (e.g., HTTP 500 or disconnection). If a token-related error is detected, attempts to reset the agent's messages and retries the update once. Logs failures; does not raise on per-agent errors.
+        Sends a formatted message to each agent's message store using system role to reduce visual clutter.
+        Retries transient failures with exponential backoff (e.g., HTTP 500 or disconnection). If a token-related
+        error is detected, attempts to reset the agent's messages and retries the update once. Logs failures;
+        does not raise on per-agent errors.
 
         Parameters:
             message (str): The message text to record in each agent's memory.
-            speaker (str): Label prepended to the message (defaults to "User").
+            speaker (str): Label for the speaker (defaults to "User").
             max_retries (int): Maximum number of attempts per agent for transient errors.
         """
+        # Format the message with speaker indication and dividers
+        formatted_message = format_group_message(f"{speaker}: {message}", speaker)
+
         for agent in self.agents:
             success = False
             for attempt in range(max_retries):
@@ -515,8 +543,8 @@ class SwarmManager:
                         agent_id=agent.agent.id,
                         messages=[
                             {
-                                "role": "user",
-                                "content": f"{speaker}: {message}",
+                                "role": "system",
+                                "content": formatted_message,
                             }
                         ],
                     )
@@ -555,8 +583,8 @@ class SwarmManager:
                                     agent_id=agent.agent.id,
                                     messages=[
                                         {
-                                            "role": "user",
-                                            "content": f"{speaker}: {message}",
+                                            "role": "system",
+                                            "content": formatted_message,
                                         }
                                     ],
                                 )
@@ -681,6 +709,48 @@ class SwarmManager:
         else:
             return ""
 
+    def _generate_dynamic_topic(
+        self,
+        recent_messages: list,
+        original_topic: str
+    ) -> str:
+        """
+        Generate dynamic topic summary from recent messages.
+
+        Uses simple heuristics to extract current conversation focus
+        without requiring additional LLM calls. This replaces static
+        "test topic" with contextual current focus.
+
+        Args:
+            recent_messages: List of ConversationMessage objects from recent turns
+            original_topic: The original topic to fall back to if no messages
+
+        Returns:
+            str: Dynamic topic reflecting current conversation focus
+        """
+        if not recent_messages:
+            return original_topic
+
+        # Strategy: Use last 3 messages to determine current topic
+        last_messages = recent_messages[-3:] if len(recent_messages) >= 3 else recent_messages
+
+        # Extract keywords or use last message snippets
+        topic_parts = []
+        for msg in last_messages:
+            # Take first 50 chars of each message
+            snippet = msg.content[:50].strip()
+            if snippet:
+                topic_parts.append(snippet)
+
+        if topic_parts:
+            # Join with ellipsis, max 150 chars total
+            dynamic_topic = "...".join(topic_parts)
+            if len(dynamic_topic) > 150:
+                dynamic_topic = dynamic_topic[:147] + "..."
+            return dynamic_topic
+
+        return original_topic
+
     def _agent_turn(self, topic: str):
         """
         Evaluate motivation and priority for each agent based on recent conversation context and original topic, build an ordered list of motivated agents (priority_score > 0), and invoke the mode-specific turn handler (_hybrid_turn, _all_speak_turn, _sequential_turn, or _pure_priority_turn). If no agents are motivated the method returns without further action. The method updates agent internal scores and triggers side-effectful turn handlers which append to the shared conversation state and notify the secretary when present.
@@ -700,7 +770,11 @@ class SwarmManager:
         for agent in self.agents:
             # Get recent messages since agent's last turn for dynamic assessment
             recent_messages = self.get_new_messages_since_last_turn(agent)
-            # Assess motivation based on current conversation context + original topic.
+
+            # Generate dynamic topic from recent messages
+            dynamic_topic = self._generate_dynamic_topic(recent_messages, topic)
+
+            # Assess motivation based on current conversation context + dynamic topic.
             # Support multiple possible signatures for assess_motivation_and_priority to
             # remain backward-compatible with tests and older agent implementations.
             try:
@@ -714,19 +788,19 @@ class SwarmManager:
                     if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
                 ]
                 if len(pos_params) >= 2:
-                    agent.assess_motivation_and_priority(recent_messages, topic)
+                    agent.assess_motivation_and_priority(recent_messages, dynamic_topic)
                 elif len(pos_params) == 1:
                     # Older tests/mocks expect only (topic)
-                    agent.assess_motivation_and_priority(topic)
+                    agent.assess_motivation_and_priority(dynamic_topic)
                 else:
                     # No parameters - call without args
                     agent.assess_motivation_and_priority()
             except Exception:
                 # Fallback: try the two-arg call first, then the single-arg call.
                 try:
-                    agent.assess_motivation_and_priority(recent_messages, topic)
+                    agent.assess_motivation_and_priority(recent_messages, dynamic_topic)
                 except TypeError:
-                    agent.assess_motivation_and_priority(topic)
+                    agent.assess_motivation_and_priority(dynamic_topic)
             self._emit(
                 f"  - {agent.name}: Motivation Score = {agent.motivation_score}, Priority Score = {agent.priority_score:.2f}"
             )
@@ -961,7 +1035,7 @@ class SwarmManager:
                             f"Slow LLM response from {agent.name}: {duration:.2f} seconds",
                             level="warning",
                         )
-                    message_text = self._normalize_agent_message(self._extract_agent_response(response))
+                    message_text = self._normalize_agent_message(self._extract_agent_response(response), agent)
 
                     # Validate response quality
                     if (
@@ -1063,9 +1137,7 @@ class SwarmManager:
                         f"Slow LLM response from {agent.name}: {duration:.2f} seconds",
                         level="warning",
                     )
-                message_text = self._normalize_agent_message(self._extract_agent_response(response))
-                # Normalize error-wrapped messages to the simple fallback used in tests
-                message_text = self._normalize_agent_message(message_text)
+                message_text = self._normalize_agent_message(self._extract_agent_response(response), agent)
                 self._emit(f"{agent.name}: {message_text}")
                 # Add responses to conversation history
                 self._append_history(agent.name, message_text)
@@ -1127,7 +1199,7 @@ class SwarmManager:
                         f"Slow LLM response from {agent.name}: {duration:.2f} seconds.",
                         level="warning",
                     )
-                message_text = self._normalize_agent_message(self._extract_agent_response(response))
+                message_text = self._normalize_agent_message(self._extract_agent_response(response), agent)
                 self._emit(f"{agent.name}: {message_text}")
                 # Update all agents' memories with this response
                 self._update_agent_memories(message_text, agent.name)
@@ -1186,7 +1258,7 @@ class SwarmManager:
                     f"Slow LLM response from {speaker.name}: {duration:.2f} seconds.",
                     level="warning",
                 )
-            message_text = self._normalize_agent_message(self._extract_agent_response(response))
+            message_text = self._normalize_agent_message(self._extract_agent_response(response), speaker)
             self._emit(f"{speaker.name}: {message_text}")
             self._append_history(speaker.name, message_text)
             # Update agent's last message index
@@ -1241,7 +1313,7 @@ class SwarmManager:
                     f"Slow LLM response from {speaker.name}: {duration:.2f} seconds.",
                     level="warning",
                 )
-            message_text = self._normalize_agent_message(self._extract_agent_response(response))
+            message_text = self._normalize_agent_message(self._extract_agent_response(response), speaker)
             self._emit(f"{speaker.name}: {message_text}")
             self._append_history(speaker.name, message_text)
             # Update agent's last message index

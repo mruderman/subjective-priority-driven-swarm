@@ -353,7 +353,7 @@ class SimpleChat {
         this.pendingAttachments = []; // Store uploaded attachments before sending
         this.messageLimit = CHAT_MESSAGE_CHAR_LIMIT;
         window.__CHAT_MESSAGE_LIMIT__ = this.messageLimit;
-        this.lastTrimmedMessage = null;       
+        this.lastTrimmedMessage = null;
         this.currentFilterText = '';
         this.exportLabels = {
             formal: 'Formal Minutes',
@@ -363,6 +363,11 @@ class SimpleChat {
             summary: 'Executive Summary',
             data: 'Structured Data'
         };
+
+        // Speaker color mapping - each unique speaker gets a persistent color
+        this.speakerColors = new Map();
+        this.nextColorIndex = 0;
+        this.maxColors = 12; // Total number of color variations defined in CSS
 
         this.init();
     }
@@ -1083,13 +1088,53 @@ class SimpleChat {
         const agentsList = document.getElementById('agents-list');
         if (agentsList && this.agents.length > 0) {
             console.log('Updating participants list with agents:', this.agents);
-            agentsList.innerHTML = this.agents.map(agent => `
-                <div class="d-flex justify-content-between align-items-center py-1">
-                    <span>${agent.name}</span>
-                    <span class="badge bg-primary">Active</span>
-                </div>
-            `).join('');
+            agentsList.innerHTML = this.agents.map(agent => {
+                // Get or assign color for each agent
+                const colorIndex = this.getSpeakerColorIndex(agent.name);
+                const colorStyle = colorIndex !== null ? `
+                    background: var(--speaker-color-${colorIndex}, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+                    padding: 4px 12px;
+                    border-radius: 12px;
+                    color: white;
+                    font-size: 0.75rem;
+                ` : '';
+
+                return `
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                        <div class="d-flex align-items-center gap-2">
+                            ${colorIndex !== null ? `
+                                <div class="message agent" data-speaker-color="${colorIndex}"
+                                     style="padding: 6px 10px; margin: 0; border-radius: 6px; font-size: 0.7rem; max-width: none; display: inline-block;">
+                                    <i class="bi bi-circle-fill"></i>
+                                </div>
+                            ` : ''}
+                            <span>${agent.name}</span>
+                        </div>
+                        <span class="badge bg-success">Active</span>
+                    </div>
+                `;
+            }).join('');
         }
+    }
+
+    // Get or assign a color index for a speaker
+    getSpeakerColorIndex(speaker) {
+        // Skip color assignment for system messages and user
+        if (speaker === 'System' || speaker === 'You') {
+            return null;
+        }
+
+        // Check if speaker already has a color
+        if (this.speakerColors.has(speaker)) {
+            return this.speakerColors.get(speaker);
+        }
+
+        // Assign next available color
+        const colorIndex = this.nextColorIndex % this.maxColors;
+        this.speakerColors.set(speaker, colorIndex);
+        this.nextColorIndex++;
+
+        return colorIndex;
     }
 
     addMessage(speaker, content, type = 'agent', timestamp = null, phase = null) {
@@ -1098,6 +1143,14 @@ class SimpleChat {
 
         const messageElement = document.createElement('div');
         messageElement.className = `message ${type}`;
+
+        // Assign speaker-specific color for agent messages
+        if (type === 'agent') {
+            const colorIndex = this.getSpeakerColorIndex(speaker);
+            if (colorIndex !== null) {
+                messageElement.setAttribute('data-speaker-color', colorIndex);
+            }
+        }
 
         const timeStr = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
 
@@ -1248,16 +1301,24 @@ class SimpleChat {
             const badges = document.createElement('div');
             badges.className = 'score-badges';
 
+            // Motivation score - show actual value, not normalized
             const m = document.createElement('span');
-            m.className = 'score-badge';
             const mVal = typeof score?.motivation_score === 'number' ? score.motivation_score : 0;
-            // Normalize/clamp: assume incoming 0..1; clamp then scale to 0..100
-            m.textContent = `M: ${Math.round(Math.max(0, Math.min(1, mVal)) * 100)}`;
+            const participationThreshold = 30; // Should match PARTICIPATION_THRESHOLD in config.py
 
+            // Color code based on whether agent will participate
+            if (mVal >= participationThreshold) {
+                m.className = 'score-badge score-speak'; // Blue for speak
+            } else {
+                m.className = 'score-badge score-abstain'; // Red for abstain
+            }
+            m.textContent = `M: ${mVal}`;
+
+            // Priority score - show actual value
             const p = document.createElement('span');
             p.className = 'score-badge';
             const pVal = typeof score?.priority_score === 'number' ? score.priority_score : 0;
-            p.textContent = `P: ${Math.round(Math.max(0, Math.min(1, pVal)) * 100)}`;
+            p.textContent = `P: ${pVal.toFixed(2)}`;
 
             badges.appendChild(m);
             badges.appendChild(p);

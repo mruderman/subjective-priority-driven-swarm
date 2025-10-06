@@ -26,6 +26,27 @@ except ImportError:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
+def format_group_message(conversation_history: str, current_speaker: str = None) -> str:
+    """Format group conversation history for system messages with clear speaker indication.
+
+    Args:
+        conversation_history: The conversation text to format
+        current_speaker: Optional current speaker name to highlight
+
+    Returns:
+        Formatted message with dividers and speaker emphasis
+    """
+    divider = "=" * 80
+
+    if current_speaker:
+        header = f"CURRENT SPEAKER: {current_speaker.upper()}"
+        formatted = f"{divider}\n{header}\n{divider}\n\n{conversation_history}\n\n{divider}"
+    else:
+        formatted = f"{divider}\nGROUP CONVERSATION\n{divider}\n\n{conversation_history}\n\n{divider}"
+
+    return formatted
+
+
 class SPDSAgent:
     def __init__(self, agent_state: AgentState, client: Letta):
         self.client = client
@@ -269,47 +290,42 @@ class SPDSAgent:
 
             if has_tools:
                 assessment_context = (
-                    f"Conversation so far:\n{conversation_history}\n\n"
+                    f"Recent messages since your last turn:\n{conversation_history}\n\n"
                     if conversation_history
-                    else ""
-                )
-                # Only claim the agent has access to "full conversation history in memory"
-                # when we actually provided conversation_history in the prompt. Otherwise
-                # avoid the confusing claim on first/initial calls.
-                memory_claim = (
-                    "You have access to our full conversation history in your memory. Please use the perform_subjective_assessment tool if available, or respond using send_message with this exact format:\n"
-                    if conversation_history
-                    else "Please use the perform_subjective_assessment tool if available, or respond using send_message with this exact format:\n"
+                    else "This is the start of the conversation.\n\n"
                 )
                 # Adjust conversation reference to emphasize current conversation context
                 conversation_reference = (
-                    f"Based on our current conversation (which started as \"{topic}\" but may have evolved)"
+                    f"Based on these recent messages (current focus: \"{topic}\")"
                     if conversation_history
                     else f"Regarding the topic \"{topic}\""
                 )
-                
+
                 # Add retry instruction if this is a retry attempt
                 retry_instruction = ""
                 if attempt > 0:
                     retry_instruction = """
-IMPORTANT: Please provide NUMERIC SCORES (0-10) for ALL dimensions listed below. 
-Your previous response was incomplete. Please respond ONLY with the exact format shown:
-IMPORTANCE_TO_SELF: [number]
-PERCEIVED_GAP: [number]
-UNIQUE_PERSPECTIVE: [number]
-EMOTIONAL_INVESTMENT: [number]
-EXPERTISE_RELEVANCE: [number]
-URGENCY: [number]
-IMPORTANCE_TO_GROUP: [number]
-
-Do not include any other text or explanation - just the scores in the exact format above.
+IMPORTANT: Your previous response was incomplete. Please use the perform_subjective_assessment tool with the parameters shown below, or use send_message with numeric scores.
 """
-                
+
                 assessment_prompt = f"""
 {assessment_context}{conversation_reference}, please assess your motivation to contribute to the CURRENT conversation state.
 {retry_instruction}
 
-{memory_claim}
+**PRIMARY METHOD: Use the perform_subjective_assessment tool**
+
+Call the perform_subjective_assessment tool with these parameters:
+- topic: "{topic}"
+- conversation_history: "{conversation_history[-500:] if conversation_history else topic}"
+- agent_persona: "{self.persona}"
+- agent_expertise: {self.expertise}
+
+This tool will automatically evaluate all 7 assessment dimensions and return a structured result.
+
+**FALLBACK METHOD (only if the tool is unavailable):**
+
+If you cannot access the perform_subjective_assessment tool, use send_message with this exact format:
+
 IMPORTANCE_TO_SELF: X
 PERCEIVED_GAP: X
 UNIQUE_PERSPECTIVE: X
@@ -318,7 +334,7 @@ EXPERTISE_RELEVANCE: X
 URGENCY: X
 IMPORTANCE_TO_GROUP: X
 
-Where:
+Where each dimension is scored 0-10:
 1. IMPORTANCE_TO_SELF: How personally significant is the CURRENT conversation direction to you?
 2. PERCEIVED_GAP: Are there crucial points missing from the RECENT discussion?
 3. UNIQUE_PERSPECTIVE: Do you have insights that haven't been shared in the CURRENT conversation?
@@ -328,23 +344,24 @@ Where:
 7. IMPORTANCE_TO_GROUP: What's the potential impact on the group's current understanding?
 
 Focus on the EVOLVING conversation, not just the original topic. Consider what has actually been discussed recently and whether you can add value to the current direction.
-
-Please respond with the exact format shown above, providing numeric scores (0-10) for each dimension. If you have access to the perform_subjective_assessment tool, you may use it instead for more accurate assessment.
 """
             else:
                 assessment_context = (
-                    f"Conversation so far:\n{conversation_history}\n\n"
+                    f"Recent messages since your last turn:\n{conversation_history}\n\n"
                     if conversation_history
-                    else ""
+                    else "This is the start of the conversation.\n\n"
                 )
                 memory_claim = (
-                    "You have access to our full conversation history in your memory. Please review the CURRENT conversation state and rate each dimension from 0-10:\n"
+                    "You have access to the full conversation history in your recall memory. "
+                    "The messages shown below are NEW since your last turn. "
+                    "Please review these recent messages and assess each dimension (0-10):\n"
                     if conversation_history
-                    else "Please review the topic below and rate each dimension from 0-10.\n"
+                    else "This is the start of the conversation. Please review the topic below "
+                    "and assess each dimension (0-10):\n"
                 )
                 # Adjust conversation reference to emphasize current conversation context
                 conversation_reference = (
-                    f"Based on our current conversation (which started as \"{topic}\" but may have evolved)"
+                    f"Based on these recent messages (current focus: \"{topic}\")"
                     if conversation_history
                     else f"Regarding the topic \"{topic}\""
                 )
@@ -409,30 +426,45 @@ IMPORTANCE_TO_GROUP: X
 
                 # Track tool calls in the response
                 for msg in response.messages:
-                    # Check for tool_call_message type with send_message tool (new format)
+                    # Check for tool_call_message type (new format)
                     if hasattr(msg, "message_type") and msg.message_type == "tool_call_message":
                         if hasattr(msg, "tool_call") and msg.tool_call:
-                            if hasattr(msg.tool_call, "function") and msg.tool_call.function.name == "send_message":
+                            tool_name = msg.tool_call.function.name if hasattr(msg.tool_call, "function") else None
+                            if tool_name == "send_message":
                                 track_tool_call(
                                     actor=self.name,
                                     tool_name="send_message",
                                     arguments={"message": "assessment_response"},
                                     result="success",
                                 )
+                            elif tool_name == "perform_subjective_assessment":
+                                track_tool_call(
+                                    actor=self.name,
+                                    tool_name="perform_subjective_assessment",
+                                    arguments={"assessment": "tool_based"},
+                                    result="success",
+                                )
+                                print(f"  [{self.name} used perform_subjective_assessment tool ✓]")
                     # Also check legacy format for backward compatibility
                     elif hasattr(msg, "tool_calls") and getattr(msg, "tool_calls"):
                         for tool_call in msg.tool_calls:
-                            if (
-                                hasattr(tool_call, "function")
-                                and getattr(tool_call.function, "name", None)
-                                == "send_message"
-                            ):
-                                track_tool_call(
-                                    actor=self.name,
-                                    tool_name="send_message",
-                                    arguments={"message": "assessment_response"},
-                                    result="success",
-                                )
+                            if hasattr(tool_call, "function"):
+                                tool_name = getattr(tool_call.function, "name", None)
+                                if tool_name == "send_message":
+                                    track_tool_call(
+                                        actor=self.name,
+                                        tool_name="send_message",
+                                        arguments={"message": "assessment_response"},
+                                        result="success",
+                                    )
+                                elif tool_name == "perform_subjective_assessment":
+                                    track_tool_call(
+                                        actor=self.name,
+                                        tool_name="perform_subjective_assessment",
+                                        arguments={"assessment": "tool_based"},
+                                        result="success",
+                                    )
+                                    print(f"  [{self.name} used perform_subjective_assessment tool ✓]")
 
                 candidate_texts = []
                 for msg in response.messages:
@@ -611,6 +643,33 @@ IMPORTANCE_TO_GROUP: X
 
         return scores
 
+    def _get_diagnostic_context(self) -> dict:
+        """
+        Gather diagnostic context for error reporting and debugging.
+
+        Returns a structured dict with agent configuration and state information
+        that can be used to diagnose issues with agent responses.
+
+        Returns:
+            dict: Diagnostic information including agent ID, model, tools, state
+        """
+        return {
+            "agent_id": self.agent.id,
+            "agent_name": self.name,
+            "model": getattr(self.agent, "model", "unknown"),
+            "embedding": getattr(self.agent, "embedding", "unknown"),
+            "tools": [t.name for t in getattr(self.agent, "tools", [])],
+            "has_send_message": any(
+                t.name == "send_message"
+                for t in getattr(self.agent, "tools", [])
+            ),
+            "tools_supported": self._tools_supported,
+            "assessment_tool_disabled": self._assessment_tool_disabled,
+            "last_error": self.last_error,
+            "motivation_score": self.motivation_score,
+            "priority_score": self.priority_score,
+        }
+
     @staticmethod
     def _response_contains_send_message(response) -> bool:
         messages = getattr(response, "messages", []) or []
@@ -648,13 +707,54 @@ IMPORTANCE_TO_GROUP: X
         )
         return SimpleNamespace(messages=[message_entry])
 
-    def _create_error_response(self, error_message: str, fallback_message: str = None) -> SimpleNamespace:
-        """Creates an error response with informative content that includes the error details."""
+    def _create_error_response(
+        self,
+        error_message: str,
+        fallback_message: str = None,
+        diagnostic_context: dict = None
+    ) -> SimpleNamespace:
+        """
+        Creates an error response with diagnostic information.
+
+        Args:
+            error_message: Primary error description
+            fallback_message: Optional fallback text to include
+            diagnostic_context: Optional diagnostic info (from _get_diagnostic_context())
+
+        Returns:
+            SimpleNamespace with error response message
+        """
+        diag = diagnostic_context or {}
+
+        # Build detailed error message with diagnostics
+        error_details = [
+            f"⚠️ **Agent Error**: {self.name}",
+            f"Model: {diag.get('model', 'unknown')}",
+            f"Tools supported: {diag.get('tools_supported', 'unknown')}",
+            f"Has send_message: {diag.get('has_send_message', 'unknown')}",
+            f"Error: {error_message}",
+        ]
+
+        if diag.get('last_error'):
+            error_details.append(f"Last tool error: {diag['last_error']}")
+
+        error_content = "\n".join(error_details)
+
         if fallback_message:
-            error_content = f"⚠️ **Error encountered**: {error_message}\n\nFallback response: {fallback_message}"
-        else:
-            error_content = f"⚠️ **Error encountered**: {error_message}\n\nThe agent was unable to respond due to a technical issue."
-        
+            error_content += f"\n\nFallback: {fallback_message}"
+
+        # Log full diagnostic context for debugging
+        logger.error(
+            f"Agent {self.name} error response created",
+            extra={
+                "agent_id": diag.get("agent_id"),
+                "agent_name": self.name,
+                "model": diag.get("model"),
+                "error": error_message,
+                "diagnostic_context": diag,
+            }
+        )
+
         return SimpleNamespace(
             messages=[
                 {
@@ -855,12 +955,25 @@ IMPORTANCE_TO_GROUP: X
             )
 
             if conversation_history:
-                if has_tools:
-                    prompt = f"""{conversation_history}
+                # Format group conversation with proper dividers and speaker indication
+                formatted_history = format_group_message(conversation_history, self.name)
 
-Based on this conversation, I want to contribute. Please use the send_message tool to share your response. Remember to call the send_message function with your response as the message parameter."""
+                if has_tools:
+                    prompt = f"""Based on this conversation, I want to contribute. Please use the send_message tool to share your response. Remember to call the send_message function with your response as the message parameter."""
                 else:
-                    prompt = f"{conversation_history}\nBased on my assessment, here is my contribution:"
+                    prompt = f"Based on my assessment, here is my contribution:"
+
+                # Use system role for group conversation history, user role for instruction
+                messages = [
+                    {
+                        "role": "system",
+                        "content": formatted_history,
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ]
             else:
                 if has_tools:
                     if mode == "initial":
@@ -873,24 +986,43 @@ Based on this conversation, I want to contribute. Please use the send_message to
                     else:
                         prompt = f"Based on the discussion about '{topic}', here is my response:"
 
+                messages = [
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ]
+
             try:
                 self.last_error = None
                 response = letta_call(
                     "agents.messages.create.speak",
                     self.client.agents.messages.create,
                     agent_id=self.agent.id,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt,
-                        }
-                    ],
+                    messages=messages,
                 )
 
                 response_text = self._extract_response_text(response)
-                
+
+                # Log response structure for debugging
+                logger.debug(
+                    f"[{self.name}] Response received",
+                    extra={
+                        "response_type": type(response).__name__,
+                        "message_count": len(getattr(response, "messages", [])),
+                        "message_types": [
+                            getattr(m, "message_type", type(m).__name__)
+                            for m in getattr(response, "messages", [])
+                        ],
+                    }
+                )
+
+                # Get diagnostic context for validation logging
+                diagnostic_ctx = self._get_diagnostic_context()
+
                 # Check if we got a valid response with send_message OR a direct response with text
                 if self._response_contains_send_message(response):
+                    logger.debug(f"[{self.name}] Response contains send_message tool call")
                     response = self._ensure_send_message_response(response, response_text)
                     if response_text:
                         track_message(
@@ -899,21 +1031,38 @@ Based on this conversation, I want to contribute. Please use the send_message to
                     return response
                 elif response_text and len(response_text.strip()) > 10:  # Accept direct responses with substantial content
                     # Agent responded directly without using send_message tool - this is acceptable
+                    logger.debug(
+                        f"[{self.name}] Direct response accepted",
+                        extra={"response_length": len(response_text)}
+                    )
                     response = self._ensure_send_message_response(response, response_text)
                     track_message(
                         actor=self.name, content=response_text, message_type="assistant"
                     )
                     return response
                 else:
-                    # No valid response content found
-                    error_msg = f"Agent {self.name} did not provide a valid response. Response format: {type(response).__name__}"
-                    print(f"[Error: {error_msg}]")
-                    
-                    # If we got some minimal text, include it as fallback
+                    # No valid response content found - log detailed validation failure
+                    logger.warning(
+                        f"[{self.name}] Response validation failed",
+                        extra={
+                            "has_send_message": False,
+                            "response_length": len(response_text) if response_text else 0,
+                            "response_text_preview": response_text[:100] if response_text else "",
+                            "diagnostic_context": diagnostic_ctx,
+                        }
+                    )
+
+                    error_msg = (
+                        f"Agent {self.name} validation failed: "
+                        f"no send_message tool call, "
+                        f"response_length={len(response_text) if response_text else 0}"
+                    )
+
+                    # Pass diagnostic context to error response
                     if response_text:
-                        return self._create_error_response(error_msg, response_text)
+                        return self._create_error_response(error_msg, response_text, diagnostic_ctx)
                     else:
-                        return self._create_error_response(error_msg)
+                        return self._create_error_response(error_msg, None, diagnostic_ctx)
                         
             except Exception as e:
                 self.last_error = str(e)

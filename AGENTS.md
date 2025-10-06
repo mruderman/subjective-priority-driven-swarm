@@ -17,7 +17,7 @@
 - Web UI deps: `pip install -r swarms-web/requirements.txt && pip install git+https://github.com/letta-ai/letta-flask.git`
 - Run CLI: `python -m spds.main` (interactive mode) or `python -m spds.main --help` for options
 - Run Web: `cd swarms-web && python run.py` (http://localhost:5002)
-- Session management: `python -m spds.main sessions list|show|delete`
+- Session management: `python -m spds.main sessions list|resume`
 - Tests + coverage: `pytest --cov=spds --cov-report=html` (HTML report in `htmlcov/`)
 - Test categories: `pytest tests/unit/` (unit), `pytest tests/integration/` (integration), `pytest tests/e2e/` (e2e)
 - Lint/format: `black . && isort . && flake8 && pylint spds`
@@ -34,7 +34,7 @@
 ## Testing Guidelines
 - Framework: Pytest with markers: `unit`, `integration`, `e2e`, `slow`.
 - Conventions (from `pytest.ini`): files `test_*.py`, classes `Test*`, functions `test_*`.
-- Typical runs: `pytest -m 'not slow'` or `pytest tests/spds`.
+- Typical runs: `pytest -m 'not slow'` or `pytest tests/`.
 - New/changed code should include tests; aim for meaningful coverage (reports via `--cov=spds`).
 
 ## Commit & Pull Request Guidelines
