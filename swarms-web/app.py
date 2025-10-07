@@ -160,6 +160,11 @@ class WebSwarmManager:
             ] = self.swarm.conversation_mode
 
             # Notify about secretary initialization
+            logger.info(
+                f"Emitting secretary_status event: active, "
+                f"agent={self.swarm.secretary.agent.name if self.swarm.secretary.agent else 'Secretary'}, "
+                f"mode={self.swarm.secretary.mode}"
+            )
             self.emit_message(
                 "secretary_status",
                 {
@@ -172,6 +177,16 @@ class WebSwarmManager:
                     ),
                     "message": f"📝 {self.swarm.secretary.agent.name if self.swarm.secretary.agent else 'Secretary'} is now taking notes in {self.swarm.secretary.mode} mode",
                 },
+            )
+        else:
+            # Secretary not enabled - ensure UI shows this clearly
+            logger.info("Secretary not enabled, emitting disabled status")
+            self.emit_message(
+                "secretary_status",
+                {
+                    "status": "disabled",
+                    "message": "📝 Secretary is not enabled for this session"
+                }
             )
 
     def process_user_message(self, message):
@@ -1070,6 +1085,60 @@ def download_session_export(session_id, filename):
     except Exception as e:
         logger.error(f"Error downloading session export: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/sessions/<session_id>/assign_secretary", methods=["POST"])
+def assign_secretary_route(session_id):
+    """Assign secretary role to an agent mid-session."""
+    try:
+        data = request.json
+        agent_id = data.get("agent_id")
+
+        if not agent_id:
+            return jsonify({"status": "error", "message": "agent_id required"}), 400
+
+        # Get the active session
+        if session_id not in active_sessions:
+            return jsonify({"status": "error", "message": "Session not found"}), 404
+
+        session_handler = active_sessions[session_id]
+        swarm = session_handler.swarm
+
+        # Assign the role
+        swarm.assign_role(agent_id, "secretary")
+
+        # Get the assigned agent for confirmation
+        secretary_agent = swarm.get_secretary()
+        if not secretary_agent:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to assign secretary role"
+            }), 500
+
+        # Emit WebSocket update to all clients in this session
+        socketio.emit(
+            "secretary_status",
+            {
+                "status": "active",
+                "agent_name": secretary_agent.name,
+                "mode": swarm.secretary.mode if swarm.secretary else "adaptive",
+                "message": f"📝 {secretary_agent.name} is now the secretary"
+            },
+            room=session_id
+        )
+
+        return jsonify({
+            "status": "success",
+            "message": f"{secretary_agent.name} is now the secretary",
+            "agent_name": secretary_agent.name
+        })
+
+    except Exception as e:
+        logger.error(f"Error assigning secretary: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
 # WebSocket events

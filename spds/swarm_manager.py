@@ -83,6 +83,9 @@ class SwarmManager:
         # Track whether the Letta client supports the optional otid parameter; lazily detected.
         self._agent_messages_supports_otid = None
         self._history: List[ConversationMessage] = []
+        # Role management state
+        self.secretary_agent_id: str | None = None
+        self.pending_nomination: dict | None = None
 
         logger.info(f"Initializing SwarmManager in {conversation_mode} mode.")
 
@@ -399,6 +402,69 @@ class SwarmManager:
                 )
             except Exception as e:
                 logger.error(f"Failed to create agent {profile['name']}: {e}")
+
+    def get_agent_by_id(self, agent_id: str):
+        """Find agent by ID."""
+        for agent in self.agents:
+            if agent.agent.id == agent_id:
+                return agent
+        return None
+
+    def get_agent_by_name(self, name: str):
+        """Find agent by name."""
+        for agent in self.agents:
+            if agent.name == name:
+                return agent
+        return None
+
+    def assign_role(self, agent_id: str, role: str):
+        """
+        Assigns a role to a specific agent.
+
+        Parameters:
+            agent_id (str): The ID of the agent to assign the role to
+            role (str): The role to assign (e.g., "secretary")
+
+        Side effects:
+            - Adds role to agent.roles if not already present
+            - If role is "secretary", sets self.secretary_agent_id and clears other agents' secretary role
+        """
+        agent = self.get_agent_by_id(agent_id)
+        if agent and role not in agent.roles:
+            agent.roles.append(role)
+            logger.info(f"Assigned role '{role}' to {agent.name}")
+            if role == "secretary":
+                self.secretary_agent_id = agent.agent.id
+                # Clear other agents' secretary role if exclusive
+                for other_agent in self.agents:
+                    if other_agent.agent.id != agent_id and "secretary" in other_agent.roles:
+                        other_agent.roles.remove("secretary")
+                        logger.info(f"Removed secretary role from {other_agent.name}")
+
+    def get_secretary(self):
+        """
+        Returns the agent object that has the 'secretary' role.
+
+        Returns:
+            SPDSAgent or None: The agent with the secretary role, or None if no secretary is assigned
+        """
+        if self.secretary_agent_id:
+            return self.get_agent_by_id(self.secretary_agent_id)
+        return None
+
+    def assign_role_by_name(self, agent_name: str, role: str):
+        """
+        Assigns a role by agent name.
+
+        Parameters:
+            agent_name (str): The name of the agent to assign the role to
+            role (str): The role to assign (e.g., "secretary")
+        """
+        agent = self.get_agent_by_name(agent_name)
+        if agent:
+            self.assign_role(agent.agent.id, role)
+        else:
+            logger.warning(f"Could not find agent with name '{agent_name}' to assign role '{role}'")
 
     def start_chat(self):
         """
@@ -865,6 +931,11 @@ class SwarmManager:
 
         try:
             for msg in response.messages:
+                # Skip user messages - these are the prompts we sent to the agent, not responses
+                if (hasattr(msg, "message_type") and msg.message_type == "user_message") or \
+                   (hasattr(msg, "role") and msg.role == "user"):
+                    continue
+
                 # Check for tool_call_message type with send_message tool (new format)
                 if (
                     hasattr(msg, "message_type")

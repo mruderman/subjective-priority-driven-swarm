@@ -323,6 +323,13 @@ def main(argv=None):
         action="store_true",
         help="Use interactive agent selection and setup (overrides default ephemeral mode).",
     )
+    parser.add_argument(
+        "--secretary",
+        "-s",
+        type=str,
+        metavar="AGENT_NAME",
+        help="Name of the agent to assign as secretary. Must match one of the selected agents.",
+    )
 
     # Subcommands for session management
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -446,6 +453,12 @@ def main(argv=None):
             secretary_mode=sec_mode,
             meeting_type=meet_type,
         )
+
+        # Assign secretary if specified via CLI flag
+        if hasattr(args, 'secretary') and args.secretary:
+            logger.info(f"Assigning secretary from CLI flag: {args.secretary}")
+            swarm.assign_role_by_name(args.secretary, "secretary")
+            print(f"✅ Assigned {args.secretary} as secretary")
 
         # If we already captured topic (default ephemeral), start with it
         if "topic" in locals() and topic:

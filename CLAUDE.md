@@ -163,6 +163,8 @@ This project prioritizes continuity of agent experience over disposable workflow
 - **Backward Compatibility**: Full compatibility maintained for existing conversation history interfaces
 - **Dynamic Context Assessment**: Agents now evaluate conversation relevance using recent messages instead of static topics
 - **Natural Conversation Flow**: Eliminated repetitive assessment patterns for more engaging interactions
+- **Role-Based Secretary System**: Flexible role management enabling dynamic secretary assignment and multi-role support
+- **Secretary UI Bug Fixed**: Proper status events and fallback handling for secretary initialization in web GUI
 
 ### Web GUI Setup
 The project includes a web GUI in the `swarms-web` directory:
@@ -321,6 +323,54 @@ tests/
 - `/action-item [description]` - Manually add action item
 - `/stats` - Show conversation participation statistics
 - `/help` - Display all available commands
+
+### Role-Based Secretary Assignment
+
+The SPDS system now supports flexible role assignment for the secretary position through the core role management system:
+
+#### Assignment Methods:
+
+1. **User Pre-specification (CLI)** _(Coming Soon)_:
+   ```bash
+   python -m spds.main --secretary "Agent Name"
+   ```
+
+2. **User Pre-specification (Web GUI)** _(Coming Soon)_:
+   - Click the journal icon next to any participant's name
+   - Secretary badge will appear on the selected agent
+
+3. **Agent Nomination (Autonomous)** _(Tool Created, Handler Implementation Coming Soon)_:
+   - Agents can nominate each other using the `propose_secretary_nomination` tool
+   - Nominated agent receives a prompt to accept or decline
+   - Acceptance automatically assigns the secretary role
+
+4. **No Secretary Mode**:
+   - If no secretary is assigned, the swarm operates without meeting documentation
+   - All agents receive incremental conversation history
+
+#### Role System Architecture:
+
+- **Multi-role Support**: Agents can have multiple roles (future-proofing)
+- **Dynamic Assignment**: Roles can be changed mid-session via `SwarmManager.assign_role()`
+- **Persistence**: Role assignments persist for the session duration
+- **Flexible Access**: Agents with the secretary role automatically receive full conversation history
+
+#### Core Role Management API:
+
+```python
+# Assign role by agent ID
+swarm_manager.assign_role(agent_id, "secretary")
+
+# Assign role by agent name
+swarm_manager.assign_role_by_name("Agent Name", "secretary")
+
+# Get current secretary
+secretary_agent = swarm_manager.get_secretary()
+
+# Find agent by name or ID
+agent = swarm_manager.get_agent_by_name("Agent Name")
+agent = swarm_manager.get_agent_by_id("agent-id-123")
+```
 
 ### Export Formats
 - **📋 Board Minutes** (.md) - Official Cyan Society board format

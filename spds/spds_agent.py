@@ -64,6 +64,7 @@ class SPDSAgent:
         self.last_assessment: tools.SubjectiveAssessment = None
         self.last_error: str | None = None
         self.last_message_index = -1  # Index in conversation history when this agent last spoke
+        self.roles: list = []  # Roles assigned to this agent (e.g., "secretary")
 
     @classmethod
     def create_new(
@@ -778,6 +779,11 @@ IMPORTANCE_TO_GROUP: X
         response_text = ""
         try:
             for msg in response.messages:
+                # Skip user messages - these are the prompts we sent to the agent, not responses
+                if (hasattr(msg, "message_type") and msg.message_type == "user_message") or \
+                   (hasattr(msg, "role") and msg.role == "user"):
+                    continue
+
                 # Check for tool_call_message type with send_message tool (new format)
                 if hasattr(msg, "message_type") and msg.message_type == "tool_call_message":
                     if hasattr(msg, "tool_call") and msg.tool_call:

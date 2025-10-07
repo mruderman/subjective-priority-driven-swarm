@@ -349,6 +349,7 @@ class SimpleChat {
         this.socket = null;
         this.sessionId = null;
         this.isConnected = false;
+        this.hasJoinedSession = false;
         this.agents = [];
         this.pendingAttachments = []; // Store uploaded attachments before sending
         this.messageLimit = CHAT_MESSAGE_CHAR_LIMIT;
@@ -432,13 +433,7 @@ class SimpleChat {
             this.isConnected = true;
             this.hideConnectionModal();
             this.joinSession();
-
-            if (this.topicToStart) {
-                setTimeout(() => {
-                    this.startChat(this.topicToStart);
-                    this.topicToStart = null; // Clear after use
-                }, 1000);
-            }
+            // Topic will be started in 'joined' event handler
         });
 
         this.socket.on('disconnect', () => {
@@ -449,6 +444,14 @@ class SimpleChat {
 
         this.socket.on('joined', (data) => {
             console.log('Joined session:', data.session_id);
+            this.hasJoinedSession = true;
+
+            // If we have a topic waiting, start chat now that we've joined the room
+            if (this.topicToStart) {
+                console.log('Room joined, starting chat with topic:', this.topicToStart);
+                this.startChat(this.topicToStart);
+                this.topicToStart = null;
+            }
         });
 
         this.socket.on('chat_started', (data) => {
@@ -506,6 +509,20 @@ class SimpleChat {
             const payload = (data && (data.stats ?? data)) || {};
             this.updateSecretaryStats(payload);
         });
+
+        // Fallback: If no secretary status received within 3 seconds, assume disabled
+        setTimeout(() => {
+            const secretaryContent = document.getElementById('secretary-content');
+            if (secretaryContent && secretaryContent.textContent.includes('Waiting for conversation')) {
+                console.warn('⚠️ No secretary status received, assuming disabled');
+                secretaryContent.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="bi bi-journal-x"></i>
+                        <p class="mt-2 mb-0 small">Secretary not enabled</p>
+                    </div>
+                `;
+            }
+        }, 3000);
     }
 
     setupChatInterface() {
@@ -1100,21 +1117,66 @@ class SimpleChat {
                 ` : '';
 
                 return `
-                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
-                        <div class="d-flex align-items-center gap-2">
+                    <div class="participant-card d-flex justify-content-between align-items-center py-2 border-bottom" data-agent-id="${agent.id}" data-agent-name="${agent.name}">
+                        <div class="d-flex align-items-center gap-2 agent-name-section">
                             ${colorIndex !== null ? `
                                 <div class="message agent" data-speaker-color="${colorIndex}"
                                      style="padding: 6px 10px; margin: 0; border-radius: 6px; font-size: 0.7rem; max-width: none; display: inline-block;">
                                     <i class="bi bi-circle-fill"></i>
                                 </div>
                             ` : ''}
-                            <span>${agent.name}</span>
+                            <span class="agent-name">${agent.name}</span>
                         </div>
-                        <span class="badge bg-success">Active</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-sm btn-outline-primary make-secretary-btn"
+                                    data-agent-id="${agent.id}"
+                                    data-agent-name="${agent.name}"
+                                    title="Make Secretary">
+                                <i class="bi bi-journal-plus"></i>
+                            </button>
+                            <span class="badge bg-success">Active</span>
+                        </div>
                     </div>
                 `;
             }).join('');
+
+            // Attach click handlers to new buttons
+            this.setupSecretaryAssignment();
         }
+    }
+
+    setupSecretaryAssignment() {
+        document.querySelectorAll('.make-secretary-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const agentId = e.currentTarget.dataset.agentId;
+                const agentName = e.currentTarget.dataset.agentName;
+
+                // Disable button during request
+                e.currentTarget.disabled = true;
+
+                try {
+                    const response = await fetch(`/api/sessions/${this.sessionId}/assign_secretary`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({agent_id: agentId})
+                    });
+
+                    const result = await response.json();
+
+                    if (result.status === 'success') {
+                        this.showToast(`${agentName} is now the secretary`, 'success');
+                    } else {
+                        this.showToast(result.message || 'Failed to assign secretary', 'error');
+                        e.currentTarget.disabled = false;
+                    }
+                } catch (error) {
+                    console.error('Error assigning secretary:', error);
+                    this.showToast('Failed to assign secretary', 'error');
+                    e.currentTarget.disabled = false;
+                }
+            });
+        });
     }
 
     // Get or assign a color index for a speaker
@@ -1440,20 +1502,77 @@ class SimpleChat {
     }
 
     handleSecretaryStatus(data) {
-        console.log('Secretary status update:', data);
+        console.log('🔔 Secretary status event received:', data);
 
         const secretaryContent = document.getElementById('secretary-content');
-        if (secretaryContent) {
+        if (!secretaryContent) {
+            console.error('Secretary content element not found');
+            return;
+        }
+
+        if (data.status === 'disabled') {
             secretaryContent.innerHTML = `
-                <div class="text-center">
-                    <div class="badge bg-success mb-2">${data.status.toUpperCase()}</div>
-                    <h6 class="text-success">
-                        <i class="bi bi-person-check"></i> ${data.agent_name}
-                    </h6>
-                    <p class="small text-muted mb-2">Mode: ${data.mode}</p>
-                    <p class="small">${data.message}</p>
+                <div class="text-center text-muted">
+                    <i class="bi bi-journal-x"></i>
+                    <p class="mt-2 mb-0 small">${data.message}</p>
                 </div>
             `;
+            // Clear all secretary badges
+            document.querySelectorAll('.secretary-badge').forEach(badge => badge.remove());
+            document.querySelectorAll('.participant-card.secretary-active').forEach(card => {
+                card.classList.remove('secretary-active');
+            });
+            // Re-enable all secretary buttons
+            document.querySelectorAll('.make-secretary-btn').forEach(btn => {
+                btn.disabled = false;
+            });
+            return;
+        }
+
+        // Active secretary
+        secretaryContent.innerHTML = `
+            <div class="text-center">
+                <div class="badge bg-success mb-2">${data.status.toUpperCase()}</div>
+                <h6 class="text-success">
+                    <i class="bi bi-person-check"></i> ${data.agent_name}
+                </h6>
+                <p class="small text-muted mb-2">Mode: ${data.mode}</p>
+                <p class="small">${data.message}</p>
+            </div>
+        `;
+
+        // Update participant cards to show secretary badge
+        document.querySelectorAll('.participant-card').forEach(card => {
+            card.classList.remove('secretary-active');
+            // Remove existing badges
+            card.querySelectorAll('.secretary-badge').forEach(badge => badge.remove());
+            // Re-enable all secretary buttons
+            const btn = card.querySelector('.make-secretary-btn');
+            if (btn) btn.disabled = false;
+        });
+
+        if (data.status === 'active' && data.agent_name) {
+            // Find the card for the current secretary
+            const secretaryCard = Array.from(document.querySelectorAll('.participant-card')).find(
+                card => card.dataset.agentName === data.agent_name
+            );
+
+            if (secretaryCard) {
+                secretaryCard.classList.add('secretary-active');
+
+                // Add badge to agent name
+                const nameSection = secretaryCard.querySelector('.agent-name');
+                if (nameSection) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-success ms-2 secretary-badge';
+                    badge.innerHTML = '<i class="bi bi-journal-check"></i> Secretary';
+                    nameSection.appendChild(badge);
+                }
+
+                // Disable the secretary button for current secretary
+                const btn = secretaryCard.querySelector('.make-secretary-btn');
+                if (btn) btn.disabled = true;
+            }
         }
 
         this.showToast(data.message, 'success');

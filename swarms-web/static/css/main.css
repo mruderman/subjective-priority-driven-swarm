@@ -588,3 +588,50 @@ footer.bg-light {
 .text-purple {
     color: var(--secondary-color) !important;
 }
+
+/* Secretary Role Styling */
+.participant-card.secretary-active {
+    border-left: 4px solid #198754;
+    background-color: #f0f9f4;
+    transition: all 0.3s ease;
+}
+
+.make-secretary-btn {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.make-secretary-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+}
+
+.make-secretary-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.secretary-badge {
+    font-size: 0.65rem;
+    padding: 0.25rem 0.5rem;
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.participant-card {
+    transition: all 0.2s ease;
+}
+
+.participant-card:hover {
+    background-color: #f8f9fa;
+}

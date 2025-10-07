@@ -388,3 +388,19 @@ def load_and_register_external_tools(client_or_agent, create_fn) -> None:
     except Exception as e:
         logger.error(f"Failed to load external tools: {e}")
         # Don't fail the main flow - integrations are optional
+
+
+def propose_secretary_nomination(agent_name: str) -> str:
+    """
+    Proposes another agent to take on the secretary role for the next round.
+
+    This tool allows agents to nominate each other for the secretary position.
+    The nominated agent will be asked to confirm or decline the role.
+
+    Args:
+        agent_name: Name of the agent to nominate as secretary
+
+    Returns:
+        str: Confirmation message
+    """
+    return f"Nomination proposed for {agent_name} as secretary. The swarm manager will ask them to confirm."
