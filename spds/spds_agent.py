@@ -965,9 +965,10 @@ IMPORTANCE_TO_GROUP: X
                 formatted_history = format_group_message(conversation_history, self.name)
 
                 if has_tools:
-                    prompt = f"""Based on this conversation, I want to contribute. Please use the send_message tool to share your response. Remember to call the send_message function with your response as the message parameter."""
+                    # Simple, direct instruction without forcing
+                    prompt = "Please share your response to the conversation using the send_message tool."
                 else:
-                    prompt = f"Based on my assessment, here is my contribution:"
+                    prompt = "Please share your response to the conversation."
 
                 # Use system role for group conversation history, user role for instruction
                 messages = [
@@ -983,14 +984,14 @@ IMPORTANCE_TO_GROUP: X
             else:
                 if has_tools:
                     if mode == "initial":
-                        prompt = f"""Based on my assessment of the topic '{topic}', I want to share my initial thoughts and perspective. Please use the send_message tool to contribute your viewpoint to this discussion. Remember to call the send_message function with your response as the message parameter."""
+                        prompt = f"Please share your initial thoughts on '{topic}' using the send_message tool."
                     else:
-                        prompt = f"""Based on what everyone has shared about '{topic}', I'd like to respond to the discussion. Please use the send_message tool to share your response, building on or reacting to what others have said. Remember to call the send_message function with your response as the message parameter."""
+                        prompt = f"Please respond to the discussion about '{topic}' using the send_message tool."
                 else:
                     if mode == "initial":
-                        prompt = f"Based on my assessment of '{topic}', here is my initial contribution:"
+                        prompt = f"Please share your initial thoughts on '{topic}'."
                     else:
-                        prompt = f"Based on the discussion about '{topic}', here is my response:"
+                        prompt = f"Please respond to the discussion about '{topic}'."
 
                 messages = [
                     {

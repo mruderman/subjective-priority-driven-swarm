@@ -127,6 +127,14 @@ class WebSwarmManager:
         self.export_manager = ExportManager()
         self.current_topic = None
 
+        # Set up the callback to link backend event to frontend notification
+        self.swarm.on_role_change_callback = self._handle_role_change
+
+    def _handle_role_change(self):
+        """Callback function passed to SwarmManager."""
+        logger.info("Role change detected from swarm, notifying GUI.")
+        notify_secretary_change(self.session_id, self.swarm)
+
     def emit_message(self, event, data):
         """Emit WebSocket message to the session room."""
         self.socketio.emit(event, data, room=self.session_id)
@@ -295,6 +303,20 @@ class WebSwarmManager:
             elif format_type == "casual":
                 file_path = self.export_manager.export_meeting_minutes(
                     meeting_data, "casual"
+                )
+            elif format_type == "transcript":
+                file_path = self.export_manager.export_raw_transcript(
+                    meeting_data["conversation_log"],
+                    meeting_data["metadata"]
+                )
+            elif format_type == "actions":
+                file_path = self.export_manager.export_action_items(
+                    meeting_data["action_items"],
+                    meeting_data["metadata"]
+                )
+            elif format_type == "summary":
+                file_path = self.export_manager.export_executive_summary(
+                    meeting_data
                 )
             elif format_type == "all":
                 files = self.export_manager.export_complete_package(
@@ -666,6 +688,29 @@ class WebSwarmManager:
             )
 
             self.swarm._append_history(speaker.name, fallback)
+
+
+def notify_secretary_change(session_id, swarm_manager):
+    """Fetches secretary status and emits a WebSocket update."""
+    secretary_agent = swarm_manager.get_secretary()
+    if secretary_agent:
+        status_data = {
+            "status": "active",
+            "agent_name": secretary_agent.name,
+            "mode": swarm_manager.secretary.mode if swarm_manager.secretary else "adaptive",
+            "message": f"📝 {secretary_agent.name} is now the secretary"
+        }
+        config.logger.info(f"Emitting secretary_status update for session {session_id}: {secretary_agent.name}")
+        socketio.emit("secretary_status", status_data, room=session_id)
+    else:
+        socketio.emit(
+            "secretary_status",
+            {
+                "status": "disabled",
+                "message": "📝 Secretary role is unassigned."
+            },
+            room=session_id
+        )
 
 
 # Routes
@@ -1115,17 +1160,8 @@ def assign_secretary_route(session_id):
                 "message": "Failed to assign secretary role"
             }), 500
 
-        # Emit WebSocket update to all clients in this session
-        socketio.emit(
-            "secretary_status",
-            {
-                "status": "active",
-                "agent_name": secretary_agent.name,
-                "mode": swarm.secretary.mode if swarm.secretary else "adaptive",
-                "message": f"📝 {secretary_agent.name} is now the secretary"
-            },
-            room=session_id
-        )
+        # Use the centralized notification function
+        notify_secretary_change(session_id, swarm)
 
         return jsonify({
             "status": "success",

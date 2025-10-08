@@ -90,7 +90,7 @@
                         <div class="d-flex flex-wrap gap-2" id="attachment-chips"></div>
                     </div>
 
-                    <div id="token-limit-banner" class="alert alert-warning d-flex align-items-start gap-3 py-2 px-3 mb-2" role="status" hidden>
+                    <div id="token-limit-banner" class="alert alert-warning align-items-start gap-3 py-2 px-3 mb-2" role="status" hidden>
                         <div class="flex-grow-1">
                             <div class="fw-semibold">
                                 <i class="bi bi-exclamation-triangle me-1"></i>
@@ -936,12 +936,14 @@ class SimpleChat {
 
             banner.hidden = false;
             banner.style.display = 'flex';
+            banner.classList.add('d-flex');
             if (showButton) {
                 showButton.disabled = false;
             }
         } else {
             banner.hidden = true;
             banner.style.display = 'none';
+            banner.classList.remove('d-flex');
             if (trimmedCount) {
                 trimmedCount.textContent = '0';
             }

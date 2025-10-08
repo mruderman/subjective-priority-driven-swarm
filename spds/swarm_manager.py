@@ -817,6 +817,40 @@ class SwarmManager:
 
         return original_topic
 
+    def _process_agent_response_for_role_change(self, agent, message_text: str) -> bool:
+        """Parses agent messages for nomination/acceptance and handles role changes.
+
+        Args:
+            agent: The agent who sent the message
+            message_text: The content of the message to parse
+
+        Returns:
+            bool: True if a role change occurred, False otherwise
+        """
+        lower_message = message_text.lower()
+
+        # Nomination Logic
+        if "nominate" in lower_message:
+            for other_agent in self.agents:
+                if other_agent.name.lower() in lower_message and other_agent.agent.id != agent.agent.id:
+                    self.pending_nomination = {
+                        "nominator_id": agent.agent.id,
+                        "nominee_id": other_agent.agent.id,
+                        "timestamp": time.time()
+                    }
+                    logger.info(f"RoleChange: {agent.name} nominated {other_agent.name} for secretary.")
+                    return False  # Nomination registered but no role change yet
+
+        # Acceptance Logic
+        if self.pending_nomination and agent.agent.id == self.pending_nomination["nominee_id"]:
+            if "accept" in lower_message or "i agree" in lower_message:
+                logger.info(f"RoleChange: {agent.name} accepted nomination.")
+                self.assign_role(self.pending_nomination["nominee_id"], "secretary")
+                self.pending_nomination = None  # Clear the pending nomination
+                return True  # Role change occurred
+
+        return False  # No role change
+
     def _agent_turn(self, topic: str):
         """
         Evaluate motivation and priority for each agent based on recent conversation context and original topic, build an ordered list of motivated agents (priority_score > 0), and invoke the mode-specific turn handler (_hybrid_turn, _all_speak_turn, _sequential_turn, or _pure_priority_turn). If no agents are motivated the method returns without further action. The method updates agent internal scores and triggers side-effectful turn handlers which append to the shared conversation state and notify the secretary when present.
@@ -1209,6 +1243,14 @@ class SwarmManager:
                         level="warning",
                     )
                 message_text = self._normalize_agent_message(self._extract_agent_response(response), agent)
+
+                # Check for role change actions before displaying message
+                role_changed = self._process_agent_response_for_role_change(agent, message_text)
+                if role_changed:
+                    # Trigger the callback to notify frontend
+                    if hasattr(self, 'on_role_change_callback'):
+                        self.on_role_change_callback()
+
                 self._emit(f"{agent.name}: {message_text}")
                 # Add responses to conversation history
                 self._append_history(agent.name, message_text)
@@ -1271,6 +1313,14 @@ class SwarmManager:
                         level="warning",
                     )
                 message_text = self._normalize_agent_message(self._extract_agent_response(response), agent)
+
+                # Check for role change actions before displaying message
+                role_changed = self._process_agent_response_for_role_change(agent, message_text)
+                if role_changed:
+                    # Trigger the callback to notify frontend
+                    if hasattr(self, 'on_role_change_callback'):
+                        self.on_role_change_callback()
+
                 self._emit(f"{agent.name}: {message_text}")
                 # Update all agents' memories with this response
                 self._update_agent_memories(message_text, agent.name)
@@ -1330,6 +1380,14 @@ class SwarmManager:
                     level="warning",
                 )
             message_text = self._normalize_agent_message(self._extract_agent_response(response), speaker)
+
+            # Check for role change actions before displaying message
+            role_changed = self._process_agent_response_for_role_change(speaker, message_text)
+            if role_changed:
+                # Trigger the callback to notify frontend
+                if hasattr(self, 'on_role_change_callback'):
+                    self.on_role_change_callback()
+
             self._emit(f"{speaker.name}: {message_text}")
             self._append_history(speaker.name, message_text)
             # Update agent's last message index
@@ -1385,6 +1443,14 @@ class SwarmManager:
                     level="warning",
                 )
             message_text = self._normalize_agent_message(self._extract_agent_response(response), speaker)
+
+            # Check for role change actions before displaying message
+            role_changed = self._process_agent_response_for_role_change(speaker, message_text)
+            if role_changed:
+                # Trigger the callback to notify frontend
+                if hasattr(self, 'on_role_change_callback'):
+                    self.on_role_change_callback()
+
             self._emit(f"{speaker.name}: {message_text}")
             self._append_history(speaker.name, message_text)
             # Update agent's last message index
