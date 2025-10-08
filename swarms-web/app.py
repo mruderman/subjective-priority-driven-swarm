@@ -283,6 +283,10 @@ class WebSwarmManager:
     def _handle_export_command(self, args):
         """Handle export commands."""
         if not self.swarm.secretary:
+            self.emit_message(
+                "system_message",
+                {"message": "Secretary is not enabled for this session. Enable secretary to export meeting data."},
+            )
             return
 
         meeting_data = {
