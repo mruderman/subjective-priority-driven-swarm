@@ -526,3 +526,4 @@ You `MUST` always use this tool when:
 + Before making architectural decisions to understand existing patterns
 + When debugging issues to check for previous solutions
 + Working with unfamiliar parts of the codebase
+- For testing conversations, only run tests with agents Jill, Jannis, and Jack.
