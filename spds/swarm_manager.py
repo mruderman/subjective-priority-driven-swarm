@@ -73,7 +73,7 @@ class SwarmManager:
         self.client = client
         self.agents = []
         self.enable_secretary = enable_secretary
-        self.secretary = None
+        self._secretary = None  # Renamed to _secretary to use property
         # Ensure meeting and secretary configuration attributes are initialized so
         # downstream methods (e.g. _start_meeting/_end_meeting) can safely access them.
         self.conversation_mode = conversation_mode
@@ -113,7 +113,7 @@ class SwarmManager:
         # Initialize secretary if enabled
         if enable_secretary:
             try:
-                self.secretary = SecretaryAgent(client, mode=secretary_mode)
+                self._secretary = SecretaryAgent(client, mode=secretary_mode)
                 logger.info(f"Secretary enabled in {secretary_mode} mode")
             except Exception as e:
                 logger.error(f"Failed to create secretary agent: {e}")
@@ -198,6 +198,26 @@ class SwarmManager:
                     self._history = convert_history_to_messages(list_value)
             except Exception:
                 self._history = []
+
+    @property
+    def secretary(self):
+        """Backward-compatible accessor for secretary.
+
+        Returns:
+            - The dedicated SecretaryAgent instance if one was created during init
+            - The role-assigned agent (SPDSAgent) if secretary_agent_id is set
+            - None if no secretary is assigned
+        """
+        # Return dedicated SecretaryAgent if it exists (old system)
+        if self._secretary is not None:
+            return self._secretary
+        # Fall back to role-based secretary (new system)
+        return self.get_secretary()
+
+    @secretary.setter
+    def secretary(self, value):
+        """Set the secretary to a SecretaryAgent instance."""
+        self._secretary = value
 
     def get_new_messages_since_last_turn(self, agent) -> list[ConversationMessage]:
         """Get conversation messages that are new since the agent's last turn.
