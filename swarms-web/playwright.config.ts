@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import type { PlaywrightTestConfig } from '@playwright/test';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5002';
 const projectRoot = path.resolve(__dirname, '..');
 
-export default defineConfig({
+const config: PlaywrightTestConfig = {
   testDir: path.join(__dirname, 'tests/e2e'),
   use: {
     baseURL,
@@ -29,4 +29,6 @@ export default defineConfig({
       SPDS_ALLOW_EPHEMERAL_AGENTS: 'true',
     },
   },
-});
+};
+
+export default config;

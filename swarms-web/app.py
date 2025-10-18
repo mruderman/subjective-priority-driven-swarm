@@ -46,6 +46,7 @@ from spds.message import get_new_messages_since_index
 from spds.secretary_agent import SecretaryAgent
 from spds.session_context import set_current_session_id
 from spds.session_store import get_default_session_store
+from spds.session_tracking import track_system_event, track_message, track_action
 from spds.swarm_manager import SwarmManager
 
 logger = logging.getLogger(__name__)
@@ -455,6 +456,9 @@ class WebSwarmManager:
                     },
                 )
 
+                # Track agent message to persistent store
+                track_message(agent.name, message_text, "assistant")
+
                 # Notify secretary
                 if self.swarm.secretary:
                     self.swarm.secretary.observe_message(agent.name, message_text)
@@ -524,6 +528,9 @@ class WebSwarmManager:
                     },
                 )
 
+                # Track agent response to persistent store
+                track_message(agent.name, message_text, "assistant")
+
                 # Add to conversation history
                 self.swarm._append_history(agent.name, message_text)
 
@@ -570,6 +577,9 @@ class WebSwarmManager:
                         "timestamp": datetime.now().isoformat(),
                     },
                 )
+
+                # Track agent message to persistent store
+                track_message(agent.name, message_text, "assistant")
 
                 self.swarm._append_history(agent.name, message_text)
 
@@ -625,6 +635,9 @@ class WebSwarmManager:
                 },
             )
 
+            # Track agent message to persistent store
+            track_message(speaker.name, message_text, "assistant")
+
             self.swarm._append_history(speaker.name, message_text)
 
             # Update all agent memories with this response
@@ -670,6 +683,9 @@ class WebSwarmManager:
                 },
             )
 
+            # Track agent message to persistent store
+            track_message(speaker.name, message_text, "assistant")
+
             self.swarm._append_history(speaker.name, message_text)
 
             # Update all agent memories with this response
@@ -692,6 +708,81 @@ class WebSwarmManager:
             )
 
             self.swarm._append_history(speaker.name, fallback)
+
+
+def _restore_web_swarm_from_session(session_id, socketio_instance):
+    """Restore a WebSwarmManager from persistent session storage.
+
+    Args:
+        session_id: The session ID to restore
+        socketio_instance: The SocketIO instance for WebSocket communication
+
+    Returns:
+        WebSwarmManager: Restored swarm manager instance
+
+    Raises:
+        ValueError: If session not found in persistent store
+    """
+    # Load session state from persistent store
+    store = get_default_session_store()
+    session_state = store.load(session_id)
+
+    # Extract configuration from extras
+    if not session_state.extras or "config" not in session_state.extras:
+        raise ValueError(f"Session {session_id} has no configuration data")
+
+    session_config = session_state.extras["config"]
+
+    # Create WebSwarmManager with original configuration
+    web_swarm = WebSwarmManager(
+        session_id=session_id,
+        socketio_instance=socketio_instance,
+        agent_ids=session_config.get("agent_ids", []),
+        conversation_mode=session_config.get("conversation_mode", "hybrid"),
+        enable_secretary=session_config.get("enable_secretary", False),
+        secretary_mode=session_config.get("secretary_mode", "adaptive"),
+        meeting_type=session_config.get("meeting_type", "discussion"),
+    )
+
+    # Rebuild conversation history and state from events
+    for event in session_state.events:
+        if event.type == "message":
+            speaker = event.actor
+            content = event.payload.get("content", "")
+            # Append to conversation history
+            web_swarm.swarm._append_history(speaker, content)
+
+        elif event.type == "system":
+            event_type = event.payload.get("event_type")
+
+            if event_type == "chat_started":
+                # Restore current topic
+                web_swarm.current_topic = event.payload.get("topic")
+
+            elif event_type == "phase_change":
+                # Phase changes are transient, no need to restore
+                pass
+
+        elif event.type == "action":
+            action_type = event.payload.get("action_type")
+
+            if action_type == "role_assignment":
+                # Restore secretary role assignment
+                agent_id = event.payload.get("agent_id")
+                role = event.payload.get("role")
+                if role == "secretary" and agent_id:
+                    web_swarm.swarm.assign_role(agent_id, "secretary")
+
+            elif action_type == "observe":
+                # Secretary observations are already in conversation history
+                pass
+
+    # Set session context
+    set_current_session_id(session_id)
+
+    logger.info(f"Restored session {session_id} with {len(session_state.events)} events")
+
+    return web_swarm
 
 
 def notify_secretary_change(session_id, swarm_manager):
@@ -732,21 +823,48 @@ def setup():
 
 @app.route("/chat")
 def chat():
-    """Main chat interface."""
+    """Main chat interface with session restoration.
+
+    This route allows loading the chat page even without a server-side Flask session,
+    enabling session restoration after server restarts. The browser's sessionStorage
+    maintains the session_id, and the WebSocket handlers will restore the session
+    from persistent storage when the client connects.
+    """
+    from flask import request
+
     # In test environments we allow injecting a session_id via query param
     # to simplify E2E testing (Playwright). When PLAYWRIGHT_TEST=1 is set,
     # a test can navigate to /chat?session_id=<id> and the server will accept
     # it and proceed without requiring a prior POST /api/start_session that
-    # performed LettA lookups.
-    from flask import request
-
+    # performed Letta lookups.
     if os.getenv("PLAYWRIGHT_TEST") == "1":
         injected = request.args.get("session_id")
         if injected:
             session["session_id"] = injected
 
-    if "session_id" not in session:
-        return redirect(url_for("setup"))
+    # Check if we have a session_id in the Flask session (normal case)
+    # If not, allow the page to load anyway - the JavaScript will check
+    # sessionStorage and attempt to restore via WebSocket join_session event
+    if "session_id" in session:
+        session_id = session["session_id"]
+
+        # Pre-restore session if it exists in persistent store but not in active memory
+        # This provides a smoother experience when reloading the page
+        if session_id not in active_sessions:
+            try:
+                logger.info(f"Session {session_id} not in active sessions, attempting pre-restoration...")
+                active_sessions[session_id] = _restore_web_swarm_from_session(session_id, socketio)
+                logger.info(f"Successfully pre-restored session {session_id} from persistent store")
+            except ValueError as e:
+                # Session not found in persistent store - redirect to setup
+                logger.warning(f"Session {session_id} not found in persistent store: {e}")
+                return redirect(url_for("setup"))
+            except Exception as e:
+                # Other restoration errors - redirect to setup
+                logger.error(f"Error pre-restoring session {session_id}: {e}", exc_info=True)
+                return redirect(url_for("setup"))
+
+    # Allow page to load even without Flask session - client-side will handle restoration
     return render_template("chat.html")
 
 
@@ -799,7 +917,7 @@ def get_agents():
 
 @app.route("/api/start_session", methods=["POST"])
 def start_session():
-    """Start a new swarm session."""
+    """Start a new swarm session with persistent storage."""
     try:
         data = request.get_json()
         session_id = str(uuid.uuid4())
@@ -828,22 +946,65 @@ def start_session():
 
             return jsonify({"session_id": session_id, "status": "mock"})
 
+        # Extract configuration
+        agent_ids = data.get("agent_ids", [])
+        conversation_mode = data.get("conversation_mode", "hybrid")
+        enable_secretary = data.get("enable_secretary", False)
+        secretary_mode = data.get("secretary_mode", "adaptive")
+        meeting_type = data.get("meeting_type", "discussion")
+
+        # Create persistent session with configuration in extras
+        store = get_default_session_store()
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        session_state = store.create(
+            session_id=session_id,
+            title=f"Swarm Session {timestamp}",
+            tags=["web", conversation_mode]
+        )
+
+        # Store configuration in session extras
+        session_state.extras = {
+            "config": {
+                "agent_ids": agent_ids,
+                "conversation_mode": conversation_mode,
+                "enable_secretary": enable_secretary,
+                "secretary_mode": secretary_mode,
+                "meeting_type": meeting_type
+            }
+        }
+        store._save_session_state(session_state)
+
+        # Set session context for event tracking
+        set_current_session_id(session_id)
+
+        # Track session creation event
+        track_system_event("session_created", {
+            "agent_ids": agent_ids,
+            "conversation_mode": conversation_mode,
+            "enable_secretary": enable_secretary,
+            "secretary_mode": secretary_mode,
+            "meeting_type": meeting_type
+        })
+
         # Create WebSwarmManager
         web_swarm = WebSwarmManager(
             session_id=session_id,
             socketio_instance=socketio,
-            agent_ids=data.get("agent_ids"),
-            conversation_mode=data.get("conversation_mode", "hybrid"),
-            enable_secretary=data.get("enable_secretary", False),
-            secretary_mode=data.get("secretary_mode", "adaptive"),
-            meeting_type=data.get("meeting_type", "discussion"),
+            agent_ids=agent_ids,
+            conversation_mode=conversation_mode,
+            enable_secretary=enable_secretary,
+            secretary_mode=secretary_mode,
+            meeting_type=meeting_type,
         )
 
         active_sessions[session_id] = web_swarm
 
+        logger.info(f"Created persistent session {session_id} with {len(agent_ids)} agents")
+
         return jsonify({"session_id": session_id, "status": "success"})
 
     except Exception as e:
+        logger.error(f"Error creating session: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -1153,6 +1314,9 @@ def assign_secretary_route(session_id):
         session_handler = active_sessions[session_id]
         swarm = session_handler.swarm
 
+        # Set session context for event tracking
+        set_current_session_id(session_id)
+
         # Assign the role
         swarm.assign_role(agent_id, "secretary")
 
@@ -1163,6 +1327,13 @@ def assign_secretary_route(session_id):
                 "status": "error",
                 "message": "Failed to assign secretary role"
             }), 500
+
+        # Track role assignment to persistent store
+        track_action("system", "role_assignment", {
+            "agent_id": agent_id,
+            "agent_name": secretary_agent.name,
+            "role": "secretary"
+        })
 
         # Use the centralized notification function
         notify_secretary_change(session_id, swarm)
@@ -1196,31 +1367,62 @@ def on_disconnect():
 
 @socketio.on("join_session")
 def on_join_session(data):
-    """Join a swarm session room."""
+    """Join a swarm session room with automatic session restoration."""
     session_id = data.get("session_id")
     if session_id:
+        # Check if session needs to be restored from persistent storage
+        if session_id not in active_sessions:
+            try:
+                logger.info(f"Session {session_id} not in active sessions, attempting restoration from WebSocket join...")
+                active_sessions[session_id] = _restore_web_swarm_from_session(session_id, socketio)
+                logger.info(f"Successfully restored session {session_id} from persistent store")
+            except ValueError as e:
+                logger.warning(f"Session {session_id} not found in persistent store: {e}")
+                emit("error", {"message": f"Session not found: {session_id}"})
+                return
+            except Exception as e:
+                logger.error(f"Error restoring session {session_id}: {e}", exc_info=True)
+                emit("error", {"message": f"Failed to restore session: {str(e)}"})
+                return
+
         join_room(session_id)
         emit("joined", {"session_id": session_id})
 
 
 @socketio.on("start_chat")
 def on_start_chat(data):
-    """Start chat with topic."""
+    """Start chat with topic and track event."""
     session_id = data.get("session_id")
     topic = data.get("topic")
 
     if session_id in active_sessions:
+        # Set session context for event tracking
+        set_current_session_id(session_id)
+
         web_swarm = active_sessions[session_id]
         web_swarm.start_web_chat(topic)
+
+        # Track chat started event
+        track_system_event("chat_started", {
+            "topic": topic,
+            "conversation_mode": web_swarm.swarm.conversation_mode,
+            "enable_secretary": web_swarm.swarm.enable_secretary
+        })
 
 
 @socketio.on("user_message")
 def on_user_message(data):
-    """Handle user message."""
+    """Handle user message and track event."""
     session_id = data.get("session_id")
     message = data.get("message")
 
     if session_id in active_sessions:
+        # Set session context for event tracking
+        set_current_session_id(session_id)
+
+        # Track user message to persistent store
+        track_message("user", message, "user")
+
         web_swarm = active_sessions[session_id]
         web_swarm.process_user_message(message)
 

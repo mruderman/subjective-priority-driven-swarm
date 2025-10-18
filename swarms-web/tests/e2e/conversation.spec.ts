@@ -885,16 +885,22 @@ test.describe('Secretary export download handling', () => {
       'Generated: 2024-02-29T10:00:00Z',
     ].join('\n');
 
-    const requestedUrls: string[] = [];
+  const requestedUrls: string[] = [];
+  let exportResponseHeaders: Record<string, string> | undefined;
 
     await page.route('**/exports/**', async (route) => {
       requestedUrls.push(route.request().url());
+      exportResponseHeaders = {
+        'content-type': 'text/markdown; charset=utf-8',
+        'content-disposition': `attachment; filename="${expectedFilename}"`,
+      };
+
       await route.fulfill({
         status: 200,
         body: downloadBody,
         headers: {
-          'Content-Type': 'text/markdown; charset=utf-8',
-          'Content-Disposition': `attachment; filename="${expectedFilename}"`,
+          'Content-Type': exportResponseHeaders['content-type'],
+          'Content-Disposition': exportResponseHeaders['content-disposition'],
         },
       });
     });
@@ -920,9 +926,8 @@ test.describe('Secretary export download handling', () => {
 
     expect(download.suggestedFilename()).toBe(expectedFilename);
     expect(await download.failure()).toBeNull();
-    const response = await download.response();
-    expect(response).not.toBeNull();
-    const headers = response?.headers() ?? {};
+  expect(exportResponseHeaders).toBeDefined();
+  const headers = exportResponseHeaders ?? {};
     expect(headers['content-type']).toContain('text/markdown');
     expect(headers['content-disposition']).toContain(expectedFilename);
 

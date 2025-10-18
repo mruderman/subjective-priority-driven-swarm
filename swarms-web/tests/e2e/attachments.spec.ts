@@ -30,17 +30,21 @@ test.describe('Chat attachments', () => {
 
     const downloadPath = `/api/test-download/${runId}/${fileName}`;
     const downloadPayload = Buffer.from(`Secretary export for ${runId}`);
-    let uploadRequestBody: string | undefined;
+  let uploadRequestBody: string | null = null;
     let downloadResponseHeaders: Record<string, string> | undefined;
 
     await page.route(`**/api/uploads?run=${runId}`, async (route) => {
       const request = route.request();
       const headers = request.headers();
       expect(headers['content-type']).toContain('multipart/form-data');
-      uploadRequestBody = request.postData();
-      expect(uploadRequestBody).toBeTruthy();
-      expect(uploadRequestBody).toContain(fileName);
-      expect(uploadRequestBody).toMatch(/Content-Disposition: form-data; name="file"; filename=".+"/);
+      const body = request.postData();
+      if (!body) {
+        throw new Error('Upload request did not include multipart payload');
+      }
+
+      uploadRequestBody = body;
+      expect(body).toContain(fileName);
+      expect(body).toMatch(/Content-Disposition: form-data; name="file"; filename=".+"/);
 
       await route.fulfill({
         status: 200,
@@ -104,7 +108,11 @@ test.describe('Chat attachments', () => {
     expect(buffered.equals(downloadPayload)).toBeTruthy();
 
     expect(await download.failure()).toBeNull();
-    expect(uploadRequestBody).toBeTruthy();
-    expect(uploadRequestBody).toMatch(/\r\n--/);
+    if (!uploadRequestBody) {
+      throw new Error('Upload request body missing');
+    }
+
+    const body = uploadRequestBody as string;
+    expect(body).toMatch(/\r\n--/);
   });
 });

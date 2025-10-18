@@ -25,14 +25,22 @@ export class MockedLettaController {
   async init(): Promise<void> {
     // Add test-only page hook early to make it available to app scripts
     await this.page.addInitScript(() => {
+      type GlobalWithSockets = Window & typeof globalThis & {
+        __TEST_EMIT?: (eventName: string, data: unknown) => void;
+        simpleChat?: { socket?: { emit?: (event: string, payload?: unknown) => void } };
+        swarmsApp?: { socket?: { emit?: (event: string, payload?: unknown) => void } };
+      };
+
+      const globalWindow = window as GlobalWithSockets;
+
       // Test-only global hook to emit Socket.IO events when available
       // It will attempt to emit immediately and retry once if the socket isn't ready yet.
-      window['__TEST_EMIT'] = (eventName, data) => {
+      globalWindow.__TEST_EMIT = (eventName: string, data: unknown) => {
         try {
           const tryEmit = () => {
             const socket =
-              (window['simpleChat'] && window['simpleChat'].socket) ||
-              (window['swarmsApp'] && window['swarmsApp'].socket);
+              globalWindow.simpleChat?.socket ||
+              globalWindow.swarmsApp?.socket;
             if (socket && typeof socket.emit === 'function') {
               socket.emit(String(eventName), data);
               return true;
@@ -218,14 +226,33 @@ export class MockedLettaController {
         };
 
         let socketInstance: SocketStub | null = null;
+        const commandTimers = new Map<string, number[]>();
+
+        const clearCommandTimers = (commandKey?: string) => {
+          const keys = typeof commandKey === 'string' ? [commandKey] : Array.from(commandTimers.keys());
+          keys.forEach((key) => {
+            const timers = commandTimers.get(key);
+            if (timers) {
+              timers.forEach((timerId) => {
+                try {
+                  clearTimeout(timerId);
+                } catch (error) {
+                  console.warn('Failed to clear mock command timer', error);
+                }
+              });
+              commandTimers.delete(key);
+            }
+          });
+        };
 
         const createSocketFactory = () => {
           if (socketInstance) {
             return socketInstance;
           }
 
+          commandTimers.clear();
+
           const listeners = new Map<string, Listener[]>();
-          const commandTimers = new Map<string, number[]>();
 
           const ensureListeners = (event: string) => {
             if (!listeners.has(event)) {
@@ -244,23 +271,6 @@ export class MockedLettaController {
                 handler(payload);
               } catch (error) {
                 console.error('Mock socket handler error', error);
-              }
-            });
-          };
-
-          const clearCommandTimers = (commandKey?: string) => {
-            const keys = typeof commandKey === 'string' ? [commandKey] : Array.from(commandTimers.keys());
-            keys.forEach((key) => {
-              const timers = commandTimers.get(key);
-              if (timers) {
-                timers.forEach((timerId) => {
-                  try {
-                    clearTimeout(timerId);
-                  } catch (error) {
-                    console.warn('Failed to clear mock command timer', error);
-                  }
-                });
-                commandTimers.delete(key);
               }
             });
           };

@@ -4,11 +4,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "moduleDetection": "force",
-  "esModuleInterop": true,
-  "allowSyntheticDefaultImports": true,
-  "strict": true,
-  "forceConsistentCasingInFileNames": true,
-    "types": ["playwright"]
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
   },
   "include": ["tests/**/*.ts", "playwright.config.ts"]
 }

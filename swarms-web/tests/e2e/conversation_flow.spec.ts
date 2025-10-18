@@ -23,11 +23,11 @@ test.describe('Prompt B conversation flow', () => {
     await chatInput.fill(userMessage);
     await chatInput.press('Enter');
 
-    const userBubble = page
+    const firstUserBubble = page
       .locator('#chat-messages .message.user')
       .filter({ hasText: userMessage })
       .first();
-    await expect(userBubble).toBeVisible();
+    await expect(firstUserBubble).toBeVisible();
 
     await chatInput.fill(userMessage);
     await chatInput.press('Enter');
@@ -38,11 +38,11 @@ test.describe('Prompt B conversation flow', () => {
       progress: '1/1',
     });
 
-    const userBubble = page
+    const latestUserBubble = page
       .locator('#chat-messages .message.user')
       .filter({ hasText: userMessage })
-      .first();
-    await expect(userBubble).toBeVisible();
+      .last();
+    await expect(latestUserBubble).toBeVisible();
 
     const thinkingIndicator = page
       .locator('.thinking-indicator')
