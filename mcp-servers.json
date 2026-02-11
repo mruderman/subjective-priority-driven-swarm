@@ -1,0 +1,12 @@
+{
+  "tier1": {
+    "sequential-thinking": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-sequential-thinking"],
+      "scope": "universal",
+      "description": "Sequential reasoning and step-by-step thinking for complex problems"
+    }
+  },
+  "tier2": {}
+}

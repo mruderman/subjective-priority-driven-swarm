@@ -435,3 +435,36 @@ def get_secretary_agent_name() -> Optional[str]:
     ID and name are set, ID takes precedence.
     """
     return os.getenv("SECRETARY_AGENT_NAME") or None
+
+
+# --- MCP Launchpad Configuration ---
+
+def get_mcp_config_path() -> str:
+    """Path to the MCP server configuration file.
+
+    Defaults to ``./mcp-servers.json``, overridable via ``SPDS_MCP_CONFIG_PATH``.
+    """
+    return os.getenv("SPDS_MCP_CONFIG_PATH", "./mcp-servers.json")
+
+
+def get_mcp_enabled() -> bool:
+    """Whether MCP tool integration is enabled.
+
+    Returns True if the config file exists (or ``SPDS_MCP_ENABLED`` is explicitly
+    set to ``true``). Returns False if ``SPDS_MCP_ENABLED`` is ``false`` or the
+    config file is missing.
+    """
+    explicit = os.getenv("SPDS_MCP_ENABLED")
+    if explicit is not None:
+        return explicit.lower() in ("1", "true", "yes")
+    return Path(get_mcp_config_path()).exists()
+
+
+def get_mcp_tier1_enabled() -> bool:
+    """Whether Tier 1 (always-on) MCP tools are enabled. Default: True."""
+    return os.getenv("SPDS_MCP_TIER1_ENABLED", "true").lower() in ("1", "true", "yes")
+
+
+def get_mcp_tier2_enabled() -> bool:
+    """Whether Tier 2 (on-demand) MCP tools are enabled. Default: True."""
+    return os.getenv("SPDS_MCP_TIER2_ENABLED", "true").lower() in ("1", "true", "yes")

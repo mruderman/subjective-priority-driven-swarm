@@ -390,6 +390,40 @@ def load_and_register_external_tools(client_or_agent, create_fn) -> None:
         # Don't fail the main flow - integrations are optional
 
 
+def use_mcp_tool(server_name: str, tool_name: str, arguments_json: str) -> str:
+    """
+    Request execution of an MCP tool from the tool ecosystem.
+
+    Check your tool_ecosystem memory block for available servers and tools.
+
+    Args:
+        server_name: The MCP server name (e.g., 'github', 'filesystem').
+        tool_name: The tool name on that server (e.g., 'create_issue').
+        arguments_json: JSON string of arguments for the tool.
+
+    Returns:
+        str: Confirmation that the request was submitted.
+    """
+    return f"Tool request submitted: {server_name}/{tool_name}. Awaiting execution result."
+
+
+def build_use_mcp_tool_kwargs(create_fn: Callable) -> Dict[str, Any]:
+    """Build kwargs for registering ``use_mcp_tool`` with Letta.
+
+    Follows the same pattern as ``build_tool_create_kwargs`` but with a simpler
+    interface since ``use_mcp_tool`` has no Pydantic schema.
+    """
+    return build_tool_create_kwargs(
+        create_fn,
+        use_mcp_tool,
+        name="use_mcp_tool",
+        description=(
+            "Request execution of an MCP tool from the tool ecosystem. "
+            "Check your tool_ecosystem memory block for available servers and tools."
+        ),
+    )
+
+
 def propose_secretary_nomination(agent_name: str) -> str:
     """
     Proposes another agent to take on the secretary role for the next round.
