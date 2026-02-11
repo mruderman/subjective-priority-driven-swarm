@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from letta_client import Letta
-from letta_client.errors import NotFoundError
+from letta_client import NotFoundError
 
 from . import config
 from .config import logger
@@ -58,7 +58,6 @@ class SwarmManager:
         import logging
         from datetime import datetime
         from letta_client import Letta
-        from letta_client.errors import NotFoundError
         from . import config
         from .config import logger
         from .export_manager import ExportManager
@@ -137,6 +136,23 @@ class SwarmManager:
                 except Exception:
                     # Best-effort: some test doubles may be strict; ignore if we can't set.
                     pass
+
+        # Initialize MCP Launchpad (gracefully degrades if config not found)
+        self._mcp_launchpad = None
+        if config.get_mcp_enabled():
+            try:
+                from .mcp_config import load_mcp_config
+                from .mcp_launchpad import MCPLaunchpad
+
+                entries = load_mcp_config(config.get_mcp_config_path())
+                self._mcp_launchpad = MCPLaunchpad(client, entries)
+                agent_ids = [a.agent.id for a in self.agents]
+                self._mcp_launchpad.setup(agent_ids)
+                logger.info("MCPLaunchpad initialized with %d servers", len(entries))
+            except FileNotFoundError:
+                logger.info("MCP config file not found; MCP tools disabled")
+            except Exception as e:
+                logger.warning("MCPLaunchpad initialization failed: %s", e)
 
     def _emit(self, message: str, *, level: str = "info") -> None:
         """Print a user-facing message and log it at the requested level."""
@@ -275,6 +291,73 @@ class SwarmManager:
             )
             return "I have some thoughts but I'm having trouble phrasing them."
         return message_text
+
+    def _check_and_fulfill_mcp_requests(self, agent, response) -> Optional[str]:
+        """Scan a Letta response for ``use_mcp_tool`` calls and fulfill them.
+
+        If a ``use_mcp_tool`` tool call is found in the response messages, the
+        launchpad executes the requested MCP tool and sends the result back to
+        the agent as a follow-up message. The agent's follow-up reply is
+        extracted and returned so callers can use it as the agent's actual
+        response.
+
+        Returns:
+            The agent's follow-up response text after receiving the tool result,
+            or *None* if no MCP request was found.
+        """
+        if not getattr(self, "_mcp_launchpad", None) or not hasattr(response, "messages"):
+            return None
+
+        import json as _json
+
+        for msg in response.messages:
+            if not (hasattr(msg, "message_type") and msg.message_type == "tool_call_message"):
+                continue
+            if not (hasattr(msg, "tool_call") and msg.tool_call):
+                continue
+            func = getattr(msg.tool_call, "function", None)
+            if not func or getattr(func, "name", None) != "use_mcp_tool":
+                continue
+
+            # Parse arguments
+            try:
+                args = _json.loads(func.arguments)
+            except (TypeError, _json.JSONDecodeError):
+                continue
+
+            server_name = args.get("server_name", "")
+            tool_name = args.get("tool_name", "")
+            arguments_json = args.get("arguments_json", "{}")
+
+            try:
+                tool_args = _json.loads(arguments_json)
+            except (TypeError, _json.JSONDecodeError):
+                tool_args = {}
+
+            logger.info("Fulfilling MCP request: %s/%s for agent %s", server_name, tool_name, agent.name)
+
+            # Execute the tool
+            result = self._mcp_launchpad.fulfill_and_execute(
+                agent.agent.id, server_name, tool_name, tool_args
+            )
+
+            # Send result back to agent for seamless UX
+            try:
+                followup = self._call_agent_message_create(
+                    "agents.messages.create.mcp_result",
+                    agent_id=agent.agent.id,
+                    messages=[{"role": "user", "content": f"MCP tool result: {result}"}],
+                )
+                followup_text = self._extract_agent_response(followup)
+                if followup_text and len(followup_text.strip()) > 5:
+                    return followup_text
+            except Exception as exc:
+                logger.warning("Failed to send MCP result to agent %s: %s", agent.name, exc)
+
+            # Return the raw result if agent follow-up failed
+            return f"[MCP result from {server_name}/{tool_name}]: {result}"
+
+        return None
 
     def _append_history(self, speaker: str, message: str) -> None:
         """Append a ConversationMessage to history with current timestamp.
@@ -1162,6 +1245,11 @@ class SwarmManager:
                         )
                     message_text = self._normalize_agent_message(self._extract_agent_response(response), agent)
 
+                    # Check for MCP tool requests and fulfill them
+                    mcp_text = self._check_and_fulfill_mcp_requests(agent, response)
+                    if mcp_text:
+                        message_text = self._normalize_agent_message(mcp_text, agent)
+
                     # Validate response quality
                     if (
                         message_text
@@ -1264,6 +1352,11 @@ class SwarmManager:
                     )
                 message_text = self._normalize_agent_message(self._extract_agent_response(response), agent)
 
+                # Check for MCP tool requests and fulfill them
+                mcp_text = self._check_and_fulfill_mcp_requests(agent, response)
+                if mcp_text:
+                    message_text = self._normalize_agent_message(mcp_text, agent)
+
                 # Check for role change actions before displaying message
                 role_changed = self._process_agent_response_for_role_change(agent, message_text)
                 if role_changed:
@@ -1334,6 +1427,11 @@ class SwarmManager:
                     )
                 message_text = self._normalize_agent_message(self._extract_agent_response(response), agent)
 
+                # Check for MCP tool requests and fulfill them
+                mcp_text = self._check_and_fulfill_mcp_requests(agent, response)
+                if mcp_text:
+                    message_text = self._normalize_agent_message(mcp_text, agent)
+
                 # Check for role change actions before displaying message
                 role_changed = self._process_agent_response_for_role_change(agent, message_text)
                 if role_changed:
@@ -1401,6 +1499,11 @@ class SwarmManager:
                 )
             message_text = self._normalize_agent_message(self._extract_agent_response(response), speaker)
 
+            # Check for MCP tool requests and fulfill them
+            mcp_text = self._check_and_fulfill_mcp_requests(speaker, response)
+            if mcp_text:
+                message_text = self._normalize_agent_message(mcp_text, speaker)
+
             # Check for role change actions before displaying message
             role_changed = self._process_agent_response_for_role_change(speaker, message_text)
             if role_changed:
@@ -1463,6 +1566,11 @@ class SwarmManager:
                     level="warning",
                 )
             message_text = self._normalize_agent_message(self._extract_agent_response(response), speaker)
+
+            # Check for MCP tool requests and fulfill them
+            mcp_text = self._check_and_fulfill_mcp_requests(speaker, response)
+            if mcp_text:
+                message_text = self._normalize_agent_message(mcp_text, speaker)
 
             # Check for role change actions before displaying message
             role_changed = self._process_agent_response_for_role_change(speaker, message_text)
@@ -1609,6 +1717,13 @@ class SwarmManager:
         elif command == "memory-awareness":
             self._emit("\n📊 Checking memory awareness status for all agents...")
             self.check_memory_awareness_status(silent=False)
+            return True
+
+        elif command == "tools":
+            if self._mcp_launchpad:
+                print(self._mcp_launchpad.get_catalog_summary())
+            else:
+                print("MCP tools are not enabled.")
             return True
 
         # Secretary-specific commands
@@ -1787,6 +1902,9 @@ Secretary Commands (When Secretary Enabled):
   /casual            - Switch to casual meeting notes mode
   /action-item       - Add an action item
   /stats             - Show conversation statistics
+
+MCP Tools (When MCP Enabled):
+  /tools             - Show registered MCP servers and available tools
 
 General:
   /help              - Show this help message

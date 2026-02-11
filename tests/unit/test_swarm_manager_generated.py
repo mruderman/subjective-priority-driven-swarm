@@ -2,7 +2,7 @@ import json
 import time
 
 import pytest
-from letta_client.errors import NotFoundError
+from letta_client import NotFoundError
 
 from spds import swarm_manager
 

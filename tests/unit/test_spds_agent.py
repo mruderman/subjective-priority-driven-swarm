@@ -6,17 +6,25 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
+import httpx
 import pytest
-from letta_client.core.api_error import ApiError
+from letta_client import APIStatusError
+
+# Helper to create APIStatusError with the 1.x constructor
+def _make_api_error(status_code, body=None):
+    resp = httpx.Response(status_code, request=httpx.Request("GET", "http://test"))
+    return APIStatusError(str(body or {}), response=resp, body=body)
+
+ApiError = APIStatusError  # alias for backward-compat in test assertions
+
 from letta_client.types import (
     AgentState,
     EmbeddingConfig,
-    LettaResponse,
     LlmConfig,
-    Memory,
-    Message,
     Tool,
 )
+from letta_client.types.agents import LettaResponse, Message
+from letta_client.types.agent_state import Memory
 
 
 def mk_agent_state(
@@ -37,6 +45,7 @@ def mk_agent_state(
         llm_config=llm,
         embedding_config=emb,
         memory=mem,
+        blocks=[],
         tools=tools or [],
         sources=[],
         tags=[],
@@ -72,6 +81,7 @@ class TestSPDSAgent:
             llm_config=agent_state.llm_config,
             embedding_config=agent_state.embedding_config,
             memory=agent_state.memory,
+            blocks=[],
             tools=agent_state_tools,
             sources=[],
             tags=[],
@@ -290,7 +300,7 @@ class TestSPDSAgent:
             model="openai/gpt-4",
         )
 
-        conflict_error = ApiError(status_code=409, body={"detail": "exists"})
+        conflict_error = _make_api_error(409, body={"detail": "exists"})
         mock_letta_client.tools.create_from_function.side_effect = conflict_error
 
         fallback_tool = Tool(
@@ -331,7 +341,7 @@ class TestSPDSAgent:
             model="openai/gpt-4",
         )
 
-        conflict_error = ApiError(status_code=409, body={"detail": "exists"})
+        conflict_error = _make_api_error(409, body={"detail": "exists"})
         mock_letta_client.tools.create_from_function.side_effect = conflict_error
         mock_letta_client.tools.upsert_from_function.side_effect = RuntimeError("upsert failed")
 
@@ -403,7 +413,7 @@ class TestSPDSAgent:
                 return mock_letta_client.agents.tools.detach(**kwargs)
             calls["count"] += 1
             if calls["count"] == 1:
-                raise ApiError(status_code=500, body={"detail": "invalid tools"})
+                raise _make_api_error(500, body={"detail": "invalid tools"})
             return SimpleNamespace(messages=[])
 
         monkeypatch.setattr("spds.spds_agent.letta_call", fake_letta_call)
@@ -484,7 +494,7 @@ class TestSPDSAgent:
                 return fn(**kwargs)
             call_counter["count"] += 1
             if call_counter["count"] == 1:
-                raise ApiError(status_code=500, body={"detail": "invalid tools"})
+                raise _make_api_error(500, body={"detail": "invalid tools"})
             return messages
 
         monkeypatch.setattr("spds.spds_agent.letta_call", fake_letta_call)
@@ -697,10 +707,10 @@ IMPORTANCE_TO_GROUP: 8"""
     ):
         """Test that assessment prompts are formatted correctly for empty vs non-empty conversation history."""
         from unittest.mock import patch
-        
+
         agent = SPDSAgent(sample_agent_state, mock_letta_client)
         agent._tools_supported = True
-        
+
         # Test with empty conversation history (new session)
         with patch.object(agent, 'client') as mock_client:
             mock_client.agents.messages.create.return_value = SimpleNamespace(
@@ -716,23 +726,23 @@ IMPORTANCE_TO_GROUP: 8"""
                     )
                 ]
             )
-            
+
             # Capture the actual prompt being sent
             actual_prompt = None
             def capture_prompt(**kwargs):
                 nonlocal actual_prompt
                 actual_prompt = kwargs['messages'][0]['content']
                 return SimpleNamespace(messages=[])
-            
+
             mock_client.agents.messages.create.side_effect = capture_prompt
-            
+
             agent._get_full_assessment(conversation_history="", topic="test topic")
-            
-            # Verify prompt doesn't mention "conversation about" for empty history
+
+            # Verify prompt uses "Regarding the topic" for empty history
             assert actual_prompt is not None
-            assert "Regarding the topic \"test topic\"" in actual_prompt
-            assert "Based on our conversation about" not in actual_prompt
-        
+            assert 'Regarding the topic "test topic"' in actual_prompt
+            assert "Based on these recent messages" not in actual_prompt
+
         # Test with non-empty conversation history (ongoing session)
         with patch.object(agent, 'client') as mock_client:
             mock_client.agents.messages.create.return_value = SimpleNamespace(
@@ -748,22 +758,22 @@ IMPORTANCE_TO_GROUP: 8"""
                     )
                 ]
             )
-            
+
             # Capture the actual prompt being sent
             actual_prompt = None
             def capture_prompt(**kwargs):
                 nonlocal actual_prompt
                 actual_prompt = kwargs['messages'][0]['content']
                 return SimpleNamespace(messages=[])
-            
+
             mock_client.agents.messages.create.side_effect = capture_prompt
-            
+
             conversation_history = "User: Hello\nAgent: Hi there!"
             agent._get_full_assessment(conversation_history=conversation_history, topic="test topic")
-            
-            # Verify prompt mentions "conversation about" for non-empty history
+
+            # Verify prompt uses "Based on these recent messages" for non-empty history
             assert actual_prompt is not None
-            assert "Based on our current conversation (which started as \"test topic\" but may have evolved)" in actual_prompt
+            assert 'Based on these recent messages (current focus: "test topic")' in actual_prompt
             assert "Regarding the topic" not in actual_prompt
             assert "User: Hello\nAgent: Hi there!" in actual_prompt
 
@@ -830,20 +840,27 @@ IMPORTANCE_TO_GROUP: 8"""
         self, mock_letta_client, sample_agent_state, mock_send_message_response
     ):
         """Test the speak method with proper send_message tool call."""
+        from spds.spds_agent import format_group_message
+
         agent = SPDSAgent(sample_agent_state, mock_letta_client)
         mock_letta_client.agents.messages.create.return_value = mock_send_message_response
 
         conversation_history = "Previous conversation content"
         response = agent.speak(conversation_history)
 
-        # Verify correct API call
+        # The current code sends a system message with formatted history and a user prompt
+        formatted_history = format_group_message(conversation_history, agent.name)
         mock_letta_client.agents.messages.create.assert_called_once_with(
             agent_id="ag-test-123",
             messages=[
                 {
+                    "role": "system",
+                    "content": formatted_history,
+                },
+                {
                     "role": "user",
-                    "content": f"{conversation_history}\nBased on my assessment, here is my contribution:",
-                }
+                    "content": "Please share your response to the conversation.",
+                },
             ],
         )
         assert response == mock_send_message_response
@@ -858,17 +875,15 @@ IMPORTANCE_TO_GROUP: 8"""
         conversation_history = "Previous conversation content"
         response = agent.speak(conversation_history)
 
-        # Verify correct API call
-        mock_letta_client.agents.messages.create.assert_called_once_with(
-            agent_id="ag-test-123",
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"{conversation_history}\nBased on my assessment, here is my contribution:",
-                }
-            ],
-        )
-        
+        # Verify correct API call - now uses system + user messages
+        call_args = mock_letta_client.agents.messages.create.call_args[1]
+        assert call_args["agent_id"] == "ag-test-123"
+        messages = call_args["messages"]
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert messages[1]["role"] == "user"
+        assert "response to the conversation" in messages[1]["content"]
+
         # Should return wrapped response since direct response is now accepted
         assert hasattr(response, 'messages')
         assert len(response.messages) > 0
@@ -880,7 +895,7 @@ IMPORTANCE_TO_GROUP: 8"""
         assert args['message'] == 'Test response'
 
     def test_speak_with_tools_history_prompt(self, mock_letta_client, mock_tool_state):
-        """History prompts should mention send_message when tools are present."""
+        """History prompts should use system message for context and user message for instruction."""
         agent_state = mk_agent_state(
             id="ag-history",
             name="History Agent",
@@ -897,13 +912,13 @@ IMPORTANCE_TO_GROUP: 8"""
         history = "Line 1\nLine 2"
         agent.speak(history, mode="initial", topic="Topic")
 
-        sent_prompt = mock_letta_client.agents.messages.create.call_args[1]["messages"][
-            0
-        ]["content"]
-        expected_prompt = f"""{history}
-
-Based on this conversation, I want to contribute. Please use the send_message tool to share your response. Remember to call the send_message function with your response as the message parameter."""
-        assert sent_prompt == expected_prompt
+        messages = mock_letta_client.agents.messages.create.call_args[1]["messages"]
+        # Should have two messages: system for context, user for instruction
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert "Line 1" in messages[0]["content"]
+        assert messages[1]["role"] == "user"
+        assert messages[1]["content"] == "Please share your response to the conversation using the send_message tool."
 
     def test_speak_with_tools_topic_prompts(self, mock_letta_client, mock_tool_state):
         """Initial and response prompts should change with mode when tools are attached."""
@@ -924,12 +939,7 @@ Based on this conversation, I want to contribute. Please use the send_message to
         initial_prompt = mock_letta_client.agents.messages.create.call_args[1][
             "messages"
         ][0]["content"]
-        expected_initial = (
-            "Based on my assessment of the topic 'Topic', I want to share my initial thoughts and "
-            "perspective. Please use the send_message tool to contribute your viewpoint to this "
-            "discussion. Remember to call the send_message function with your response as the "
-            "message parameter."
-        )
+        expected_initial = "Please share your initial thoughts on 'Topic' using the send_message tool."
         assert initial_prompt == expected_initial
 
         mock_letta_client.agents.messages.create.reset_mock()
@@ -938,12 +948,7 @@ Based on this conversation, I want to contribute. Please use the send_message to
         response_prompt = mock_letta_client.agents.messages.create.call_args[1][
             "messages"
         ][0]["content"]
-        expected_response = (
-            "Based on what everyone has shared about 'Topic', I'd like to respond to the discussion. "
-            "Please use the send_message tool to share your response, building on or reacting to what "
-            "others have said. Remember to call the send_message function with your response as the "
-            "message parameter."
-        )
+        expected_response = "Please respond to the discussion about 'Topic' using the send_message tool."
         assert response_prompt == expected_response
 
     def test_speak_without_tools_topic_prompts(self, mock_letta_client):
@@ -964,10 +969,7 @@ Based on this conversation, I want to contribute. Please use the send_message to
         initial_prompt = mock_letta_client.agents.messages.create.call_args[1][
             "messages"
         ][0]["content"]
-        assert (
-            initial_prompt
-            == "Based on my assessment of 'Topic', here is my initial contribution:"
-        )
+        assert initial_prompt == "Please share your initial thoughts on 'Topic'."
 
         mock_letta_client.agents.messages.create.reset_mock()
 
@@ -975,10 +977,7 @@ Based on this conversation, I want to contribute. Please use the send_message to
         response_prompt = mock_letta_client.agents.messages.create.call_args[1][
             "messages"
         ][0]["content"]
-        assert (
-            response_prompt
-            == "Based on the discussion about 'Topic', here is my response:"
-        )
+        assert response_prompt == "Please respond to the discussion about 'Topic'."
 
     def test_agent_string_representation(self, mock_letta_client, sample_agent_state):
         """Test that agent can be represented as string."""

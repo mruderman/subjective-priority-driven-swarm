@@ -95,14 +95,14 @@ def test_secretary_agent_initialization_formal_builds_expected_blocks(fixed_date
     assert call_kwargs["name"].endswith("Secretary 20240101_090000")
 
     persona_block = next(
-        block for block in call_kwargs["memory_blocks"] if block.label == "persona"
+        block for block in call_kwargs["memory_blocks"] if block["label"] == "persona"
     )
-    assert "formal language" in persona_block.value
+    assert "formal language" in persona_block["value"]
 
     notes_style_block = next(
-        block for block in call_kwargs["memory_blocks"] if block.label == "notes_style"
+        block for block in call_kwargs["memory_blocks"] if block["label"] == "notes_style"
     )
-    assert "formal" in notes_style_block.value
+    assert "formal" in notes_style_block["value"]
 
 
 def test_secretary_agent_initialization_defaults_to_adaptive_mode(monkeypatch):
@@ -125,9 +125,9 @@ def test_secretary_agent_initialization_defaults_to_adaptive_mode(monkeypatch):
     call_kwargs = client.agents.create_calls[0]
     assert call_kwargs["name"].startswith("Adaptive Secretary ")
     persona_block = next(
-        block for block in call_kwargs["memory_blocks"] if block.label == "persona"
+        block for block in call_kwargs["memory_blocks"] if block["label"] == "persona"
     )
-    assert "adaptive meeting secretary" in persona_block.value
+    assert "adaptive meeting secretary" in persona_block["value"]
 
 
 def test_set_mode_updates_mode_value(fixed_datetime):
@@ -165,7 +165,7 @@ def test_start_meeting_records_metadata_and_notifies_agent(fixed_datetime):
 
     message_call = client.agents.messages.calls[0]
     assert message_call["agent_id"] == secretary.agent.id
-    sent_message = message_call["messages"][0].content
+    sent_message = message_call["messages"][0]["content"]
     assert "Topic: Quarterly Review" in sent_message
     assert "Please begin taking notes" in sent_message
 
@@ -195,27 +195,31 @@ def test_observe_message_sends_formatted_prompt(fixed_datetime):
     secretary.observe_message("Alice", "We should revisit the budget")
 
     message_call = client.agents.messages.calls[-1]
-    sent_message = message_call["messages"][0].content
+    sent_message = message_call["messages"][0]["content"]
     assert (
         sent_message
         == "Please note this in the meeting: Alice: We should revisit the budget"
     )
 
 
-def test_observe_message_handles_retry_failure(fixed_datetime, monkeypatch):
+def test_observe_message_handles_api_failure(fixed_datetime):
     client = DummyClient()
     secretary = SecretaryAgent(client)
 
-    def raising_retry(func, max_retries=2, backoff_factor=0.5):
-        func()
-        raise RuntimeError("retry failed")
+    # Make the API call raise after recording the call
+    original_create = client.agents.messages.create
 
-    monkeypatch.setattr(secretary_module, "retry_with_backoff", raising_retry)
+    def failing_create(**kwargs):
+        original_create(**kwargs)
+        raise RuntimeError("API failed")
 
+    client.agents.messages.create = failing_create
+
+    # observe_message swallows exceptions silently
     secretary.observe_message("Bob", "Status update", metadata={"importance": "high"})
 
     message_call = client.agents.messages.calls[-1]
-    sent_message = message_call["messages"][0].content
+    sent_message = message_call["messages"][0]["content"]
     assert sent_message.endswith("Bob: Status update")
 
 
@@ -228,7 +232,7 @@ def test_add_action_item_includes_optional_fields(fixed_datetime):
     )
 
     message_call = client.agents.messages.calls[-1]
-    sent_message = message_call["messages"][0].content
+    sent_message = message_call["messages"][0]["content"]
     assert "Prepare the project report" in sent_message
     assert "assigned to: Bob" in sent_message
     assert "due: Friday" in sent_message
@@ -241,7 +245,7 @@ def test_add_decision_records_context(fixed_datetime):
     secretary.add_decision("Approve new roadmap", context="Sprint review")
 
     message_call = client.agents.messages.calls[-1]
-    sent_message = message_call["messages"][0].content
+    sent_message = message_call["messages"][0]["content"]
     assert "Approve new roadmap" in sent_message
     assert "context: Sprint review" in sent_message
 
@@ -292,7 +296,7 @@ def test_generate_minutes_returns_full_minutes(fixed_datetime):
     assert "detailed meeting minutes" in minutes
 
     message_call = client.agents.messages.calls[-1]
-    sent_message = message_call["messages"][0].content
+    sent_message = message_call["messages"][0]["content"]
     assert "Please generate meeting minutes" in sent_message
     assert "Roadmap" in sent_message
 
@@ -316,57 +320,34 @@ def test_generate_minutes_reports_processing_when_content_short(fixed_datetime):
     )
 
 
-def test_retry_with_backoff_retries_on_server_error():
-    failing_then_success = Mock(
-        side_effect=[Exception("500 Internal Server Error"), "success"]
-    )
+def test_letta_call_handles_api_errors(fixed_datetime):
+    """Verify that secretary methods handle API errors via letta_call."""
+    client = DummyClient()
+    secretary = SecretaryAgent(client)
+    secretary.meeting_metadata = {
+        "meeting_type": "sync",
+        "topic": "Test",
+        "start_time": secretary_module.datetime.now(),
+    }
 
-    with patch.object(secretary_module.time, "sleep") as sleep_mock:
-        result = secretary_module.retry_with_backoff(
-            failing_then_success,
-            max_retries=3,
-            backoff_factor=2,
-        )
+    # Make API calls raise
+    client.agents.messages.create = Mock(side_effect=RuntimeError("API error"))
 
-    assert result == "success"
-    assert failing_then_success.call_count == 2
-    sleep_mock.assert_called_once_with(2)
-
-
-def test_retry_with_backoff_raises_non_retryable_error():
-    always_fail = Mock(side_effect=ValueError("bad request"))
-
-    with pytest.raises(ValueError):
-        secretary_module.retry_with_backoff(always_fail, max_retries=2)
-
-    assert always_fail.call_count == 1
+    result = secretary.generate_minutes()
+    assert "Error generating minutes" in result
 
 
 def test_start_meeting_handles_missing_response(fixed_datetime, capsys, monkeypatch):
     client = DummyClient()
     secretary = SecretaryAgent(client)
 
-    def fake_retry(func, max_retries=3, backoff_factor=1):
-        """
-        Test helper that invokes the provided callable exactly once and returns None.
-
-        This fake replacement for a retry-with-backoff utility ignores retry semantics and backoff parameters. It calls `func()` a single time and always returns None. Useful in tests to simulate a retry helper that does not retry or return a value.
-
-        Parameters:
-            func (callable): Function to execute once.
-            max_retries (int): Ignored. Present to match the real helper's signature.
-            backoff_factor (int|float): Ignored. Present to match the real helper's signature.
-        """
-        func()
-        return None
-
-    monkeypatch.setattr(secretary_module, "retry_with_backoff", fake_retry)
+    # Make letta_call return None to simulate missing response
+    monkeypatch.setattr(secretary_module, "letta_call", lambda *a, **kw: None)
 
     secretary.start_meeting("Weekly Sync", ["Ada", "Lin"], meeting_type="sync")
 
     captured = capsys.readouterr()
     assert "Secretary may not have received meeting start notification" in captured.out
-    assert client.agents.messages.calls  # Inner function executed
 
 
 def test_extract_agent_response_handles_invalid_tool_json(fixed_datetime):
@@ -486,21 +467,8 @@ def test_generate_minutes_handles_missing_response(fixed_datetime, monkeypatch):
         "topic": "Roadmap",
     }
 
-    def fake_retry(func, max_retries=3, backoff_factor=1):
-        """
-        Test helper that invokes the provided callable exactly once and returns None.
-
-        This fake replacement for a retry-with-backoff utility ignores retry semantics and backoff parameters. It calls `func()` a single time and always returns None. Useful in tests to simulate a retry helper that does not retry or return a value.
-
-        Parameters:
-            func (callable): Function to execute once.
-            max_retries (int): Ignored. Present to match the real helper's signature.
-            backoff_factor (int|float): Ignored. Present to match the real helper's signature.
-        """
-        func()
-        return None
-
-    monkeypatch.setattr(secretary_module, "retry_with_backoff", fake_retry)
+    # Make letta_call return None to simulate missing response
+    monkeypatch.setattr(secretary_module, "letta_call", lambda *a, **kw: None)
 
     result = secretary.generate_minutes()
 
@@ -515,24 +483,11 @@ def test_generate_minutes_handles_exception(fixed_datetime, monkeypatch):
         "topic": "Roadmap",
     }
 
-    def fake_retry(func, max_retries=3, backoff_factor=1):
-        """
-        Test helper that simulates a failing retry function.
-
-        This replacement for a retry helper always raises RuntimeError("boom"), regardless of the provided
-        callable or retry parameters. Use in tests to simulate an unrecoverable error from retry logic.
-
-        Parameters:
-            func: Ignored. The callable that would be retried.
-            max_retries (int): Ignored. Retry limit placeholder.
-            backoff_factor (int|float): Ignored. Backoff multiplier placeholder.
-
-        Raises:
-            RuntimeError: Always raised with message "boom".
-        """
+    # Make letta_call raise to simulate unrecoverable error
+    def failing_letta_call(*args, **kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(secretary_module, "retry_with_backoff", fake_retry)
+    monkeypatch.setattr(secretary_module, "letta_call", failing_letta_call)
 
     result = secretary.generate_minutes()
 

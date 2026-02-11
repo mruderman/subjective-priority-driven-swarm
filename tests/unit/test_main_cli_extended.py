@@ -91,7 +91,7 @@ def test_main_cloud_api_key():
         with patch("builtins.input", return_value="T"):
             main([])
         _, kwargs = L.call_args
-        assert kwargs["token"] == "api-key"
+        assert kwargs["api_key"] == "api-key"
         assert kwargs["base_url"] == "http://x"
 
 
@@ -110,5 +110,5 @@ def test_main_no_auth_baseurl_only(monkeypatch):
         with patch("builtins.input", return_value="T"):
             main([])
         _, kwargs = L.call_args
-        assert "token" not in kwargs
+        assert "api_key" not in kwargs
         assert kwargs["base_url"] == "http://x"

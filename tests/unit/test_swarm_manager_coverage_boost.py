@@ -1,10 +1,16 @@
 import builtins
 import types
 
+import httpx
 import pytest
-from letta_client.errors import NotFoundError
+from letta_client import NotFoundError
 
 from spds import swarm_manager
+
+
+def _make_not_found_error(message="Not found"):
+    resp = httpx.Response(404, request=httpx.Request("GET", "http://test"))
+    return NotFoundError(message, response=resp, body={"detail": message})
 
 
 class StubSPDSAgent:
@@ -105,7 +111,7 @@ def test_load_agents_by_id_not_found_then_success(monkeypatch):
     monkeypatch.setattr(swarm_manager, "SPDSAgent", StubSPDSAgent)
     # First NotFoundError, then valid object
     client = make_client_for_ids(
-        [NotFoundError("missing"), types.SimpleNamespace(id="ok2", name="B")]
+        [_make_not_found_error("missing"), types.SimpleNamespace(id="ok2", name="B")]
     )
     mgr = swarm_manager.SwarmManager(
         client, agent_ids=["missing", "ok2"], conversation_mode="hybrid"
@@ -317,7 +323,8 @@ def test_init_from_profiles(monkeypatch):
 
 def test_handle_secretary_commands_without_secretary(capsys):
     mgr = object.__new__(swarm_manager.SwarmManager)
-    mgr.secretary = None
+    mgr._secretary = None
+    mgr.secretary_agent_id = None
     # Commands that should warn and return True
     assert mgr._handle_secretary_commands("/minutes") is True
     assert mgr._handle_secretary_commands("/export") is True
@@ -465,7 +472,8 @@ def test_hybrid_turn_initial_exception_and_instruction_error(monkeypatch, capsys
 
 def test_handle_secretary_commands_help_without_secretary(capsys):
     mgr = object.__new__(swarm_manager.SwarmManager)
-    mgr.secretary = None
+    mgr._secretary = None
+    mgr.secretary_agent_id = None
     assert mgr._handle_secretary_commands("/help") is True
     out = capsys.readouterr().out
     assert "Available Commands" in out
@@ -514,6 +522,9 @@ def test_pure_priority_turn_success():
 
     mgr = object.__new__(swarm_manager.SwarmManager)
     mgr.conversation_history = ""
+    mgr._secretary = None
+    mgr.secretary_agent_id = None
+    mgr.pending_nomination = None
     mgr._notify_secretary_agent_response = lambda *a, **k: None
     a = A("A")
     mgr._pure_priority_turn([a], "t")

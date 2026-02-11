@@ -18,7 +18,7 @@ from .session_tracking import (
     track_tool_call,
 )
 try:
-    from letta_client.core.api_error import ApiError
+    from letta_client import APIError as ApiError
 except ImportError:  # pragma: no cover
     ApiError = None  # type: ignore
 

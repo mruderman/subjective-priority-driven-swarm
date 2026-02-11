@@ -9,13 +9,12 @@ import pytest
 from letta_client.types import (
     AgentState,
     EmbeddingConfig,
-    LettaResponse,
     LlmConfig,
-    Memory,
-    Message,
     Tool,
     ToolReturnMessage,
 )
+from letta_client.types.agents import LettaResponse, Message
+from letta_client.types.agent_state import Memory
 
 from spds.tools import SubjectiveAssessment
 
@@ -60,6 +59,7 @@ def _mk_agent_state(id: str, name: str, system: str, model: str = "openai/gpt-4"
         llm_config=llm,
         embedding_config=emb,
         memory=mem,
+        blocks=[],
         tools=[],
         sources=[],
         tags=[],
@@ -169,6 +169,72 @@ def mock_send_message_response():
             )
         ]
     )
+
+
+@pytest.fixture
+def mock_mcp_tool():
+    """Mock MCP tool from the use_mcp_tool function."""
+    return Tool(
+        id="tool-mcp-123",
+        name="use_mcp_tool",
+        description="Request execution of an MCP tool",
+    )
+
+
+@pytest.fixture
+def sample_mcp_config():
+    """Sample MCP server configuration for testing."""
+    return {
+        "tier1": {
+            "sequential-thinking": {
+                "type": "stdio",
+                "command": "npx",
+                "args": ["-y", "@anthropic/mcp-sequential-thinking"],
+                "scope": "universal",
+                "description": "Sequential reasoning",
+            }
+        },
+        "tier2": {
+            "github": {
+                "type": "sse",
+                "url": "http://localhost:3002/sse",
+                "scope": "universal",
+                "description": "GitHub operations",
+                "categories": ["vcs"],
+            }
+        },
+    }
+
+
+@pytest.fixture
+def mock_mcp_letta_client(mock_letta_client):
+    """Extend mock_letta_client with MCP-specific mocks."""
+    # MCP server operations
+    mock_letta_client.mcp_servers = Mock()
+    mock_letta_client.mcp_servers.create = Mock()
+    mock_letta_client.mcp_servers.list = Mock(return_value=[])
+    mock_letta_client.mcp_servers.retrieve = Mock()
+    mock_letta_client.mcp_servers.refresh = Mock()
+    mock_letta_client.mcp_servers.delete = Mock()
+
+    # Block operations
+    mock_letta_client.blocks = Mock()
+    mock_letta_client.blocks.create = Mock(
+        return_value=SimpleNamespace(id="block-eco-123")
+    )
+    mock_letta_client.blocks.list = Mock(return_value=[])
+    mock_letta_client.blocks.update = Mock()
+
+    # Agent block operations
+    mock_letta_client.agents.blocks = Mock()
+    mock_letta_client.agents.blocks.attach = Mock()
+
+    # Agent tool run
+    mock_letta_client.agents.tools.run = Mock(
+        return_value=SimpleNamespace(tool_return="Tool executed successfully")
+    )
+
+    return mock_letta_client
 
 
 @pytest.fixture(autouse=True)

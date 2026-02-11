@@ -11,11 +11,10 @@ import pytest
 from letta_client.types import (
     AgentState,
     EmbeddingConfig,
-    LettaResponse,
     LlmConfig,
-    Memory,
-    Message,
 )
+from letta_client.types.agents import LettaResponse, Message
+from letta_client.types.agent_state import Memory
 
 from spds import config
 from spds.spds_agent import SPDSAgent
@@ -40,6 +39,7 @@ def mk_agent_state(
         llm_config=llm,
         embedding_config=emb,
         memory=mem,
+        blocks=[],
         tools=[],
         sources=[],
         tags=[],

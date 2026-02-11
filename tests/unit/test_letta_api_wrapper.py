@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from letta_client.core.api_error import ApiError
+from letta_client import APIError as ApiError
 
 from spds.letta_api import letta_call, with_letta_resilience
 
@@ -174,8 +174,10 @@ class TestLettaCall:
     def test_retry_on_api_error_500(self, monkeypatch):
         """ApiError with 5xx status should be retried."""
         mock_fn = MagicMock()
+        resp_500 = httpx.Response(500, request=httpx.Request("GET", "http://test"))
+        from letta_client import APIStatusError
         mock_fn.side_effect = [
-            ApiError(status_code=500, body={"detail": "server error"}, headers={}),
+            APIStatusError("server error", response=resp_500, body={"detail": "server error"}),
             "success",
         ]
 
@@ -190,8 +192,10 @@ class TestLettaCall:
     def test_no_retry_on_api_error_client_side(self, monkeypatch):
         """ApiError with non-retryable status should not retry."""
         mock_fn = MagicMock()
-        mock_fn.side_effect = ApiError(
-            status_code=409, body={"detail": "conflict"}, headers={}
+        resp_409 = httpx.Response(409, request=httpx.Request("GET", "http://test"))
+        from letta_client import APIStatusError
+        mock_fn.side_effect = APIStatusError(
+            "conflict", response=resp_409, body={"detail": "conflict"}
         )
 
         monkeypatch.setattr(time, "sleep", lambda _: None)

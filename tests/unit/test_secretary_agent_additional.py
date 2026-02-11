@@ -4,8 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-import spds.secretary_agent as secretary_module
-from spds.secretary_agent import SecretaryAgent, retry_with_backoff
+from spds.secretary_agent import SecretaryAgent
 
 
 def _mk_profile():
@@ -34,7 +33,7 @@ def make_tool_response(message: str):
 
 
 def test_set_mode_accepts_valid_and_rejects_invalid(mock_letta_client):
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         # create a secretary agent instance
         sec = SecretaryAgent(client=mock_letta_client, mode="adaptive")
 
@@ -49,7 +48,7 @@ def test_set_mode_accepts_valid_and_rejects_invalid(mock_letta_client):
 
 def test_start_meeting_notifies_and_extracts_response(mock_letta_client, capsys):
     # patch the underlying create to not actually call external
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         sec = SecretaryAgent(client=mock_letta_client, mode="casual")
 
     # mock the client's messages.create to return a tool response
@@ -66,7 +65,7 @@ def test_start_meeting_notifies_and_extracts_response(mock_letta_client, capsys)
 
 
 def test_generate_minutes_returns_minutes_when_long_enough(mock_letta_client):
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         sec = SecretaryAgent(client=mock_letta_client, mode="formal")
 
     # set meeting metadata so minutes() will proceed
@@ -89,7 +88,7 @@ def test_generate_minutes_returns_minutes_when_long_enough(mock_letta_client):
 
 
 def test_add_action_item_prints_success_and_handles_failure(mock_letta_client, capsys):
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         sec = SecretaryAgent(client=mock_letta_client, mode="adaptive")
 
     sec.agent = SimpleNamespace(id="sec-1")
@@ -110,22 +109,9 @@ def test_add_action_item_prints_success_and_handles_failure(mock_letta_client, c
     assert "Failed to record action item" in captured.out or "Failed" in captured.out
 
 
-def test_retry_with_backoff_returns_none_when_no_attempts():
-    called = False
-
-    def should_not_run():
-        nonlocal called
-        called = True
-
-    out = retry_with_backoff(should_not_run, max_retries=0)
-
-    assert out is None
-    assert called is False
-
-
 def test_create_secretary_agent_failure_path(mock_letta_client, capsys):
     mock_letta_client.agents.create.side_effect = RuntimeError("boom")
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         with pytest.raises(RuntimeError):
             SecretaryAgent(client=mock_letta_client, mode="formal")
 
@@ -133,29 +119,10 @@ def test_create_secretary_agent_failure_path(mock_letta_client, capsys):
     assert "Failed to create secretary agent" in captured.out
 
 
-def test_start_meeting_logs_failure_when_retry_raises(
-    mock_letta_client, capsys, monkeypatch
-):
-    with patch("spds.secretary_agent.CreateBlock"):
-        sec = SecretaryAgent(client=mock_letta_client, mode="adaptive")
-
-    sec.agent = SimpleNamespace(id="sec-err")
-
-    def raising_retry(func, max_retries=3, backoff_factor=1):
-        raise RuntimeError("retry exploded")
-
-    monkeypatch.setattr(secretary_module, "retry_with_backoff", raising_retry)
-
-    sec.start_meeting("Crisis", ["Ada"])
-
-    captured = capsys.readouterr()
-    assert "Failed to notify secretary" in captured.out
-
-
 def test_extract_agent_response_prefers_tool_return_and_handles_list_content(
     mock_letta_client,
 ):
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         sec = SecretaryAgent(client=mock_letta_client)
 
     response = SimpleNamespace(
@@ -193,7 +160,7 @@ def test_extract_agent_response_prefers_tool_return_and_handles_list_content(
 
 
 def test_extract_agent_response_handles_unexpected_structure(mock_letta_client):
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         sec = SecretaryAgent(client=mock_letta_client)
 
     # Force response.messages to raise when iterated
@@ -206,7 +173,7 @@ def test_extract_agent_response_handles_unexpected_structure(mock_letta_client):
 
 
 def test_add_decision_handles_missing_agent_and_failure(mock_letta_client, capsys):
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         sec = SecretaryAgent(client=mock_letta_client)
 
     # No agent present logs warning and returns early
@@ -224,7 +191,7 @@ def test_add_decision_handles_missing_agent_and_failure(mock_letta_client, capsy
 
 
 def test_extract_agent_response_handles_string_entries(mock_letta_client):
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         sec = SecretaryAgent(client=mock_letta_client)
 
     response = SimpleNamespace(
@@ -243,7 +210,7 @@ def test_extract_agent_response_handles_string_entries(mock_letta_client):
 
 
 def test_extract_agent_response_handles_direct_string_content(mock_letta_client):
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         sec = SecretaryAgent(client=mock_letta_client)
 
     response = SimpleNamespace(
@@ -262,7 +229,7 @@ def test_extract_agent_response_handles_direct_string_content(mock_letta_client)
 
 
 def test_extract_agent_response_handles_namespace_text(mock_letta_client):
-    with patch("spds.secretary_agent.CreateBlock"):
+    with patch("spds.secretary_agent.CreateBlockParam"):
         sec = SecretaryAgent(client=mock_letta_client)
 
     response = SimpleNamespace(

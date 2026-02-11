@@ -407,12 +407,12 @@ def main():
     # Initialize Letta client
     try:
         if config.LETTA_ENVIRONMENT == "LETTA_CLOUD":
-            client = Letta(token=config.LETTA_API_KEY)
+            client = Letta(api_key=config.LETTA_API_KEY)
         else:
             password = config.get_letta_password()
             client = Letta(
                 base_url=config.LETTA_BASE_URL,
-                token=password if password else None,
+                api_key=password if password else None,
             )
     except Exception as e:
         print(f"❌ Failed to initialize Letta client: {e}")

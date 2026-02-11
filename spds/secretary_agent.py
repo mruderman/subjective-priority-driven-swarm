@@ -1,11 +1,10 @@
 import json
 import re
-import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from letta_client import CreateBlock, Letta, MessageCreate
-from letta_client.types import AgentState
+from letta_client import Letta
+from letta_client.types import AgentState, CreateBlockParam, MessageCreateParam
 
 from . import config
 from .letta_api import letta_call
@@ -18,21 +17,6 @@ from .session_tracking import (
 
 # spds/secretary_agent.py
 
-
-def retry_with_backoff(func, max_retries=3, backoff_factor=1):
-    """Retry a function with exponential backoff."""
-    for attempt in range(max_retries):
-        try:
-            return func()
-        except Exception as e:
-            if "500" in str(e) or "disconnected" in str(e).lower():
-                if attempt < max_retries - 1:
-                    wait_time = backoff_factor * (2**attempt)
-                    print(f"    Retrying in {wait_time}s after error: {str(e)[:50]}...")
-                    time.sleep(wait_time)
-                    continue
-            raise
-    return None
 
 
 class SecretaryAgent:
@@ -128,17 +112,17 @@ class SecretaryAgent:
                 self.client.agents.create,
                 name=name,
                 memory_blocks=[
-                    CreateBlock(
+                    CreateBlockParam(
                         label="human",
                         value="I am working with a team of AI agents in group conversations and meetings.",
                     ),
-                    CreateBlock(label="persona", value=persona),
-                    CreateBlock(
+                    CreateBlockParam(label="persona", value=persona),
+                    CreateBlockParam(
                         label="meeting_context",
                         value="No active meeting. Ready to take notes when a meeting begins.",
                         description="Stores current meeting information, participants, topic, and ongoing notes",
                     ),
-                    CreateBlock(
+                    CreateBlockParam(
                         label="notes_style",
                         value=f"Documentation style: {self.mode}",
                         description="Preferred style for meeting documentation (formal, casual, or adaptive)",
@@ -192,11 +176,11 @@ class SecretaryAgent:
                 "secretary.meeting.start",
                 self.client.agents.messages.create,
                 agent_id=self.agent.id,
-                messages=[MessageCreate(role="user", content=meeting_start_message)],
+                messages=[MessageCreateParam(role="user", content=meeting_start_message)],
             )
 
         try:
-            response = retry_with_backoff(send_start_message)
+            response = send_start_message()
             if response:
                 print(f"📋 Meeting started: {topic}")
                 print(f"👥 Participants: {', '.join(participants)}")
@@ -237,7 +221,7 @@ class SecretaryAgent:
                                 args = json.loads(tool_call.function.arguments)
                                 message_text = args.get("message", "")
                                 break
-                            except:
+                            except Exception:
                                 pass
 
                 # Check for tool return messages (when agent uses send_message)
@@ -297,7 +281,7 @@ class SecretaryAgent:
                 self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[
-                    MessageCreate(
+                    MessageCreateParam(
                         role="user",
                         content=f"Please note this in the meeting: {formatted_message}",
                     )
@@ -305,7 +289,7 @@ class SecretaryAgent:
             )
 
         try:
-            retry_with_backoff(send_observation, max_retries=2, backoff_factor=0.5)
+            send_observation()
 
             # Track message observation
             track_action(
@@ -344,7 +328,7 @@ class SecretaryAgent:
                 "secretary.action_item.add",
                 self.client.agents.messages.create,
                 agent_id=self.agent.id,
-                messages=[MessageCreate(role="user", content=action_message)],
+                messages=[MessageCreateParam(role="user", content=action_message)],
             )
             print(f"✅ Action item recorded: {description}")
 
@@ -378,7 +362,7 @@ class SecretaryAgent:
                 "secretary.decision.record",
                 self.client.agents.messages.create,
                 agent_id=self.agent.id,
-                messages=[MessageCreate(role="user", content=decision_message)],
+                messages=[MessageCreateParam(role="user", content=decision_message)],
             )
             print(f"📋 Decision recorded: {decision}")
 
@@ -402,7 +386,7 @@ class SecretaryAgent:
                 self.client.agents.messages.create,
                 agent_id=self.agent.id,
                 messages=[
-                    MessageCreate(
+                    MessageCreateParam(
                         role="user",
                         content="Please provide a summary of the meeting statistics - how many messages, participants, decisions, action items, etc. Please use the send_message tool to provide your response.",
                     )
@@ -455,11 +439,11 @@ class SecretaryAgent:
                 "secretary.minutes.generate",
                 self.client.agents.messages.create,
                 agent_id=self.agent.id,
-                messages=[MessageCreate(role="user", content=minutes_request)],
+                messages=[MessageCreateParam(role="user", content=minutes_request)],
             )
 
         try:
-            response = retry_with_backoff(request_minutes)
+            response = request_minutes()
             if response:
                 # Extract the agent's response
                 minutes = self._extract_agent_response(response)

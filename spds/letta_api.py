@@ -7,7 +7,7 @@ import time
 from typing import Any, Callable, Optional, Tuple, Type
 
 try:
-    from letta_client.core.api_error import ApiError
+    from letta_client import APIError as ApiError
 except ImportError:  # pragma: no cover
     ApiError = None  # type: ignore
 

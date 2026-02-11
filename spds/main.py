@@ -33,7 +33,7 @@ def load_swarm_from_file(filepath: str):
 def list_available_agents(client: Letta):
     """Fetches all available agents from the Letta server."""
     try:
-        agents = client.agents.list()
+        agents = list(client.agents.list())
         return agents
     except Exception as e:
         print(f"Error fetching agents from Letta server: {e}")
@@ -378,9 +378,9 @@ def main(argv=None):
     # For self-hosted servers with password protection, use the password as token
     letta_password = config.get_letta_password()
     if config.LETTA_ENVIRONMENT == "SELF_HOSTED" and letta_password:
-        client = Letta(token=letta_password, base_url=config.LETTA_BASE_URL)
+        client = Letta(api_key=letta_password, base_url=config.LETTA_BASE_URL)
     elif config.LETTA_API_KEY:
-        client = Letta(token=config.LETTA_API_KEY, base_url=config.LETTA_BASE_URL)
+        client = Letta(api_key=config.LETTA_API_KEY, base_url=config.LETTA_BASE_URL)
     else:
         # No authentication (local self-hosted without password protection)
         client = Letta(base_url=config.LETTA_BASE_URL)

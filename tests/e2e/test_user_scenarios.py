@@ -12,7 +12,8 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from letta_client import Letta
-from letta_client.types import AgentState, EmbeddingConfig, LlmConfig, Memory, Tool
+from letta_client.types import AgentState, EmbeddingConfig, LlmConfig, Tool
+from letta_client.types.agent_state import Memory
 
 from spds.main import main
 from spds.swarm_manager import SwarmManager
@@ -35,6 +36,7 @@ def make_agent_state(id: str, name: str, system: str, model: str, tools=None):
         llm_config=llm,
         embedding_config=emb,
         memory=mem,
+        blocks=[],
         tools=tools or [],
         sources=[],
         tags=[],

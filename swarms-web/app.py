@@ -9,7 +9,7 @@ import string
 import sys
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
@@ -115,10 +115,10 @@ class WebSwarmManager:
         # Initialize Letta client
         letta_password = config.get_letta_password()
         if config.LETTA_ENVIRONMENT == "SELF_HOSTED" and letta_password:
-            self.client = Letta(token=letta_password, base_url=config.LETTA_BASE_URL)
+            self.client = Letta(api_key=letta_password, base_url=config.LETTA_BASE_URL)
         elif config.LETTA_API_KEY:
             self.client = Letta(
-                token=config.LETTA_API_KEY, base_url=config.LETTA_BASE_URL
+                api_key=config.LETTA_API_KEY, base_url=config.LETTA_BASE_URL
             )
         else:
             self.client = Letta(base_url=config.LETTA_BASE_URL)
@@ -886,13 +886,13 @@ def get_agents():
         # Initialize Letta client
         letta_password = config.get_letta_password()
         if config.LETTA_ENVIRONMENT == "SELF_HOSTED" and letta_password:
-            client = Letta(token=letta_password, base_url=config.LETTA_BASE_URL)
+            client = Letta(api_key=letta_password, base_url=config.LETTA_BASE_URL)
         elif config.LETTA_API_KEY:
-            client = Letta(token=config.LETTA_API_KEY, base_url=config.LETTA_BASE_URL)
+            client = Letta(api_key=config.LETTA_API_KEY, base_url=config.LETTA_BASE_URL)
         else:
             client = Letta(base_url=config.LETTA_BASE_URL)
 
-        agents = client.agents.list()
+        agents = list(client.agents.list())
         agent_list = []
 
         for agent in agents:
@@ -1664,7 +1664,7 @@ def create_message():
         event = SessionEvent(
             event_id=str(uuid.uuid4()),
             session_id=session_id,
-            ts=datetime.utcnow(),
+            ts=datetime.now(timezone.utc),
             actor="user",
             type="message",
             payload=payload,

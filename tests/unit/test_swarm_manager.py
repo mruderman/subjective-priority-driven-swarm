@@ -8,15 +8,21 @@ from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, call, patch
 
+import httpx
 import pytest
 from letta_client.types import (
     AgentState,
     EmbeddingConfig,
-    LettaResponse,
     LlmConfig,
-    Memory,
-    Message,
 )
+from letta_client.types.agents import LettaResponse, Message
+from letta_client.types.agent_state import Memory
+
+
+def _make_not_found_error(message="Not found"):
+    resp = httpx.Response(404, request=httpx.Request("GET", "http://test"))
+    from letta_client import NotFoundError
+    return NotFoundError(message, response=resp, body={"detail": message})
 
 
 def mk_agent_state(
@@ -38,6 +44,7 @@ def mk_agent_state(
         llm_config=llm,
         embedding_config=emb,
         memory=mem,
+        blocks=[],
         tools=[],
         sources=[],
         tags=[],
@@ -46,7 +53,7 @@ def mk_agent_state(
     )
 
 
-from letta_client.errors import NotFoundError
+from letta_client import NotFoundError
 
 from spds.spds_agent import SPDSAgent
 from spds.swarm_manager import SwarmManager
@@ -232,7 +239,7 @@ class TestSwarmManager:
 
         def mock_retrieve(agent_id):
             if agent_id == "ag-missing":
-                raise NotFoundError("Agent not found")
+                raise _make_not_found_error("Agent not found")
             elif agent_id == "ag-123":
                 return mock_agent_state1
             elif agent_id == "ag-456":

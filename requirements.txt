@@ -1,5 +1,5 @@
 # Core client for Letta
-letta-client
+letta-client>=1.7.0,<2.0.0
 
 # Required by the Letta client
 httpx>=0.21.2

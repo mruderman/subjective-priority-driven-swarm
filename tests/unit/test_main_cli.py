@@ -123,7 +123,7 @@ def test_main_auth_selection_self_hosted_password():
             main([])
         L.assert_called()
         args, kwargs = L.call_args
-        assert kwargs["token"] == "pw"
+        assert kwargs["api_key"] == "pw"
         assert kwargs["base_url"] == "http://x"
 
 
