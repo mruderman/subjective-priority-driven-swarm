@@ -6,7 +6,7 @@ import os
 import tempfile
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
@@ -94,17 +94,8 @@ class JsonSessionStore(SessionStore):
         # If no default store has been initialized yet, set this instance as the default.
         # This makes helpers that call get_default_session_store() work seamlessly in tests
         # that construct their own JsonSessionStore pointing at a temp directory.
-        try:
-            from .session_store import _default_session_store  # type: ignore
-
-            # Only assign if not yet set to avoid clobbering an explicitly configured store
-            if _default_session_store is None:
-                # Assigning via globals to avoid circular import issues
-                globals().setdefault("_default_session_store", self)
-                globals()["_default_session_store"] = self
-        except Exception:
-            # Best-effort; safe to ignore if globals are not yet available
-            pass
+        if globals().get("_default_session_store") is None:
+            globals()["_default_session_store"] = self
 
     def _get_session_lock(self, session_id: str) -> threading.RLock:
         """Get or create a lock for a specific session."""
@@ -162,7 +153,7 @@ class JsonSessionStore(SessionStore):
         session_dir = self._get_session_dir(session_id)
         session_dir.mkdir(parents=True, exist_ok=True)
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         meta = SessionMeta(
             id=session_id,
             created_at=now,
@@ -369,7 +360,7 @@ class JsonSessionStore(SessionStore):
         """Update the last_updated timestamp for a session."""
         try:
             session_state = self.load(session_id)
-            session_state.meta.last_updated = datetime.utcnow()
+            session_state.meta.last_updated = datetime.now(timezone.utc)
             self._save_session_state(session_state)
             logger.debug(f"Touched session {session_id}")
         except Exception as e:

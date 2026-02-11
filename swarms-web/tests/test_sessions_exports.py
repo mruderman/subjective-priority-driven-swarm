@@ -10,7 +10,7 @@ Tests the following endpoints:
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -73,7 +73,7 @@ def test_session(tmp_path):
         SessionEvent(
             event_id="test-event-1",
             session_id=session_id,
-            ts=datetime.utcnow(),
+            ts=datetime.now(timezone.utc),
             actor="test_agent",
             type="message",
             payload={"content": "Hello world", "message_type": "assistant"},
@@ -81,7 +81,7 @@ def test_session(tmp_path):
         SessionEvent(
             event_id="test-event-2",
             session_id=session_id,
-            ts=datetime.utcnow(),
+            ts=datetime.now(timezone.utc),
             actor="test_agent",
             type="action",
             payload={"action_type": "test_action", "details": {"key": "value"}},
@@ -89,7 +89,7 @@ def test_session(tmp_path):
         SessionEvent(
             event_id="test-event-3",
             session_id=session_id,
-            ts=datetime.utcnow(),
+            ts=datetime.now(timezone.utc),
             actor="test_agent",
             type="decision",
             payload={

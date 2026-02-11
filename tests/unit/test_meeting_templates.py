@@ -1,6 +1,6 @@
 """Unit tests for the board meeting minutes template."""
 
-from datetime import datetime as real_datetime
+from datetime import datetime as real_datetime, timezone
 
 import pytest
 
@@ -23,8 +23,7 @@ def fixed_datetime(monkeypatch):
             Returns:
                 datetime: A `datetime` instance for 2024-05-20 15:30 (UTC/naive as constructed).
             """
-            dt = cls(2024, 5, 20, 15, 30)
-            return dt if tz is None else dt.replace(tzinfo=tz)
+            return cls(2024, 5, 20, 15, 30, tzinfo=timezone.utc)
 
     monkeypatch.setattr("spds.meeting_templates.datetime", FixedDateTime)
     return FixedDateTime
@@ -61,7 +60,7 @@ def sample_meeting_data(fixed_datetime):
             dict: A sample meeting record containing deterministic metadata (start_time, meeting_type, topic, participants),
             a conversation_log with two speakers, one action item, one decision, topics_covered, and aggregated stats.
         """
-        start = fixed_datetime(2024, 5, 19, 9, 0)
+        start = fixed_datetime(2024, 5, 19, 9, 0, tzinfo=timezone.utc)
         base = {
             "metadata": {
                 "start_time": start,

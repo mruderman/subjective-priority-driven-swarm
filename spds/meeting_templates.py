@@ -1,7 +1,7 @@
 # spds/meeting_templates.py
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
@@ -41,8 +41,8 @@ class BoardMinutesTemplate(BaseTemplate):
         decisions = meeting_data.get("decisions", [])
         stats = meeting_data.get("stats", {})
 
-        start_time = metadata.get("start_time", datetime.now())
-        end_time = datetime.now()
+        start_time = metadata.get("start_time", datetime.now(timezone.utc))
+        end_time = datetime.now(timezone.utc)
 
         # Header
         minutes = f"""# {self.organization_name}
@@ -140,7 +140,7 @@ class BoardMinutesTemplate(BaseTemplate):
         # Footer
         minutes += f"\n---\n"
         minutes += f"**Minutes Prepared by**: Secretary Agent\n"
-        minutes += f"**Date of Preparation**: {datetime.now().strftime('%B %d, %Y')}\n"
+        minutes += f"**Date of Preparation**: {datetime.now(timezone.utc).strftime('%B %d, %Y')}\n"
         minutes += f"**Status**: Draft\n"
         minutes += f"**Distribution**: Board Members\n"
 
@@ -221,8 +221,8 @@ class CasualMinutesTemplate(BaseTemplate):
         decisions = meeting_data.get("decisions", [])
         stats = meeting_data.get("stats", {})
 
-        start_time = metadata.get("start_time", datetime.now())
-        end_time = datetime.now()
+        start_time = metadata.get("start_time", datetime.now(timezone.utc))
+        end_time = datetime.now(timezone.utc)
 
         # Casual header with emoji
         minutes = f"""# 💬 Group Discussion: {metadata.get('topic', 'Team Chat')}

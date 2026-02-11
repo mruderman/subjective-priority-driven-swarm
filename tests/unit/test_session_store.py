@@ -2,7 +2,7 @@
 
 import json
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -65,7 +65,7 @@ class TestJsonSessionStore:
         event = SessionEvent(
             event_id="test-event-1",
             session_id=session_id,
-            ts=datetime.utcnow(),
+            ts=datetime.now(timezone.utc),
             actor="test_agent",
             type="message",
             payload={"content": "Hello world", "message_type": "assistant"},
@@ -96,7 +96,7 @@ class TestJsonSessionStore:
             event = SessionEvent(
                 event_id=f"event-{i}",
                 session_id=session_id,
-                ts=datetime.utcnow(),
+                ts=datetime.now(timezone.utc),
                 actor=f"agent-{i}",
                 type="message",
                 payload={"content": f"Message {i}", "message_type": "assistant"},
@@ -200,7 +200,7 @@ class TestJsonSessionStore:
             event = SessionEvent(
                 event_id=f"event-{i}",
                 session_id=session_id,
-                ts=datetime.utcnow(),
+                ts=datetime.now(timezone.utc),
                 actor=f"agent-{i}",
                 type="message",
                 payload={"content": f"Message {i}", "message_type": "assistant"},
@@ -240,7 +240,7 @@ class TestJsonSessionStore:
                 event = SessionEvent(
                     event_id=f"concurrent-event-{i}",
                     session_id=session_id,
-                    ts=datetime.utcnow(),
+                    ts=datetime.now(timezone.utc),
                     actor=f"agent-{i}",
                     type="message",
                     payload={
@@ -274,8 +274,8 @@ class TestSessionModels:
         """Test SessionMeta model."""
         meta = SessionMeta(
             id="test-123",
-            created_at=datetime.utcnow(),
-            last_updated=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            last_updated=datetime.now(timezone.utc),
             title="Test Session",
             tags=["test", "demo"],
         )
@@ -289,7 +289,7 @@ class TestSessionModels:
         event = SessionEvent(
             event_id="event-123",
             session_id="session-123",
-            ts=datetime.utcnow(),
+            ts=datetime.now(timezone.utc),
             actor="test_agent",
             type="message",
             payload={"content": "Hello", "message_type": "assistant"},
@@ -305,8 +305,8 @@ class TestSessionModels:
         """Test SessionState model."""
         meta = SessionMeta(
             id="session-123",
-            created_at=datetime.utcnow(),
-            last_updated=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            last_updated=datetime.now(timezone.utc),
             title="Test Session",
         )
 
@@ -314,7 +314,7 @@ class TestSessionModels:
             SessionEvent(
                 event_id="event-1",
                 session_id="session-123",
-                ts=datetime.utcnow(),
+                ts=datetime.now(timezone.utc),
                 actor="agent-1",
                 type="message",
                 payload={"content": "Message 1"},

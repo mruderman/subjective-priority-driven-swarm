@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from spds.export_manager import ExportManager
@@ -12,7 +12,7 @@ from spds.export_manager import ExportManager
 
 def build_sample_meeting_data() -> dict:
     """Create a rich meeting payload for export tests."""
-    start = datetime(2024, 1, 1, 9, 0, 0)
+    start = datetime(2024, 1, 1, 9, 0, 0, tzinfo=timezone.utc)
     metadata = {
         "topic": "AI Strategy Planning",
         "meeting_type": "board meeting",
