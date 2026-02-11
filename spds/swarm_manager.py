@@ -10,6 +10,7 @@ from letta_client import NotFoundError
 
 from . import config
 from .config import logger
+from .cross_agent import setup_cross_agent_messaging, teardown_cross_agent_messaging
 from .export_manager import ExportManager
 from .letta_api import letta_call
 from .memory_awareness import create_memory_awareness_for_agent
@@ -85,6 +86,9 @@ class SwarmManager:
         # Role management state
         self.secretary_agent_id: str | None = None
         self.pending_nomination: dict | None = None
+        # Cross-agent messaging state (populated by _setup_cross_agent)
+        self.session_id: str = str(uuid.uuid4())
+        self._cross_agent_info: dict | None = None
 
         logger.info(f"Initializing SwarmManager in {conversation_mode} mode.")
 
@@ -153,6 +157,43 @@ class SwarmManager:
                 logger.info("MCP config file not found; MCP tools disabled")
             except Exception as e:
                 logger.warning("MCPLaunchpad initialization failed: %s", e)
+
+        # Set up cross-agent messaging (tagging, shared memory, multi-agent tools)
+        self._setup_cross_agent()
+
+    def _setup_cross_agent(self) -> None:
+        """Enable cross-agent messaging for all agents in this session."""
+        if not self.agents:
+            return
+        try:
+            agent_ids = [a.agent.id for a in self.agents]
+            participant_names = [a.name for a in self.agents]
+            self._cross_agent_info = setup_cross_agent_messaging(
+                client=self.client,
+                agent_ids=agent_ids,
+                session_id=self.session_id,
+                participant_names=participant_names,
+                conversation_mode=self.conversation_mode,
+            )
+            if self._cross_agent_info.get("multi_agent_enabled"):
+                logger.info("Cross-agent messaging enabled for session %s", self.session_id)
+        except Exception as e:
+            logger.warning("Cross-agent messaging setup failed: %s", e)
+            self._cross_agent_info = None
+
+    def _teardown_cross_agent(self) -> None:
+        """Remove session tags after the session ends."""
+        if not self.agents or not getattr(self, "_cross_agent_info", None):
+            return
+        try:
+            agent_ids = [a.agent.id for a in self.agents]
+            teardown_cross_agent_messaging(
+                client=self.client,
+                agent_ids=agent_ids,
+                session_id=self.session_id,
+            )
+        except Exception as e:
+            logger.warning("Cross-agent messaging teardown failed: %s", e)
 
     def _emit(self, message: str, *, level: str = "info") -> None:
         """Print a user-facing message and log it at the requested level."""
@@ -1624,7 +1665,15 @@ class SwarmManager:
             },
         )
 
-        # Topic is naturally included in conversation_history
+        # Update shared swarm_context block with topic
+        cross_info = getattr(self, "_cross_agent_info", None)
+        if cross_info and cross_info.get("swarm_context_block_id"):
+            from .cross_agent import update_swarm_context
+            update_swarm_context(
+                self.client,
+                self._cross_agent_info["swarm_context_block_id"],
+                {"Topic": topic},
+            )
 
         if self.secretary:
             # Get participant names
@@ -1660,6 +1709,9 @@ class SwarmManager:
                 "conversation_history_length": len(self.conversation_history),
             },
         )
+
+        # Clean up cross-agent session tags
+        self._teardown_cross_agent()
 
         if self.secretary:
             self._emit("\n" + "=" * 50)

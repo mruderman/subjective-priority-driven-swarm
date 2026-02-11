@@ -75,6 +75,8 @@ class SPDSAgent:
         client: Letta,
         model: str = None,
         embedding: str = None,
+        include_multi_agent_tools: bool = False,
+        tags: list = None,
     ):
         """Creates a new agent on the Letta server and returns an SPDSAgent instance."""
         system_prompt = (
@@ -88,14 +90,22 @@ class SPDSAgent:
         agent_model = model if model else config.DEFAULT_AGENT_MODEL
         agent_embedding = embedding if embedding else config.DEFAULT_EMBEDDING_MODEL
 
-        agent_state = letta_call(
-            "agent.create",
-            client.agents.create,
+        create_kwargs = dict(
             name=name,
             system=system_prompt,
             model=agent_model,
             embedding=agent_embedding,
             include_base_tools=True,
+        )
+        if include_multi_agent_tools:
+            create_kwargs["include_multi_agent_tools"] = True
+        if tags:
+            create_kwargs["tags"] = tags
+
+        agent_state = letta_call(
+            "agent.create",
+            client.agents.create,
+            **create_kwargs,
         )
         return cls(agent_state, client)
 
