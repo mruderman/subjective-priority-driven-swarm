@@ -98,7 +98,9 @@ def make_mgr_with_agents(agent_list):
     )
     mgr.agents = agent_list
     mgr.enable_secretary = False
-    mgr.secretary = None
+    mgr._secretary = None
+    mgr.secretary_agent_id = None
+    mgr.pending_nomination = None
     mgr.export_manager = FakeExportManager()
     mgr.conversation_history = ""
     mgr.last_speaker = None

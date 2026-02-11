@@ -12,7 +12,8 @@ def test_start_chat_eof_inner_loop(monkeypatch, capsys):
     mgr._agent_turn = lambda topic: None
     mgr._end_meeting = lambda: None
     mgr._handle_secretary_commands = lambda s: False
-    mgr.secretary = None
+    mgr._secretary = None
+    mgr.secretary_agent_id = None
 
     # First call returns a topic, second call simulates Ctrl+D (EOF)
     seq = iter(["some topic"])
@@ -36,7 +37,9 @@ def test_start_chat_with_topic_eof_inner_loop(monkeypatch, capsys):
     mgr._agent_turn = lambda topic: None
     mgr._end_meeting = lambda: None
     mgr._handle_secretary_commands = lambda s: False
-    mgr.secretary = None
+    mgr._secretary = None
+    mgr.secretary_agent_id = None
+    mgr.pending_nomination = None
 
     # Simulate EOF immediately in the inner loop
     def input_stub(prompt=""):
@@ -54,7 +57,8 @@ def test_start_chat_secretary_command_continue(monkeypatch, capsys):
     mgr._start_meeting = lambda topic: None
     mgr._agent_turn = lambda topic: None
     mgr._end_meeting = lambda: None
-    mgr.secretary = None
+    mgr._secretary = None
+    mgr.secretary_agent_id = None
 
     # Inputs: topic, a secretary-command which should be handled and cause 'continue', then quit
     seq = iter(["topic", "/minutes", "quit"])
