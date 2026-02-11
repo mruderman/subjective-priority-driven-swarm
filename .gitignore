@@ -22,17 +22,15 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-exports/
 
 # Virtual environments
 .venv/
+.venv-*
 venv/
-ENV/
 env/
+ENV/
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -47,6 +45,7 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+.pytest_cache/
 nosetests.xml
 coverage.xml
 *.cover
@@ -57,7 +56,7 @@ coverage.xml
 *.mo
 *.pot
 
-# Django stuff:
+# Django stuff
 *.log
 local_settings.py
 db.sqlite3
@@ -69,34 +68,34 @@ instance/
 # Pyre type checker
 .pyre/
 
-# Env files
-.env
-
-# Editor directories and files
-.idea/
-.vscode/
-*.sublime-project
-*.sublime-workspace
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environments
-venv/
-env/
-.venv/
-.venv-*
-
 # Environment variables
 .env
 *.env
 
-# IDE files
-.vscode/
+# Editor / IDE files
 .idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
 *.swp
 *~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+
+# Logs
+logs/
+
+# Exports
+exports/
+
+# Claude-flow / swarm local state
+.claude-flow/
+.swarm/
 
 # Local hive-mind data (do not commit runtime state or secrets)
 .hive-mind/
@@ -105,48 +104,19 @@ env/
 CLAUDE.md
 AGENTS.md
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Logs
-logs/
-*.log
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Backup files
-*.bak
-*~
-
-# Claude Flow generated files
-.claude/settings.local.json
-.mcp.json
-claude-flow.config.json
-.swarm/
-.hive-mind/
-memory/claude-flow-data.json
-memory/sessions/*
-!memory/sessions/README.md
-memory/agents/*
-!memory/agents/README.md
-coordination/memory_bank/*
-coordination/subtasks/*
-coordination/orchestration/*
+# Database files
 *.db
 *.db-journal
 *.db-wal
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
-claude-flow
-claude-flow.bat
-claude-flow.ps1
-hive-mind-prompt-*.txt
-**/.claude-flow/
+
+# Claude Code local settings (not committed)
+.claude/settings.local.json
+.mcp.json
+
+# Byterover rules
 .clinerules/byterover-rules.md
 .kilocode/rules/byterover-rules.md
 .roo/rules/byterover-rules.md
