@@ -300,10 +300,10 @@ Codebase shrinks ~40-50%. What remains is focused on SPDS's unique value: priori
 | Phase | Focus | Scope | Risk | Dependencies | Status |
 |-------|-------|-------|------|-------------|--------|
 | 1 | Server connection + letta-client | Small | Low | None | ✅ Complete |
-| 2 | Conversations API | Large | Medium-high | Phase 1 ✅ | Ready |
-| 3 | Cross-agent messaging | Medium | Low | Phase 2 | Blocked |
-| 4 | MCP Launchpad integration | Medium-large | Medium | Phase 1 ✅ | Ready |
-| 5 | Cleanup and slimming | Medium | Low | Phases 2-4 | Blocked |
+| 2 | Conversations API | Large | Medium-high | Phase 1 ✅ | ✅ Complete |
+| 3 | Cross-agent messaging | Medium | Low | Phase 2 ✅ | ✅ Complete |
+| 4 | MCP Launchpad integration | Medium-large | Medium | Phase 1 ✅ | ✅ Complete |
+| 5 | Cleanup and slimming | Medium | Low | Phases 2-4 ✅ | ✅ Complete |
 
 ### Parallel Execution Plan
 

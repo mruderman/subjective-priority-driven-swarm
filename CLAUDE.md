@@ -109,14 +109,14 @@ pre-commit run --all-files
 1. **SPDSAgent** (`spds_agent.py`): Individual agent implementation with real LLM-based subjective assessment
 2. **SwarmManager** (`swarm_manager.py`): Orchestrates multi-agent conversations with 4 conversation modes
 3. **SecretaryAgent** (`secretary_agent.py`): AI-powered meeting documentation using real Letta agent intelligence
-4. **MeetingTemplates** (`meeting_templates.py`): Formal board minutes and casual group discussion formats
-5. **ExportManager** (`export_manager.py`): Multi-format export system for conversations and minutes
-6. **Tools** (`tools.py`): Defines the SubjectiveAssessment Pydantic model for agent decision-making
-7. **Config** (`config.py`): Environment variables, logging setup, Letta client configuration, and validation
-8. **Interactive Selection** (`main.py`): CLI entry point with agent selection, conversation modes, and session management
-9. **Session Management** (`session_store.py`, `session_context.py`, `session_tracking.py`): Persistent session tracking and context
-10. **Letta API Wrapper** (`letta_api.py`): Simplified Letta client interface with error handling
-11. **Integration System** (`integrations/`): External tool integrations (Composio, MCP) with registry management
+4. **ExportManager** (`export_manager.py`): Multi-format export system for conversations and minutes
+5. **Tools** (`tools.py`): Defines the SubjectiveAssessment Pydantic model and MCP Launchpad tool
+6. **Config** (`config.py`): Environment variables, logging setup, Letta client configuration, and validation
+7. **Interactive Selection** (`main.py`): CLI entry point with agent selection, conversation modes, and session management
+8. **Conversations** (`conversations.py`): Letta Conversations API wrapper for server-side session persistence
+9. **Cross-Agent Messaging** (`cross_agent.py`): Session tagging, multi-agent tools, shared memory blocks
+10. **MCP Launchpad** (`mcp_launchpad.py`, `mcp_config.py`): On-demand MCP tool discovery and execution
+11. **Letta API Wrapper** (`letta_api.py`): Simplified Letta client interface with error handling
 12. **Agent Profiles** (`profiles_schema.py`): Pydantic schemas for agent profile validation
 13. **Memory Awareness** (`memory_awareness.py`): Agent memory management utilities respecting autonomy
 14. **Message Architecture** (`message.py`): Structured ConversationMessage system for incremental delivery
@@ -127,7 +127,8 @@ pre-commit run --all-files
 - **Real LLM Assessment**: Agents use their own models to evaluate conversation relevance
 - **Multi-Mode Conversations**: Four conversation modes for different discussion styles
 - **Secretary Integration**: Optional neutral observer for meeting documentation
-- **Dual Meeting Formats**: Formal board minutes and casual group discussion notes
+- **Cross-Agent Messaging**: Agents can communicate directly via `send_message_to_agent_async`
+- **MCP Launchpad**: On-demand tool discovery via `discover_and_use_tool` pattern
 - **Interactive UX**: Checkbox-based agent selection with conversation mode and meeting type options
 - **Structured Message System**: ConversationMessage objects enable incremental delivery and context-aware assessment
 
@@ -212,43 +213,32 @@ The complete project structure for imports and testing:
 spds/
 ├── __init__.py
 ├── config.py                  # Configuration and environment management
-├── tools.py                   # SubjectiveAssessment Pydantic model
+├── tools.py                   # SubjectiveAssessment model and MCP Launchpad tool
 ├── spds_agent.py              # Individual agent implementation
 ├── swarm_manager.py           # Multi-agent conversation orchestration
 ├── secretary_agent.py         # AI-powered meeting documentation
-├── meeting_templates.py       # Meeting minute formatting
 ├── export_manager.py          # Multi-format export system
 ├── main.py                    # CLI entry point and interactive selection
+├── conversations.py           # Letta Conversations API wrapper
+├── cross_agent.py             # Cross-agent messaging setup (tags, tools, shared blocks)
+├── mcp_launchpad.py           # MCP tool discovery and execution
+├── mcp_config.py              # MCP server configuration management
 ├── letta_api.py               # Letta client wrapper and utilities
-├── session_store.py           # Session persistence
-├── session_context.py         # Session context handling
-├── session_tracking.py        # Session lifecycle tracking
+├── session_context.py         # Conversation context ContextVar (stub)
+├── session_tracking.py        # Session tracking logging stubs
 ├── profiles_schema.py         # Agent profile validation schemas
 ├── memory_awareness.py        # Memory management utilities
-├── message.py                 # ConversationMessage dataclass and utilities for structured messaging
-├── setup.sh                   # Docker setup script
-└── integrations/              # External tool integrations
-    ├── __init__.py
-    ├── registry.py            # Integration registry management
-    ├── composio.py            # Composio tools integration
-    └── mcp.py                 # Model Context Protocol integration
+├── message.py                 # ConversationMessage dataclass and utilities
+├── diagnostics/               # Agent configuration checking
+│   └── check_agent_config.py
+└── setup.sh                   # Docker setup script
 
 swarms-web/
 ├── app.py                     # Flask web server with WebSocket support
 ├── run.py                     # Web interface startup script
 ├── requirements.txt           # Web-specific dependencies
 ├── templates/                 # Jinja2 HTML templates
-│   ├── base.html
-│   ├── index.html
-│   ├── setup.html
-│   ├── chat.html
-│   └── sessions.html
-├── static/                    # CSS, JS, assets (Bootstrap 5)
-│   ├── css/
-│   └── js/
-└── tests/                     # Playwright E2E tests
-    ├── test_sessions_endpoints.py
-    └── test_sessions_exports.py
+└── static/                    # CSS, JS, assets (Bootstrap 5)
 
 tests/
 ├── unit/                      # Unit tests for individual components
@@ -257,9 +247,9 @@ tests/
 │   ├── test_swarm_manager.py
 │   ├── test_secretary_agent.py
 │   ├── test_export_manager.py
-│   ├── test_session_store.py
-│   ├── test_integrations_registry.py
-│   └── [many more unit tests]
+│   ├── test_cross_agent.py
+│   ├── test_mcp_launchpad.py
+│   └── [more unit tests]
 ├── integration/               # Integration tests
 │   ├── test_model_diversity.py
 │   └── test_config_connectivity.py

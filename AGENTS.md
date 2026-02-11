@@ -1,9 +1,10 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `spds/` – Core Python package (CLI, agents, config, exports, integrations, session management, message architecture).
-- `spds/message.py` – ConversationMessage dataclass system for structured messaging and incremental delivery ✅ **RECENTLY REFACTORED**.
-- `spds/integrations/` – External tool integrations (Composio, MCP, registry management).
+- `spds/` – Core Python package (CLI, agents, config, exports, conversations, cross-agent messaging, MCP launchpad).
+- `spds/conversations.py` – Letta Conversations API wrapper for server-side session persistence.
+- `spds/cross_agent.py` – Cross-agent messaging setup (session tagging, multi-agent tools, shared memory blocks).
+- `spds/mcp_launchpad.py` – On-demand MCP tool discovery and execution via semantic search.
 - `swarms-web/` – Flask web UI with WebSocket support (`app.py`, `run.py`, `templates/`, `static/`, E2E tests).
 - `tests/` – Comprehensive Pytest suite (unit, integration, e2e tests with fixtures).
 - `exports/` – Generated minutes/transcripts (organized by sessions).

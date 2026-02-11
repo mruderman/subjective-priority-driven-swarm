@@ -90,14 +90,10 @@ def build_sample_meeting_data() -> dict:
     }
 
 
-def test_export_meeting_minutes_formal_contains_board_headers(tmp_path):
+def test_export_meeting_minutes_formal_writes_content(tmp_path):
     manager = ExportManager(export_directory=str(tmp_path))
     meeting_data = build_sample_meeting_data()
-    meeting_data["metadata"]["participants"] = [
-        {"name": "Alice", "model": "gpt-4", "expertise": "Chair"},
-        {"name": "Bob", "model": "gpt-4", "expertise": "CTO"},
-        "Charlie",
-    ]
+    meeting_data["content"] = "# Board Minutes\n\nFormal content here."
 
     path = manager.export_meeting_minutes(
         meeting_data, format_type="formal", filename="board_minutes_test"
@@ -106,15 +102,14 @@ def test_export_meeting_minutes_formal_contains_board_headers(tmp_path):
     exported = Path(path)
     assert exported.exists()
     content = exported.read_text(encoding="utf-8")
-
-    assert "CYAN SOCIETY" in content
-    assert "### DISCUSSION AND ACTIONS" in content
-    assert "- [ ] Draft follow-up report" in content
+    assert "Board Minutes" in content
+    assert "Formal content here." in content
 
 
-def test_export_meeting_minutes_casual_highlights_vibe(tmp_path):
+def test_export_meeting_minutes_casual_fallback(tmp_path):
     manager = ExportManager(export_directory=str(tmp_path))
     meeting_data = build_sample_meeting_data()
+    # No pre-formatted content — triggers fallback formatting
 
     path = manager.export_meeting_minutes(
         meeting_data, format_type="casual", filename="casual_notes_test"
@@ -122,10 +117,7 @@ def test_export_meeting_minutes_casual_highlights_vibe(tmp_path):
 
     exported = Path(path)
     content = exported.read_text(encoding="utf-8")
-
-    assert "🎯 What We Talked About" in content
-    assert "Key Insights" in content
-    assert "📋 Action Items" in content
+    assert "AI Strategy Planning" in content
 
 
 def test_export_raw_transcript_includes_metadata_lines(tmp_path):

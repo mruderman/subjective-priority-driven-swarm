@@ -343,16 +343,6 @@ def get_sessions_dir() -> Path:
     return Path(os.getenv("SESSIONS_DIR", "exports/sessions"))
 
 
-def get_session_autoflush_events() -> int:
-    """
-    Get the number of events to batch before flushing to disk.
-
-    Returns:
-        int: Number of events to batch (default: 1, flush every event)
-    """
-    return int(os.getenv("SESSION_AUTOFLUSH_EVENTS", "1"))
-
-
 # Tool schema/export behavior
 def get_tools_use_pydantic_schemas() -> bool:
     """
@@ -382,33 +372,6 @@ def get_tools_use_return_model() -> bool:
         "true",
         "yes",
     )
-
-
-# Integrations Configuration
-def get_integrations_enabled() -> bool:
-    """
-    Get whether integrations are enabled.
-
-    Returns:
-        bool: True if integrations are enabled (default: False)
-    """
-    return os.getenv("SPDS_ENABLE_INTEGRATIONS", "false").lower() == "true"
-
-
-def get_integrations_allow_fake_providers() -> bool:
-    """
-    Get whether fake providers are allowed for testing.
-
-    Returns:
-        bool: True if fake providers are allowed (default: False)
-    """
-    allow_fake = os.getenv("SPDS_ALLOW_FAKE_PROVIDERS", "false").lower() == "true"
-    if allow_fake:
-        logger.warning(
-            "Fake providers are enabled via SPDS_ALLOW_FAKE_PROVIDERS. "
-            "This should only be used for testing and development."
-        )
-    return allow_fake
 
 
 # Ephemeral agent policy and secretary reuse configuration

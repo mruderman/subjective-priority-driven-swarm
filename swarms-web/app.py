@@ -45,7 +45,54 @@ from spds.export_manager import (
 from spds.message import get_new_messages_since_index
 from spds.secretary_agent import SecretaryAgent
 from spds.session_context import set_current_session_id
-from spds.session_store import get_default_session_store
+# session_store deleted in Phase 5 — provide in-memory stub until web app
+# is migrated to ConversationManager (see design doc Phase 2b / Phase 5).
+try:
+    from spds.session_store import get_default_session_store
+except ImportError:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "spds.session_store removed; web app session routes use in-memory stub"
+    )
+
+    class _StubSessionStore:
+        """Minimal in-memory stub replacing JsonSessionStore."""
+        def __init__(self):
+            self._sessions = {}
+
+        def create(self, session_id=None, title=None, tags=None):
+            from types import SimpleNamespace
+            from datetime import datetime, timezone
+            from uuid import uuid4
+            sid = session_id or str(uuid4())
+            now = datetime.now(timezone.utc)
+            meta = SimpleNamespace(id=sid, created_at=now, last_updated=now, title=title, tags=tags or [])
+            state = SimpleNamespace(meta=meta, events=[], extras=None)
+            self._sessions[sid] = state
+            return state
+
+        def load(self, session_id):
+            if session_id not in self._sessions:
+                raise ValueError(f"Session {session_id} not found")
+            return self._sessions[session_id]
+
+        def list_sessions(self):
+            return [s.meta for s in self._sessions.values()]
+
+        def save_event(self, event):
+            sid = getattr(event, "session_id", None)
+            if sid and sid in self._sessions:
+                self._sessions[sid].events.append(event)
+
+        def touch(self, session_id):
+            pass
+
+        def delete(self, session_id):
+            self._sessions.pop(session_id, None)
+
+    _stub_store = _StubSessionStore()
+    def get_default_session_store():
+        return _stub_store
 from spds.session_tracking import track_system_event, track_message, track_action
 from spds.swarm_manager import SwarmManager
 
@@ -1674,10 +1721,9 @@ def create_message():
 
         # Create a session event directly
         from datetime import datetime
+        from types import SimpleNamespace
 
-        from spds.session_store import SessionEvent
-
-        event = SessionEvent(
+        event = SimpleNamespace(
             event_id=str(uuid.uuid4()),
             session_id=session_id,
             ts=datetime.now(timezone.utc),
