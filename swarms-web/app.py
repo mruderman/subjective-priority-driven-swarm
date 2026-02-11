@@ -1224,13 +1224,29 @@ def trigger_session_export(session_id):
         created_files = []
 
         try:
+            # Build messages from session events for export
+            session_state = store.load(session_id)
+            messages_for_export = []
+            for event in sorted(session_state.events, key=lambda e: e.ts):
+                if event.type == "message":
+                    messages_for_export.append({
+                        "message_type": event.payload.get("message_type", "message"),
+                        "role": event.actor,
+                        "content": event.payload.get("content", ""),
+                        "created_at": event.ts.isoformat(),
+                    })
+
             # Export to JSON
-            json_path = export_session_to_json(session_id, session_exports_dir)
+            json_path = export_session_to_json(
+                session_id, dest_dir=session_exports_dir, messages=messages_for_export
+            )
             json_filename = json_path.name
             created_files.append({"filename": json_filename, "kind": "json"})
 
             # Export to Markdown
-            md_path = export_session_to_markdown(session_id, session_exports_dir)
+            md_path = export_session_to_markdown(
+                session_id, dest_dir=session_exports_dir, messages=messages_for_export
+            )
             md_filename = md_path.name
             created_files.append({"filename": md_filename, "kind": "markdown"})
 

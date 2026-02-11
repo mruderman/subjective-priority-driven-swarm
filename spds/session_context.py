@@ -1,77 +1,60 @@
 # spds/session_context.py
+#
+# Tracks the active conversation ID via a ContextVar.
+# Previously tracked a local JSON session; now tracks a Letta
+# Conversations API conversation_id.
 
 import logging
 from contextvars import ContextVar
 from typing import Optional
 from uuid import uuid4
 
-from .session_store import SessionState, SessionStore
-
 logger = logging.getLogger(__name__)
 
-# Context variable for current session ID
-current_session_id: ContextVar[Optional[str]] = ContextVar(
-    "current_session_id", default=None
+# Context variable for active conversation ID
+current_conversation_id: ContextVar[Optional[str]] = ContextVar(
+    "current_conversation_id", default=None
 )
+
+# Backward-compatible alias
+current_session_id = current_conversation_id
 
 
 def set_current_session_id(session_id: str) -> None:
-    """
-    Set the current session ID in the context.
-
-    Args:
-        session_id: The session ID to set
-    """
-    current_session_id.set(session_id)
-    logger.debug(f"Set current session ID to {session_id}")
+    """Set the active conversation/session ID."""
+    current_conversation_id.set(session_id)
+    logger.debug("Set current conversation ID to %s", session_id)
 
 
 def get_current_session_id() -> Optional[str]:
-    """
-    Get the current session ID from the context.
-
-    Returns:
-        The current session ID, or None if not set
-    """
-    return current_session_id.get()
+    """Get the active conversation/session ID."""
+    return current_conversation_id.get()
 
 
-def ensure_session(session_store: SessionStore, title: Optional[str] = None) -> str:
-    """
-    Ensure a session is active. If none is set, creates a new session.
+def clear_session_context() -> None:
+    """Clear the active conversation context."""
+    current_conversation_id.set(None)
+    logger.debug("Cleared conversation context")
 
-    Args:
-        session_store: The session store to use
-        title: Optional title for the new session
 
-    Returns:
-        The session ID (either existing or newly created)
+def new_session_id() -> str:
+    """Generate a new session ID (UUID4)."""
+    return str(uuid4())
+
+
+def ensure_session(session_store=None, title: Optional[str] = None) -> str:
+    """Ensure a conversation ID is set. Creates one if needed.
+
+    The ``session_store`` parameter is accepted but ignored (kept for
+    backward compatibility). A new UUID is generated if no conversation
+    is active — callers should replace this with a real
+    ``ConversationManager.create_session()`` call.
     """
     current_id = get_current_session_id()
     if current_id is not None:
         return current_id
 
-    # Create new session
-    session_state = session_store.create(title=title)
-    session_id = session_state.meta.id
+    session_id = new_session_id()
     set_current_session_id(session_id)
-    logger.info(f"Created new session {session_id}")
+    logger.info("Created new conversation context %s", session_id)
     return session_id
-
-
-def new_session_id() -> str:
-    """
-    Generate a new session ID.
-
-    Returns:
-        A new UUID4-based session ID
-    """
-    return str(uuid4())
-
-
-def clear_session_context() -> None:
-    """
-    Clear the current session context.
-    """
-    current_session_id.set(None)
-    logger.debug("Cleared session context")

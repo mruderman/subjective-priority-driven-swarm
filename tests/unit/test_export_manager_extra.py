@@ -1,21 +1,35 @@
+"""Extra unit tests for export_manager edge cases."""
+
 from pathlib import Path
-import json
+from unittest.mock import MagicMock
 
 import pytest
-from spds.session_store import set_default_session_store
+
+from spds.export_manager import build_session_summary, export_session_to_json
+
+
+def _mock_conversation_manager(messages=None, summary_dict=None):
+    """Create a mock ConversationManager."""
+    cm = MagicMock()
+    cm.list_messages.return_value = messages or []
+    cm.get_session_summary.return_value = summary_dict or {"id": "conv-test"}
+    return cm
 
 
 def test_export_session_atomic_write_cleanup(tmp_path, monkeypatch):
+    """Verify that a failed atomic write cleans up temp files."""
     from spds import export_manager as em
 
-    # Create minimal session in store so build_session_summary can run
-    from spds.session_store import JsonSessionStore
+    # Create a mock ConversationManager that returns some messages
+    cm = _mock_conversation_manager(
+        messages=[
+            {"message_type": "assistant_message", "role": "assistant",
+             "content": "test", "created_at": ""},
+        ],
+        summary_dict={"id": "conv-boom"},
+    )
 
-    store = JsonSessionStore(tmp_path / "sessions")
-    set_default_session_store(store)
-    sess = store.create(title="X")
-
-    # Force tempfile.NamedTemporaryFile to throw on write to trigger cleanup only during export
+    # Force tempfile.NamedTemporaryFile to throw to trigger cleanup path
     real_ntf = em.tempfile.NamedTemporaryFile
 
     class Boom(Exception):
@@ -27,22 +41,19 @@ def test_export_session_atomic_write_cleanup(tmp_path, monkeypatch):
     monkeypatch.setattr(em.tempfile, "NamedTemporaryFile", bomb)
     try:
         with pytest.raises(Boom):
-            em.export_session_to_json(sess.meta.id, dest_dir=tmp_path / "out")
+            em.export_session_to_json(
+                "conv-boom",
+                conversation_manager=cm,
+                dest_dir=tmp_path / "out",
+            )
     finally:
-        # Restore real NTF to avoid side effects
         monkeypatch.setattr(em.tempfile, "NamedTemporaryFile", real_ntf)
-        set_default_session_store(None)
 
 
 def test_build_session_summary_no_events(tmp_path):
+    """build_session_summary with empty messages returns valid structure."""
     from spds import export_manager as em
-    from spds.session_store import JsonSessionStore
 
-    store = JsonSessionStore(tmp_path / "sessions")
-    set_default_session_store(store)
-    sess = store.create(title="Empty")
-    summary = em.build_session_summary(sess)
-    assert "minutes_markdown" in summary and "Total Events" in summary["minutes_markdown"]
-    set_default_session_store(None)
-
-
+    summary = em.build_session_summary(messages=[])
+    assert "minutes_markdown" in summary
+    assert "Total Messages" in summary["minutes_markdown"]

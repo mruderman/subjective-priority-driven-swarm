@@ -5,15 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
 from spds import main as main_module
-from spds.session_store import (
-    JsonSessionStore,
-    reset_default_session_store,
-    set_default_session_store,
-)
 
 
 class DummySwarm:
@@ -27,12 +23,6 @@ class DummySwarm:
 
     def start_chat_with_topic(self, topic: str):
         self.started_with_topic = topic
-
-
-def _install_session_store(tmp_path: Path):
-    store = JsonSessionStore(tmp_path / "sessions")
-    set_default_session_store(store)
-    return store
 
 
 @pytest.fixture(autouse=True)
@@ -58,54 +48,74 @@ def isolate_config(monkeypatch: pytest.MonkeyPatch):
         ),
     )
     yield
-    reset_default_session_store()
 
 
-def test_sessions_list_json(tmp_path, monkeypatch, capsys):
-    store = _install_session_store(tmp_path)
-    session = store.create(title="CLI Coverage")
-    store.save_event(session.events[0])
+def test_sessions_list_json(monkeypatch, capsys):
+    """Test sessions list --json with mocked ConversationManager."""
+    mock_conv = Mock()
+    mock_conv.id = "conv-abc123"
+    mock_conv.created_at = None
+    mock_conv.updated_at = None
+    mock_conv.summary = "Test Session"
 
-    exit_code = main_module.main(["sessions", "list", "--json"])
+    mock_cm = Mock()
+    mock_cm.list_sessions.return_value = [mock_conv]
+    mock_cm.get_session_summary.return_value = {
+        "id": "conv-abc123",
+        "agent_id": "agent-1",
+        "summary": "Test Session",
+        "created_at": "2026-02-11T00:00:00",
+        "updated_at": "2026-02-11T00:00:00",
+    }
+
+    monkeypatch.setattr(
+        main_module, "ConversationManager", lambda client: mock_cm
+    )
+
+    exit_code = main_module.main(
+        ["sessions", "list", "--agent-id", "agent-1", "--json"]
+    )
     assert exit_code == 0
 
     output = capsys.readouterr().out.strip()
     data = json.loads(output)
-    assert data[0]["title"] == "CLI Coverage"
+    assert data[0]["summary"] == "Test Session"
 
 
-def test_sessions_resume_success_and_failure(tmp_path, monkeypatch, capsys):
-    store = _install_session_store(tmp_path)
-    session = store.create(title="Resume")
+def test_sessions_resume_success_and_failure(monkeypatch, capsys):
+    """Test sessions resume with mocked ConversationManager."""
+    mock_cm = Mock()
+    mock_cm.get_session.return_value = Mock(id="conv-123")
 
-    ok_code = main_module.main(["sessions", "resume", session.meta.id])
+    monkeypatch.setattr(
+        main_module, "ConversationManager", lambda client: mock_cm
+    )
+
+    ok_code = main_module.main(["sessions", "resume", "conv-123"])
     assert ok_code == 0
-    capsys.readouterr()  # clear captured output
+    capsys.readouterr()
 
+    # Now test failure
+    mock_cm.get_session.side_effect = Exception("Not found")
     err_code = main_module.main(["sessions", "resume", "missing-id"])
     assert err_code == 2
     stderr = capsys.readouterr().err
-    assert "not found" in stderr
+    assert "not found" in stderr.lower()
 
 
-def test_new_session_flag_triggers_swarm(monkeypatch, tmp_path):
-    _install_session_store(tmp_path)
-
+def test_session_id_sets_context(monkeypatch):
+    """Test that --session-id sets the conversation context."""
     dummy_swarm = DummySwarm()
     monkeypatch.setattr(
         main_module, "SwarmManager", lambda *args, **kwargs: dummy_swarm
     )
 
-    exit_code = main_module.main(
-        ["--new-session", "Kickoff", "--agent-ids", "agent-123"]
-    )
+    exit_code = main_module.main(["--session-id", "conv-999", "--agent-ids", "agent-1"])
     assert exit_code == 0
     assert dummy_swarm.started is True
 
 
 def test_swarm_config_path(monkeypatch, tmp_path):
-    _install_session_store(tmp_path)
-
     profiles = [
         {
             "name": "Playwright Agent",
@@ -132,8 +142,6 @@ def test_swarm_config_path(monkeypatch, tmp_path):
 
 
 def test_agent_ids_flow(monkeypatch, tmp_path):
-    _install_session_store(tmp_path)
-
     dummy_swarm = DummySwarm()
 
     # Mock Letta client to provide retrieve responses.

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -17,12 +17,6 @@ from spds.export_manager import (
     export_session_to_json,
     export_session_to_markdown,
     restore_session_from_json,
-)
-from spds.session_store import (
-    JsonSessionStore,
-    SessionEvent,
-    reset_default_session_store,
-    set_default_session_store,
 )
 
 
@@ -42,7 +36,7 @@ def manager(export_dir):
 
 
 def _sample_meeting_data():
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return {
         "metadata": {
             "topic": "Playwright Coverage",
@@ -132,88 +126,59 @@ def test_export_manager_generates_files(manager, export_dir, tmp_path):
     assert removed >= 1
 
 
-def test_session_summary_and_restore(tmp_path, export_dir, monkeypatch):
-    store = JsonSessionStore(tmp_path / "sessions")
-    set_default_session_store(store)
+def test_session_summary_and_restore(tmp_path, export_dir):
+    """Test build_session_summary with messages and export functions."""
+    now = datetime.now(timezone.utc)
+    messages = [
+        {
+            "message_type": "user_message",
+            "role": "user",
+            "content": "Hello world",
+            "created_at": now,
+        },
+        {
+            "message_type": "assistant_message",
+            "role": "assistant",
+            "content": "Hi there! How can I help?",
+            "created_at": now + timedelta(seconds=5),
+        },
+    ]
 
-    session = store.create(title="Minutes Session")
-    base_event = SessionEvent(
-        event_id="evt-1",
-        session_id=session.meta.id,
-        ts=datetime.utcnow(),
-        actor="Alex",
-        type="message",
-        payload={"content": "Hello world", "message_type": "user"},
-    )
-    store.save_event(base_event)
-    decision_event = SessionEvent(
-        event_id="evt-2",
-        session_id=session.meta.id,
-        ts=datetime.utcnow(),
-        actor="Jordan",
-        type="decision",
-        payload={"decision_type": "proposal", "details": {"content": "Approve plan"}},
-    )
-    store.save_event(decision_event)
-    action_event = SessionEvent(
-        event_id="evt-3",
-        session_id=session.meta.id,
-        ts=datetime.utcnow(),
-        actor="Alex",
-        type="action",
-        payload={"action_type": "task", "details": {"content": "Write report"}},
-    )
-    store.save_event(action_event)
+    summary = build_session_summary(messages=messages)
+    assert len(summary["messages"]) == 2
+    assert "Hello world" in summary["minutes_markdown"]
+    assert summary["actions"] == []
+    assert summary["decisions"] == []
 
-    session = store.load(session.meta.id)
-    summary = build_session_summary(session)
-    assert summary["actions"] and summary["decisions"] and summary["messages"]
+    # Test export with mocked ConversationManager
+    mock_cm = Mock()
+    mock_cm.list_messages.return_value = messages
+    mock_cm.get_session_summary.return_value = {
+        "id": "conv-123",
+        "summary": "Test conversation",
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+    }
 
     md_path = export_session_to_markdown(
-        session.meta.id, dest_dir=tmp_path / "session_exports"
+        "conv-123",
+        conversation_manager=mock_cm,
+        dest_dir=tmp_path / "session_exports",
     )
     json_path = export_session_to_json(
-        session.meta.id, dest_dir=tmp_path / "session_exports"
+        "conv-123",
+        conversation_manager=mock_cm,
+        dest_dir=tmp_path / "session_exports",
     )
     assert md_path.exists()
     assert json_path.exists()
 
-    restored_events = {"systems": [], "decisions": [], "actions": []}
+    # Verify JSON content
+    with json_path.open() as f:
+        data = json.load(f)
+    assert "messages" in data
+    assert len(data["messages"]) == 2
 
-    import spds.session_context as session_context
-    import spds.session_tracking as session_tracking
-
-    monkeypatch.setattr(
-        session_tracking,
-        "track_system_event",
-        lambda *args, **kwargs: restored_events["systems"].append((args, kwargs)),
-    )
-    monkeypatch.setattr(
-        session_tracking,
-        "track_decision",
-        lambda *args, **kwargs: restored_events["decisions"].append((args, kwargs)),
-    )
-    monkeypatch.setattr(
-        session_tracking,
-        "track_action",
-        lambda *args, **kwargs: restored_events["actions"].append((args, kwargs)),
-    )
-    monkeypatch.setattr(
-        session_context, "set_current_session_id", lambda *args, **kwargs: None
-    )
-
-    restored_id = restore_session_from_json(json_path)
-    assert isinstance(restored_id, str)
-    assert restored_events["decisions"]
-    assert restored_events["actions"]
-
-    # Invalid paths should raise helpful errors
-    with pytest.raises(ValueError):
-        restore_session_from_json(tmp_path / "missing.json")
-
-    bad_json = tmp_path / "bad.json"
-    bad_json.write_text("not-json")
-    with pytest.raises(ValueError):
-        restore_session_from_json(bad_json)
-
-    reset_default_session_store()
+    # restore_session_from_json is now a deprecation stub
+    assert restore_session_from_json(json_path) is None
+    assert restore_session_from_json(tmp_path / "missing.json") is None

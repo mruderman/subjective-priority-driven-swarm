@@ -10,8 +10,8 @@ import questionary
 from letta_client import Letta
 
 from . import config
+from .conversations import ConversationManager
 from .session_context import set_current_session_id
-from .session_store import SessionMeta, get_default_session_store
 from .swarm_manager import SwarmManager
 
 logger = logging.getLogger(__name__)
@@ -163,111 +163,91 @@ def interactive_agent_selection(client: Letta):
     )
 
 
-def format_session_table(sessions: list[SessionMeta]) -> str:
-    """Format session metadata as a human-readable table."""
+def format_session_table(sessions: list) -> str:
+    """Format conversation list as a human-readable table."""
     if not sessions:
         return "No sessions found."
 
-    # Header
     lines = [
-        f"{'ID':<12} {'Created':<20} {'Updated':<20} {'Title':<30} {'Tags'}",
+        f"{'ID':<12} {'Created':<20} {'Updated':<20} {'Summary':<40}",
         "-" * 95,
     ]
 
-    for session in sessions:
-        # Shorten ID for display (first 8 chars + ...)
-        display_id = session.id[:8] + "..." if len(session.id) > 8 else session.id
+    for conv in sessions:
+        cid = getattr(conv, "id", str(conv)) if not isinstance(conv, dict) else conv.get("id", "")
+        display_id = cid[:8] + "..." if len(cid) > 8 else cid
 
-        # Format timestamps
-        created_str = session.created_at.strftime("%Y-%m-%d %H:%M")
-        updated_str = session.last_updated.strftime("%Y-%m-%d %H:%M")
+        created_at = getattr(conv, "created_at", None)
+        updated_at = getattr(conv, "updated_at", None)
+        created_str = created_at.strftime("%Y-%m-%d %H:%M") if created_at else ""
+        updated_str = updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else ""
 
-        # Format title (truncate if too long)
-        title = session.title or ""
-        display_title = title[:27] + "..." if len(title) > 27 else title
-
-        # Format tags
-        tags_str = ", ".join(session.tags) if session.tags else ""
+        summary = getattr(conv, "summary", None) or ""
+        display_summary = summary[:37] + "..." if len(summary) > 37 else summary
 
         lines.append(
-            f"{display_id:<12} {created_str:<20} {updated_str:<20} {display_title:<30} {tags_str}"
+            f"{display_id:<12} {created_str:<20} {updated_str:<20} {display_summary:<40}"
         )
 
     return "\n".join(lines)
 
 
-def list_sessions_command(args):
-    """Handle the 'sessions list' command."""
-    store = get_default_session_store()
-    sessions = store.list_sessions()
+def list_sessions_command(args, client=None):
+    """Handle the 'sessions list' command.
 
-    if args.json:
-        # Output as JSON array
+    Requires ``--agent-id`` to specify which agent's conversations to list,
+    since conversations are per-agent in the Letta Conversations API.
+    """
+    if client is None:
+        print("Error: Letta client required for session listing", file=sys.stderr)
+        return 1
+
+    agent_id = getattr(args, "agent_id", None)
+    if not agent_id:
+        print("Error: --agent-id is required for listing sessions", file=sys.stderr)
+        return 1
+
+    cm = ConversationManager(client)
+    sessions = cm.list_sessions(agent_id)
+
+    if getattr(args, "json", False):
         import json as json_lib
 
         sessions_data = [
-            {
-                "id": session.id,
-                "created_at": session.created_at.isoformat(),
-                "last_updated": session.last_updated.isoformat(),
-                "title": session.title,
-                "tags": session.tags,
-            }
-            for session in sessions
+            cm.get_session_summary(conv.id) for conv in sessions
         ]
         print(json_lib.dumps(sessions_data, indent=2))
     else:
-        # Output as table
         print(format_session_table(sessions))
 
     return 0
 
 
-def resume_session_command(args):
+def resume_session_command(args, client=None):
     """Handle the 'sessions resume' command."""
-    store = get_default_session_store()
-    session_id = args.session_id
+    if client is None:
+        print("Error: Letta client required for session resume", file=sys.stderr)
+        return 1
+
+    conversation_id = args.session_id
+    cm = ConversationManager(client)
 
     try:
-        # Verify session exists
-        store.load(session_id)
-
-        # Set current session context
-        set_current_session_id(session_id)
-
-        print(f"Session resumed: {session_id}")
+        cm.get_session(conversation_id)
+        set_current_session_id(conversation_id)
+        print(f"Session resumed: {conversation_id}")
         return 0
-    except ValueError:
-        print(f"Error: Session '{session_id}' not found", file=sys.stderr)
+    except Exception:
+        print(f"Error: Conversation '{conversation_id}' not found", file=sys.stderr)
         return 2
 
 
 def setup_session_context(args) -> Optional[str]:
     """Set up session context based on CLI arguments."""
-    store = get_default_session_store()
-
-    if args.session_id:
-        # Resume existing session
-        try:
-            store.load(args.session_id)
-            set_current_session_id(args.session_id)
-            logger.info(f"Resumed session: {args.session_id}")
-            return args.session_id
-        except ValueError:
-            print(f"Error: Session '{args.session_id}' not found", file=sys.stderr)
-            sys.exit(2)
-
-    elif args.new_session is not None:
-        # Create new session (with optional title)
-        title = args.new_session if isinstance(args.new_session, str) else None
-        session_state = store.create(title=title)
-        session_id = session_state.meta.id
-        set_current_session_id(session_id)
-        logger.info(
-            f"Created new session: {session_id}"
-            + (f" with title: {title}" if title else "")
-        )
-        return session_id
+    if getattr(args, "session_id", None):
+        set_current_session_id(args.session_id)
+        logger.info(f"Set conversation context: {args.session_id}")
+        return args.session_id
 
     # No session management requested - return None
     return None
@@ -289,13 +269,6 @@ def main(argv=None):
         type=str,
         metavar="SESSION_ID",
         help="Resume an existing session by ID. If provided, no new session is created.",
-    )
-    session_group.add_argument(
-        "--new-session",
-        nargs="?",
-        const=True,
-        metavar="TITLE",
-        help="Create a new session. Optionally provide a title for the session.",
     )
 
     # Agent selection group (existing)
@@ -341,6 +314,13 @@ def main(argv=None):
     # sessions list
     list_parser = sessions_subparsers.add_parser("list", help="List all sessions")
     list_parser.add_argument(
+        "--agent-id",
+        type=str,
+        metavar="AGENT_ID",
+        required=True,
+        help="Agent ID whose sessions to list",
+    )
+    list_parser.add_argument(
         "--json",
         action="store_true",
         help="Output sessions as JSON instead of table format",
@@ -355,19 +335,6 @@ def main(argv=None):
 
     # Allow passing argv for testing; default to sys.argv[1:]
     args = parser.parse_args(argv)
-
-    # Handle session management subcommands
-    if args.command == "sessions":
-        if args.sessions_command == "list":
-            return list_sessions_command(args)
-        elif args.sessions_command == "resume":
-            return resume_session_command(args)
-        else:
-            sessions_parser.print_help()
-            return 1
-
-    # Set up session context for main commands (before any swarm operations)
-    session_id = setup_session_context(args)
 
     agent_profiles = None
     agent_ids = None
@@ -384,6 +351,19 @@ def main(argv=None):
     else:
         # No authentication (local self-hosted without password protection)
         client = Letta(base_url=config.LETTA_BASE_URL)
+
+    # Handle session management subcommands (require client)
+    if args.command == "sessions":
+        if args.sessions_command == "list":
+            return list_sessions_command(args, client=client)
+        elif args.sessions_command == "resume":
+            return resume_session_command(args, client=client)
+        else:
+            sessions_parser.print_help()
+            return 1
+
+    # Set up session context for main commands (before any swarm operations)
+    setup_session_context(args)
 
     if args.agent_ids:
         print("Mode: Loading existing agents by ID.")

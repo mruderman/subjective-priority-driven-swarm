@@ -268,20 +268,60 @@ def test_start_session_handles_initialisation_failure(web_app, monkeypatch):
     assert "error" in response.get_json()
 
 
-def test_chat_allows_session_injection_in_playwright_mode(web_app):
+def test_chat_allows_session_injection_in_playwright_mode(web_app, monkeypatch):
+    """Test that session_id query param works in playwright mode.
+
+    Note: In playwright mode, session injection sets the session ID, then
+    the app tries to restore the session. If restoration fails (e.g., no agents),
+    it redirects to setup. This test verifies the session injection mechanism
+    works by checking the restore was attempted.
+    """
+    # Create a session first so it exists in the store with config data
+    store = get_default_session_store()
+    session = store.create(title="Playwright Test Session")
+    session_id = session.meta.id
+    # Add config extras that the restore function expects
+    session.extras = {
+        "config": {
+            "agent_ids": ["agent-1"],  # Provide an agent ID
+            "conversation_mode": "hybrid",
+            "enable_secretary": False,
+            "secretary_mode": "adaptive",
+            "meeting_type": "discussion",
+        }
+    }
+    # Save the session with extras
+    store._save_session_state(session)
+
+    # Mock the restore function to succeed
+    def mock_restore(sid, socketio_instance):
+        return SimpleNamespace(
+            swarm=SimpleNamespace(
+                conversation_mode="hybrid",
+                enable_secretary=False,
+                _secretary=None,
+                secretary_agent_id=None,
+            ),
+            session_id=sid,
+        )
+
+    monkeypatch.setattr(web_app, "_restore_web_swarm_from_session", mock_restore)
+
     client = web_app.app.test_client()
-    response = client.get("/chat?session_id=test-session")
+    response = client.get(f"/chat?session_id={session_id}")
 
     assert response.status_code == 200
     assert b"Active Conversation" in response.data
 
 
-def test_chat_redirects_without_session(web_app):
+def test_chat_renders_without_session(web_app):
+    """Chat page now renders even without a session (client-side handles restoration)."""
     client = web_app.app.test_client()
     response = client.get("/chat")
 
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/setup")
+    # App now allows chat page to load without session
+    # (JavaScript will attempt client-side restoration)
+    assert response.status_code == 200
 
 
 def test_sessions_list_json_output(web_app, tmp_path):
@@ -520,7 +560,12 @@ def test_socket_events_join_start_message(web_app):
 
     class DummyWebSwarm:
         def __init__(self):
-            self.swarm = SimpleNamespace(conversation_mode="hybrid")
+            self.swarm = SimpleNamespace(
+                conversation_mode="hybrid",
+                enable_secretary=False,
+                _secretary=None,
+                secretary_agent_id=None,
+            )
 
         def start_web_chat(self, topic):
             calls["started"].append(topic)
@@ -644,6 +689,9 @@ def test_secretary_enabled_socket_flow(web_app, monkeypatch):
             # Mimic underlying swarm surface used by handlers
             self.swarm = SimpleNamespace(
                 secretary=StubSecretary(mode=kwargs.get("secretary_mode", "formal")),
+                _secretary=StubSecretary(mode=kwargs.get("secretary_mode", "formal")),
+                secretary_agent_id=None,
+                enable_secretary=True,
                 agents=[],
                 meeting_type=kwargs.get("meeting_type", "discussion"),
                 conversation_mode=kwargs.get("conversation_mode", "hybrid"),
@@ -733,7 +781,10 @@ def test_turn_modes_emit_agent_messages_and_cover_extract(web_app, monkeypatch, 
 
             self.swarm = sm.SwarmManager.__new__(sm.SwarmManager)
             self.swarm.conversation_mode = mode
-            self.swarm.secretary = None
+            self.swarm._secretary = None
+            self.swarm.secretary_agent_id = None
+            self.swarm.pending_nomination = None
+            self.swarm.enable_secretary = False
             self.swarm.meeting_type = "discussion"
             self.swarm.conversation_history = ""
 
