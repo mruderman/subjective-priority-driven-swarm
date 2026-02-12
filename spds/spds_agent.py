@@ -66,6 +66,10 @@ class SPDSAgent:
         self.last_message_index = -1  # Index in conversation history when this agent last spoke
         self.roles: list = []  # Roles assigned to this agent (e.g., "secretary")
 
+        # Conversations API routing (set by SwarmManager when session conversations are active)
+        self.conversation_id: str | None = None
+        self._conversation_manager = None
+
     @classmethod
     def create_new(
         cls,
@@ -1012,12 +1016,20 @@ IMPORTANCE_TO_GROUP: X
 
             try:
                 self.last_error = None
-                response = letta_call(
-                    "agents.messages.create.speak",
-                    self.client.agents.messages.create,
-                    agent_id=self.agent.id,
-                    messages=messages,
-                )
+                if self.conversation_id and self._conversation_manager:
+                    response = letta_call(
+                        "conversations.send_and_collect.speak",
+                        self._conversation_manager.send_and_collect,
+                        conversation_id=self.conversation_id,
+                        messages=messages,
+                    )
+                else:
+                    response = letta_call(
+                        "agents.messages.create.speak",
+                        self.client.agents.messages.create,
+                        agent_id=self.agent.id,
+                        messages=messages,
+                    )
 
                 response_text = self._extract_response_text(response)
 

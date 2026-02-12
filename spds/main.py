@@ -164,13 +164,18 @@ def interactive_agent_selection(client: Letta):
 
 
 def format_session_table(sessions: list) -> str:
-    """Format conversation list as a human-readable table."""
+    """Format conversation list as a human-readable table.
+
+    SPDS-tagged conversations (summaries starting with ``spds:``) get their
+    metadata parsed so the table shows agent name and topic instead of the
+    raw encoded summary.
+    """
     if not sessions:
         return "No sessions found."
 
     lines = [
-        f"{'ID':<12} {'Created':<20} {'Updated':<20} {'Summary':<40}",
-        "-" * 95,
+        f"{'ID':<12} {'Agent':<16} {'Topic':<24} {'Created':<20} {'Status':<10}",
+        "-" * 85,
     ]
 
     for conv in sessions:
@@ -178,15 +183,22 @@ def format_session_table(sessions: list) -> str:
         display_id = cid[:8] + "..." if len(cid) > 8 else cid
 
         created_at = getattr(conv, "created_at", None)
-        updated_at = getattr(conv, "updated_at", None)
         created_str = created_at.strftime("%Y-%m-%d %H:%M") if created_at else ""
-        updated_str = updated_at.strftime("%Y-%m-%d %H:%M") if updated_at else ""
 
         summary = getattr(conv, "summary", None) or ""
-        display_summary = summary[:37] + "..." if len(summary) > 37 else summary
+        parsed = ConversationManager.parse_spds_summary(summary)
+
+        if parsed:
+            agent_name = parsed["agent_name"][:14] or "—"
+            topic = parsed["topic"][:22] or "—"
+            status = "completed" if "completed" in summary else "active"
+        else:
+            agent_name = "—"
+            topic = summary[:22] or "—"
+            status = "—"
 
         lines.append(
-            f"{display_id:<12} {created_str:<20} {updated_str:<20} {display_summary:<40}"
+            f"{display_id:<12} {agent_name:<16} {topic:<24} {created_str:<20} {status:<10}"
         )
 
     return "\n".join(lines)
@@ -197,6 +209,7 @@ def list_sessions_command(args, client=None):
 
     Requires ``--agent-id`` to specify which agent's conversations to list,
     since conversations are per-agent in the Letta Conversations API.
+    Optionally filter to a specific SPDS session with ``--spds-session``.
     """
     if client is None:
         print("Error: Letta client required for session listing", file=sys.stderr)
@@ -208,7 +221,12 @@ def list_sessions_command(args, client=None):
         return 1
 
     cm = ConversationManager(client)
-    sessions = cm.list_sessions(agent_id)
+    spds_session = getattr(args, "spds_session", None)
+
+    if spds_session:
+        sessions = cm.find_sessions_by_spds_id(agent_id, spds_session)
+    else:
+        sessions = cm.list_sessions(agent_id)
 
     if getattr(args, "json", False):
         import json as json_lib
@@ -224,7 +242,11 @@ def list_sessions_command(args, client=None):
 
 
 def resume_session_command(args, client=None):
-    """Handle the 'sessions resume' command."""
+    """Handle the 'sessions resume' command.
+
+    Loads a conversation by ID, parses SPDS session metadata from its
+    summary, and displays recent messages for read-only inspection.
+    """
     if client is None:
         print("Error: Letta client required for session resume", file=sys.stderr)
         return 1
@@ -233,13 +255,50 @@ def resume_session_command(args, client=None):
     cm = ConversationManager(client)
 
     try:
-        cm.get_session(conversation_id)
-        set_current_session_id(conversation_id)
-        print(f"Session resumed: {conversation_id}")
-        return 0
+        conv = cm.get_session(conversation_id)
     except Exception:
         print(f"Error: Conversation '{conversation_id}' not found", file=sys.stderr)
         return 2
+
+    # Parse SPDS metadata from summary
+    summary = getattr(conv, "summary", None) or ""
+    parsed = ConversationManager.parse_spds_summary(summary)
+
+    if parsed:
+        print(f"Session:  {parsed['session_id']}")
+        print(f"Agent:    {parsed['agent_name'] or '—'}")
+        print(f"Topic:    {parsed['topic'] or '—'}")
+        status = "completed" if "completed" in summary else "active"
+        print(f"Status:   {status}")
+    else:
+        print(f"Conversation: {conversation_id}")
+        print(f"Summary:  {summary or '(none)'}")
+
+    print()
+
+    # Load and display recent messages
+    messages = cm.list_messages(conversation_id, limit=50)
+    if messages:
+        print(f"--- Recent messages ({len(messages)}) ---")
+        for msg in messages:
+            role = getattr(msg, "role", "?")
+            content = getattr(msg, "content", "")
+            if isinstance(content, list):
+                # Handle content blocks
+                text_parts = []
+                for item in content:
+                    if isinstance(item, dict) and "text" in item:
+                        text_parts.append(item["text"])
+                    elif hasattr(item, "text"):
+                        text_parts.append(item.text)
+                content = " ".join(text_parts)
+            if content:
+                print(f"  [{role}] {str(content)[:200]}")
+    else:
+        print("No messages in this conversation.")
+
+    set_current_session_id(conversation_id)
+    return 0
 
 
 def setup_session_context(args) -> Optional[str]:
@@ -324,6 +383,12 @@ def main(argv=None):
         "--json",
         action="store_true",
         help="Output sessions as JSON instead of table format",
+    )
+    list_parser.add_argument(
+        "--spds-session",
+        type=str,
+        metavar="SESSION_ID",
+        help="Filter to conversations from a specific SPDS session",
     )
 
     # sessions resume

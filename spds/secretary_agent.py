@@ -34,6 +34,10 @@ class SecretaryAgent:
         self.action_items: List[Dict[str, Any]] = []
         self.decisions: List[Dict[str, Any]] = []
 
+        # Conversations API routing (set by SwarmManager)
+        self.conversation_id: str | None = None
+        self._conversation_manager = None
+
         # Create the secretary agent
         self._create_secretary_agent()
 
@@ -137,6 +141,37 @@ class SecretaryAgent:
             print(f"❌ Failed to create secretary agent: {e}")
             raise
 
+    def _send_to_agent(self, operation_name: str, messages):
+        """Send messages to the secretary agent, routing through conversations when available.
+
+        Args:
+            operation_name: Descriptive name for letta_call logging.
+            messages: List of MessageCreateParam (dicts) or message-like objects.
+
+        Returns:
+            The response (or response-like object from send_and_collect).
+        """
+        if self.conversation_id and self._conversation_manager:
+            # MessageCreateParam is a TypedDict, so messages are dicts
+            dict_msgs = []
+            for m in messages:
+                if isinstance(m, dict):
+                    dict_msgs.append(m)
+                else:
+                    dict_msgs.append({"role": m.role, "content": m.content})
+            return letta_call(
+                operation_name,
+                self._conversation_manager.send_and_collect,
+                conversation_id=self.conversation_id,
+                messages=dict_msgs,
+            )
+        return letta_call(
+            operation_name,
+            self.client.agents.messages.create,
+            agent_id=self.agent.id,
+            messages=messages,
+        )
+
     def set_mode(self, mode: str):
         """Change the secretary's documentation mode."""
         if mode not in ["formal", "casual", "adaptive"]:
@@ -171,16 +206,11 @@ class SecretaryAgent:
             f"Please use the send_message tool to acknowledge that you're ready to take notes."
         )
 
-        def send_start_message():
-            return letta_call(
-                "secretary.meeting.start",
-                self.client.agents.messages.create,
-                agent_id=self.agent.id,
-                messages=[MessageCreateParam(role="user", content=meeting_start_message)],
-            )
-
         try:
-            response = send_start_message()
+            response = self._send_to_agent(
+                "secretary.meeting.start",
+                [MessageCreateParam(role="user", content=meeting_start_message)],
+            )
             if response:
                 print(f"📋 Meeting started: {topic}")
                 print(f"👥 Participants: {', '.join(participants)}")
@@ -275,21 +305,14 @@ class SecretaryAgent:
         formatted_message = f"{speaker}: {message}"
 
         # Send to secretary agent for processing and note-taking
-        def send_observation():
-            return letta_call(
-                "secretary.message.observe",
-                self.client.agents.messages.create,
-                agent_id=self.agent.id,
-                messages=[
-                    MessageCreateParam(
-                        role="user",
-                        content=f"Please note this in the meeting: {formatted_message}",
-                    )
-                ],
-            )
-
         try:
-            send_observation()
+            self._send_to_agent(
+                "secretary.message.observe",
+                [MessageCreateParam(
+                    role="user",
+                    content=f"Please note this in the meeting: {formatted_message}",
+                )],
+            )
 
             # Track message observation
             track_action(
@@ -324,11 +347,9 @@ class SecretaryAgent:
             action_message += f" (due: {due_date})"
 
         try:
-            letta_call(
+            self._send_to_agent(
                 "secretary.action_item.add",
-                self.client.agents.messages.create,
-                agent_id=self.agent.id,
-                messages=[MessageCreateParam(role="user", content=action_message)],
+                [MessageCreateParam(role="user", content=action_message)],
             )
             print(f"✅ Action item recorded: {description}")
 
@@ -358,11 +379,9 @@ class SecretaryAgent:
             decision_message += f" (context: {context})"
 
         try:
-            letta_call(
+            self._send_to_agent(
                 "secretary.decision.record",
-                self.client.agents.messages.create,
-                agent_id=self.agent.id,
-                messages=[MessageCreateParam(role="user", content=decision_message)],
+                [MessageCreateParam(role="user", content=decision_message)],
             )
             print(f"📋 Decision recorded: {decision}")
 
@@ -381,16 +400,12 @@ class SecretaryAgent:
             return {}
 
         try:
-            response = letta_call(
+            response = self._send_to_agent(
                 "secretary.stats.get",
-                self.client.agents.messages.create,
-                agent_id=self.agent.id,
-                messages=[
-                    MessageCreateParam(
-                        role="user",
-                        content="Please provide a summary of the meeting statistics - how many messages, participants, decisions, action items, etc. Please use the send_message tool to provide your response.",
-                    )
-                ],
+                [MessageCreateParam(
+                    role="user",
+                    content="Please provide a summary of the meeting statistics - how many messages, participants, decisions, action items, etc. Please use the send_message tool to provide your response.",
+                )],
             )
 
             stats_text = self._extract_agent_response(response)
@@ -434,16 +449,11 @@ class SecretaryAgent:
             f"Please use the send_message tool to provide your response, with the formatted meeting minutes as the message parameter."
         )
 
-        def request_minutes():
-            return letta_call(
-                "secretary.minutes.generate",
-                self.client.agents.messages.create,
-                agent_id=self.agent.id,
-                messages=[MessageCreateParam(role="user", content=minutes_request)],
-            )
-
         try:
-            response = request_minutes()
+            response = self._send_to_agent(
+                "secretary.minutes.generate",
+                [MessageCreateParam(role="user", content=minutes_request)],
+            )
             if response:
                 # Extract the agent's response
                 minutes = self._extract_agent_response(response)

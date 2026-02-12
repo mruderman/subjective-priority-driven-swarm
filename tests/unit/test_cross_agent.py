@@ -9,10 +9,15 @@ import pytest
 
 from spds import cross_agent
 from spds.cross_agent import (
+    BROADCAST_TOOL,
+    MULTI_AGENT_TOOL,
+    MULTI_AGENT_TOOLS,
     SESSION_TAG_PREFIX,
+    _find_multi_agent_tools,
     attach_block_to_agents,
     attach_multi_agent_tools,
     create_swarm_context_block,
+    detect_side_conversations,
     make_session_tag,
     remove_session_tags,
     setup_cross_agent_messaging,
@@ -147,49 +152,118 @@ class TestRemoveSessionTags:
 
 
 # ---------------------------------------------------------------------------
+# _find_multi_agent_tools
+# ---------------------------------------------------------------------------
+
+
+class TestFindMultiAgentTools:
+    def test_finds_both_tools(self):
+        client = _mock_client()
+        async_tool = SimpleNamespace(id="tool-async-1", name=MULTI_AGENT_TOOL)
+        bcast_tool = SimpleNamespace(id="tool-bcast-1", name=BROADCAST_TOOL)
+        client.tools.list.return_value = [async_tool, bcast_tool]
+
+        result = _find_multi_agent_tools(client)
+
+        assert result == {MULTI_AGENT_TOOL: "tool-async-1", BROADCAST_TOOL: "tool-bcast-1"}
+
+    def test_finds_async_only(self):
+        client = _mock_client()
+        async_tool = SimpleNamespace(id="tool-async-1", name=MULTI_AGENT_TOOL)
+        other_tool = SimpleNamespace(id="tool-other", name="some_other_tool")
+        client.tools.list.return_value = [async_tool, other_tool]
+
+        result = _find_multi_agent_tools(client)
+
+        assert result == {MULTI_AGENT_TOOL: "tool-async-1"}
+
+    def test_finds_broadcast_only(self):
+        client = _mock_client()
+        bcast_tool = SimpleNamespace(id="tool-bcast-1", name=BROADCAST_TOOL)
+        client.tools.list.return_value = [bcast_tool]
+
+        result = _find_multi_agent_tools(client)
+
+        assert result == {BROADCAST_TOOL: "tool-bcast-1"}
+
+    def test_no_tools_found(self):
+        client = _mock_client()
+        client.tools.list.return_value = [
+            SimpleNamespace(id="tool-other", name="unrelated_tool"),
+        ]
+
+        result = _find_multi_agent_tools(client)
+
+        assert result == {}
+
+    def test_handles_server_error(self):
+        client = _mock_client()
+        client.tools.list.side_effect = Exception("Server down")
+
+        result = _find_multi_agent_tools(client)
+
+        assert result == {}
+
+
+# ---------------------------------------------------------------------------
 # attach_multi_agent_tools
 # ---------------------------------------------------------------------------
 
 
 class TestAttachMultiAgentTools:
-    def test_finds_and_attaches_tool(self):
+    def test_finds_and_attaches_async_tool(self):
         client = _mock_client()
-        tool_obj = SimpleNamespace(id="tool-async-123", name="send_message_to_agent_async")
+        tool_obj = SimpleNamespace(id="tool-async-123", name=MULTI_AGENT_TOOL)
         client.tools.list.return_value = [tool_obj]
         client.agents.retrieve.return_value = _agent_state("agent-1", tools=[])
 
         result = attach_multi_agent_tools(client, ["agent-1"])
 
-        assert result is True
+        assert result["async_enabled"] is True
+        assert result["broadcast_enabled"] is False
         client.agents.tools.attach.assert_called_once_with(
             agent_id="agent-1", tool_id="tool-async-123"
         )
 
+    def test_attaches_both_tools(self):
+        client = _mock_client()
+        async_tool = SimpleNamespace(id="tool-async-1", name=MULTI_AGENT_TOOL)
+        bcast_tool = SimpleNamespace(id="tool-bcast-1", name=BROADCAST_TOOL)
+        client.tools.list.return_value = [async_tool, bcast_tool]
+        client.agents.retrieve.return_value = _agent_state("agent-1", tools=[])
+
+        result = attach_multi_agent_tools(client, ["agent-1"])
+
+        assert result["async_enabled"] is True
+        assert result["broadcast_enabled"] is True
+        assert client.agents.tools.attach.call_count == 2
+
     def test_skips_already_attached(self):
         client = _mock_client()
-        tool_obj = SimpleNamespace(id="tool-async-123", name="send_message_to_agent_async")
+        tool_obj = SimpleNamespace(id="tool-async-123", name=MULTI_AGENT_TOOL)
         client.tools.list.return_value = [tool_obj]
-        existing_tool = SimpleNamespace(name="send_message_to_agent_async")
+        existing_tool = SimpleNamespace(name=MULTI_AGENT_TOOL)
         client.agents.retrieve.return_value = _agent_state(
             "agent-1", tools=[existing_tool]
         )
 
         result = attach_multi_agent_tools(client, ["agent-1"])
 
-        assert result is True
+        assert result["async_enabled"] is True
         client.agents.tools.attach.assert_not_called()
 
-    def test_returns_false_when_tool_not_found(self):
+    def test_returns_false_when_no_tools_found(self):
         client = _mock_client()
         client.tools.list.return_value = []  # No multi-agent tools
 
         result = attach_multi_agent_tools(client, ["agent-1"])
 
-        assert result is False
+        assert result["async_enabled"] is False
+        assert result["broadcast_enabled"] is False
 
     def test_handles_attachment_error(self):
         client = _mock_client()
-        tool_obj = SimpleNamespace(id="tool-async-123", name="send_message_to_agent_async")
+        tool_obj = SimpleNamespace(id="tool-async-123", name=MULTI_AGENT_TOOL)
         client.tools.list.return_value = [tool_obj]
         client.agents.retrieve.return_value = _agent_state("agent-1", tools=[])
         client.agents.tools.attach.side_effect = Exception("Attach failed")
@@ -197,11 +271,11 @@ class TestAttachMultiAgentTools:
         result = attach_multi_agent_tools(client, ["agent-1"])
 
         # Returns False because no agent was successfully attached
-        assert result is False
+        assert result["async_enabled"] is False
 
     def test_multiple_agents_partial_success(self):
         client = _mock_client()
-        tool_obj = SimpleNamespace(id="tool-async-123", name="send_message_to_agent_async")
+        tool_obj = SimpleNamespace(id="tool-async-123", name=MULTI_AGENT_TOOL)
         client.tools.list.return_value = [tool_obj]
 
         # First agent succeeds, second fails
@@ -212,7 +286,22 @@ class TestAttachMultiAgentTools:
 
         result = attach_multi_agent_tools(client, ["a-1", "a-2"])
 
-        assert result is True  # At least one succeeded
+        assert result["async_enabled"] is True  # At least one succeeded
+
+    def test_partial_tool_availability(self):
+        """Only async found, broadcast not on server — broadcast gracefully skipped."""
+        client = _mock_client()
+        async_tool = SimpleNamespace(id="tool-async-1", name=MULTI_AGENT_TOOL)
+        client.tools.list.return_value = [async_tool]
+        client.agents.retrieve.return_value = _agent_state("agent-1", tools=[])
+
+        result = attach_multi_agent_tools(client, ["agent-1"])
+
+        assert result["async_enabled"] is True
+        assert result["broadcast_enabled"] is False
+        client.agents.tools.attach.assert_called_once_with(
+            agent_id="agent-1", tool_id="tool-async-1"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -344,7 +433,11 @@ class TestSetupCrossAgentMessaging:
         "create_swarm_context_block",
         return_value="block-ctx-1",
     )
-    @patch.object(cross_agent, "attach_multi_agent_tools", return_value=True)
+    @patch.object(
+        cross_agent,
+        "attach_multi_agent_tools",
+        return_value={"async_enabled": True, "broadcast_enabled": True},
+    )
     @patch.object(
         cross_agent,
         "tag_agents_for_session",
@@ -364,6 +457,7 @@ class TestSetupCrossAgentMessaging:
 
         assert result["session_tag"] == "spds:session-sess-1"
         assert result["multi_agent_enabled"] is True
+        assert result["broadcast_enabled"] is True
         assert result["swarm_context_block_id"] == "block-ctx-1"
         mock_tag.assert_called_once()
         mock_attach.assert_called_once()
@@ -374,7 +468,11 @@ class TestSetupCrossAgentMessaging:
 
     @patch.object(cross_agent, "attach_block_to_agents")
     @patch.object(cross_agent, "create_swarm_context_block", return_value=None)
-    @patch.object(cross_agent, "attach_multi_agent_tools", return_value=False)
+    @patch.object(
+        cross_agent,
+        "attach_multi_agent_tools",
+        return_value={"async_enabled": False, "broadcast_enabled": False},
+    )
     @patch.object(
         cross_agent,
         "tag_agents_for_session",
@@ -388,6 +486,7 @@ class TestSetupCrossAgentMessaging:
         )
 
         assert result["multi_agent_enabled"] is False
+        assert result["broadcast_enabled"] is False
         assert result["swarm_context_block_id"] is None
         mock_attach_block.assert_not_called()  # No block to attach
 
@@ -555,3 +654,210 @@ class TestSwarmManagerCrossAgent:
 
         # Should not raise
         mgr._teardown_cross_agent()
+
+    def test_resolve_agent_name_found(self):
+        """_resolve_agent_name returns agent name when ID matches."""
+        from spds.swarm_manager import SwarmManager
+
+        mgr = object.__new__(SwarmManager)
+        mock_agent = MagicMock()
+        mock_agent.agent.id = "agent-123"
+        mock_agent.name = "Alice"
+        mgr.agents = [mock_agent]
+
+        assert mgr._resolve_agent_name("agent-123") == "Alice"
+
+    def test_resolve_agent_name_fallback(self):
+        """_resolve_agent_name returns raw ID when agent not found."""
+        from spds.swarm_manager import SwarmManager
+
+        mgr = object.__new__(SwarmManager)
+        mgr.agents = []
+
+        assert mgr._resolve_agent_name("unknown-id") == "unknown-id"
+
+    @patch("spds.swarm_manager.detect_side_conversations")
+    def test_check_side_conversations_detects_async(self, mock_detect):
+        """_check_side_conversations emits notification and notifies secretary."""
+        from spds.swarm_manager import SwarmManager
+
+        mock_detect.return_value = [
+            {
+                "type": "async",
+                "sender": "Alice",
+                "tool_name": MULTI_AGENT_TOOL,
+                "recipient_id": "agent-bob",
+                "tags": None,
+                "message_content": "Hey Bob, what do you think?",
+            }
+        ]
+
+        mgr = object.__new__(SwarmManager)
+        mock_alice = MagicMock()
+        mock_alice.name = "Alice"
+        mock_alice.agent.id = "agent-alice"
+        mock_bob = MagicMock()
+        mock_bob.name = "Bob"
+        mock_bob.agent.id = "agent-bob"
+        mgr.agents = [mock_alice, mock_bob]
+        mgr._history = []
+        mgr._secretary = MagicMock()
+        mgr.secretary_agent_id = None
+
+        response = MagicMock()
+        mgr._check_side_conversations(mock_alice, response)
+
+        # Should have added system message to history
+        assert len(mgr._history) == 1
+        assert "Side channel" in mgr._history[0].content
+        assert "Alice" in mgr._history[0].content
+        assert "Bob" in mgr._history[0].content
+
+        # Should have notified secretary
+        mgr._secretary.observe_message.assert_called_once()
+
+    @patch("spds.swarm_manager.detect_side_conversations")
+    def test_check_side_conversations_no_convos(self, mock_detect):
+        """_check_side_conversations does nothing when no side conversations detected."""
+        from spds.swarm_manager import SwarmManager
+
+        mock_detect.return_value = []
+
+        mgr = object.__new__(SwarmManager)
+        mgr.agents = []
+        mgr._history = []
+        mgr._secretary = None
+        mgr.secretary_agent_id = None
+
+        response = MagicMock()
+        mgr._check_side_conversations(MagicMock(), response)
+
+        assert len(mgr._history) == 0
+
+
+# ---------------------------------------------------------------------------
+# detect_side_conversations
+# ---------------------------------------------------------------------------
+
+
+class TestDetectSideConversations:
+    def _make_tool_call_msg(self, tool_name, arguments):
+        """Helper to create a mock tool_call_message."""
+        import json
+
+        msg = SimpleNamespace(
+            message_type="tool_call_message",
+            tool_call=SimpleNamespace(
+                name=tool_name,
+                arguments=json.dumps(arguments) if isinstance(arguments, dict) else arguments,
+            ),
+        )
+        return msg
+
+    def test_detects_async_tool_call(self):
+        msg = self._make_tool_call_msg(
+            MULTI_AGENT_TOOL,
+            {"agent_id": "agent-bob", "message": "Hey Bob!"},
+        )
+        response = SimpleNamespace(messages=[msg])
+
+        result = detect_side_conversations(response, "Alice")
+
+        assert len(result) == 1
+        assert result[0]["type"] == "async"
+        assert result[0]["sender"] == "Alice"
+        assert result[0]["recipient_id"] == "agent-bob"
+        assert result[0]["message_content"] == "Hey Bob!"
+        assert result[0]["tags"] is None
+
+    def test_detects_broadcast_tool_call(self):
+        msg = self._make_tool_call_msg(
+            BROADCAST_TOOL,
+            {"tags": ["spds:session-s1"], "message": "Attention everyone!"},
+        )
+        response = SimpleNamespace(messages=[msg])
+
+        result = detect_side_conversations(response, "Alice")
+
+        assert len(result) == 1
+        assert result[0]["type"] == "broadcast"
+        assert result[0]["sender"] == "Alice"
+        assert result[0]["tags"] == ["spds:session-s1"]
+        assert result[0]["recipient_id"] is None
+        assert result[0]["message_content"] == "Attention everyone!"
+
+    def test_detects_multiple(self):
+        msg1 = self._make_tool_call_msg(
+            MULTI_AGENT_TOOL,
+            {"agent_id": "agent-bob", "message": "Hey Bob"},
+        )
+        msg2 = self._make_tool_call_msg(
+            BROADCAST_TOOL,
+            {"tags": ["team-a"], "message": "FYI"},
+        )
+        response = SimpleNamespace(messages=[msg1, msg2])
+
+        result = detect_side_conversations(response, "Alice")
+
+        assert len(result) == 2
+        assert result[0]["type"] == "async"
+        assert result[1]["type"] == "broadcast"
+
+    def test_no_side_conversations(self):
+        msg = SimpleNamespace(
+            message_type="assistant_message",
+            content="Just a normal message",
+        )
+        response = SimpleNamespace(messages=[msg])
+
+        result = detect_side_conversations(response, "Alice")
+
+        assert result == []
+
+    def test_handles_none_response(self):
+        result = detect_side_conversations(None, "Alice")
+        assert result == []
+
+    def test_handles_malformed_arguments(self):
+        msg = SimpleNamespace(
+            message_type="tool_call_message",
+            tool_call=SimpleNamespace(
+                name=MULTI_AGENT_TOOL,
+                arguments="this is not valid json{{{",
+            ),
+        )
+        response = SimpleNamespace(messages=[msg])
+
+        result = detect_side_conversations(response, "Alice")
+
+        # Should skip the malformed entry gracefully
+        assert result == []
+
+    def test_ignores_other_tools(self):
+        msg = self._make_tool_call_msg(
+            "use_mcp_tool",
+            {"server_name": "test", "tool_name": "search"},
+        )
+        response = SimpleNamespace(messages=[msg])
+
+        result = detect_side_conversations(response, "Alice")
+
+        assert result == []
+
+    def test_handles_response_with_no_messages_attr(self):
+        response = SimpleNamespace()  # No messages attribute
+
+        result = detect_side_conversations(response, "Alice")
+
+        assert result == []
+
+    def test_handles_missing_tool_call(self):
+        msg = SimpleNamespace(
+            message_type="tool_call_message",
+            tool_call=None,
+        )
+        response = SimpleNamespace(messages=[msg])
+
+        result = detect_side_conversations(response, "Alice")
+
+        assert result == []

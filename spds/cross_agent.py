@@ -23,8 +23,10 @@ logger = logging.getLogger(__name__)
 # Tag prefix used for swarm session membership
 SESSION_TAG_PREFIX = "spds:session-"
 
-# Built-in multi-agent tool name
+# Built-in multi-agent tool names
 MULTI_AGENT_TOOL = "send_message_to_agent_async"
+BROADCAST_TOOL = "send_message_to_agents_matching_all_tags"
+MULTI_AGENT_TOOLS = {MULTI_AGENT_TOOL, BROADCAST_TOOL}
 
 
 def make_session_tag(session_id: str) -> str:
@@ -102,45 +104,67 @@ def remove_session_tags(
 # ---------------------------------------------------------------------------
 
 
-def _find_multi_agent_tool(client: "Letta") -> Optional[str]:
-    """Return the tool ID for ``send_message_to_agent_async`` if it exists.
+def _find_multi_agent_tools(client: "Letta") -> Dict[str, str]:
+    """Return a mapping of tool name → tool ID for all known multi-agent tools.
 
-    Letta registers multi-agent tools globally.  We search the tool list
-    for the built-in async messaging tool.
+    Scans ``client.tools.list()`` once and checks each tool name against
+    :data:`MULTI_AGENT_TOOLS`.  Only tools that exist on the server are
+    included in the result.
     """
+    found: Dict[str, str] = {}
     try:
         all_tools = letta_call("tools.list", client.tools.list)
         for tool in all_tools:
-            if getattr(tool, "name", None) == MULTI_AGENT_TOOL:
-                return tool.id
+            name = getattr(tool, "name", None)
+            if name in MULTI_AGENT_TOOLS:
+                found[name] = tool.id
     except Exception as e:
-        logger.warning("Failed to search for multi-agent tool: %s", e)
-    return None
+        logger.warning("Failed to search for multi-agent tools: %s", e)
+    return found
+
+
+def _find_multi_agent_tool(client: "Letta") -> Optional[str]:
+    """Return the tool ID for ``send_message_to_agent_async`` if it exists.
+
+    Thin wrapper around :func:`_find_multi_agent_tools` for backward
+    compatibility.
+    """
+    return _find_multi_agent_tools(client).get(MULTI_AGENT_TOOL)
 
 
 def attach_multi_agent_tools(
     client: "Letta",
     agent_ids: List[str],
-) -> bool:
-    """Attach the async messaging tool to each agent.
+) -> Dict[str, bool]:
+    """Attach available multi-agent messaging tools to each agent.
 
-    Returns True if the tool was successfully found and attached to at
-    least one agent, False otherwise.
+    Discovers both ``send_message_to_agent_async`` and
+    ``send_message_to_agents_matching_all_tags`` and attaches whichever
+    are available on the server.
+
+    Returns a dict::
+
+        {"async_enabled": bool, "broadcast_enabled": bool}
+
+    Each flag is True when the corresponding tool was found and attached
+    to at least one agent.
     """
-    tool_id = _find_multi_agent_tool(client)
-    if not tool_id:
+    tool_map = _find_multi_agent_tools(client)
+    result = {"async_enabled": False, "broadcast_enabled": False}
+
+    if not tool_map:
         logger.info(
-            "Multi-agent tool '%s' not found on server; "
+            "No multi-agent tools found on server; "
             "agents will not have cross-agent messaging. "
             "Ensure include_multi_agent_tools=True when creating agents.",
-            MULTI_AGENT_TOOL,
         )
-        return False
+        return result
 
-    attached_count = 0
+    async_count = 0
+    broadcast_count = 0
+
     for agent_id in agent_ids:
         try:
-            # Check if tool is already attached
             agent_state = letta_call(
                 "agents.retrieve",
                 client.agents.retrieve,
@@ -150,32 +174,44 @@ def attach_multi_agent_tools(
                 getattr(t, "name", None)
                 for t in (getattr(agent_state, "tools", None) or [])
             ]
-            if MULTI_AGENT_TOOL in agent_tool_names:
-                logger.debug(
-                    "Agent %s already has %s", agent_id, MULTI_AGENT_TOOL
-                )
-                attached_count += 1
-                continue
 
-            letta_call(
-                "agents.tools.attach",
-                client.agents.tools.attach,
-                agent_id=agent_id,
-                tool_id=tool_id,
-            )
-            attached_count += 1
-            logger.debug("Attached %s to agent %s", MULTI_AGENT_TOOL, agent_id)
+            for tool_name, tool_id in tool_map.items():
+                if tool_name in agent_tool_names:
+                    logger.debug(
+                        "Agent %s already has %s", agent_id, tool_name
+                    )
+                    if tool_name == MULTI_AGENT_TOOL:
+                        async_count += 1
+                    else:
+                        broadcast_count += 1
+                    continue
+
+                letta_call(
+                    "agents.tools.attach",
+                    client.agents.tools.attach,
+                    agent_id=agent_id,
+                    tool_id=tool_id,
+                )
+                if tool_name == MULTI_AGENT_TOOL:
+                    async_count += 1
+                else:
+                    broadcast_count += 1
+                logger.debug("Attached %s to agent %s", tool_name, agent_id)
+
         except Exception as e:
             logger.warning(
-                "Failed to attach multi-agent tool to agent %s: %s",
+                "Failed to attach multi-agent tools to agent %s: %s",
                 agent_id,
                 e,
             )
 
     logger.info(
-        "Multi-agent tool attached to %d/%d agents", attached_count, len(agent_ids)
+        "Multi-agent tools attached — async: %d/%d, broadcast: %d/%d agents",
+        async_count, len(agent_ids), broadcast_count, len(agent_ids),
     )
-    return attached_count > 0
+    result["async_enabled"] = async_count > 0
+    result["broadcast_enabled"] = broadcast_count > 0
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +350,84 @@ def update_swarm_context(
 
 
 # ---------------------------------------------------------------------------
+# Side-conversation detection
+# ---------------------------------------------------------------------------
+
+
+def detect_side_conversations(
+    response: Any,
+    sender_name: str,
+) -> List[Dict[str, Any]]:
+    """Scan a Letta response for cross-agent messaging tool calls.
+
+    Returns a list of dicts describing each detected side conversation::
+
+        {
+            "type": "async" | "broadcast",
+            "sender": sender_name,
+            "tool_name": str,
+            "recipient_id": str | None,   # async only
+            "tags": list | None,          # broadcast only
+            "message_content": str,
+        }
+
+    Returns ``[]`` if *response* is None or contains no side-conversation
+    tool calls.
+    """
+    if response is None:
+        return []
+
+    import json
+
+    detected: List[Dict[str, Any]] = []
+    messages = getattr(response, "messages", None) or []
+
+    for msg in messages:
+        if getattr(msg, "message_type", None) != "tool_call_message":
+            continue
+
+        tool_call = getattr(msg, "tool_call", None)
+        if tool_call is None:
+            continue
+
+        tool_name = getattr(tool_call, "name", None)
+        if tool_name not in MULTI_AGENT_TOOLS:
+            continue
+
+        # Parse arguments defensively
+        raw_args = getattr(tool_call, "arguments", None) or "{}"
+        try:
+            args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(
+                "Malformed tool call arguments from %s for %s: %s",
+                sender_name,
+                tool_name,
+                raw_args,
+            )
+            continue
+
+        entry: Dict[str, Any] = {
+            "sender": sender_name,
+            "tool_name": tool_name,
+        }
+
+        if tool_name == MULTI_AGENT_TOOL:
+            entry["type"] = "async"
+            entry["recipient_id"] = args.get("agent_id") or args.get("recipient_agent_id")
+            entry["tags"] = None
+        else:
+            entry["type"] = "broadcast"
+            entry["recipient_id"] = None
+            entry["tags"] = args.get("tags")
+
+        entry["message_content"] = args.get("message", "")
+        detected.append(entry)
+
+    return detected
+
+
+# ---------------------------------------------------------------------------
 # High-level setup / teardown
 # ---------------------------------------------------------------------------
 
@@ -346,8 +460,8 @@ def setup_cross_agent_messaging(
     # 1. Tag agents
     session_tag = tag_agents_for_session(client, agent_ids, session_id)
 
-    # 2. Attach multi-agent tool
-    multi_agent_ok = attach_multi_agent_tools(client, agent_ids)
+    # 2. Attach multi-agent tools
+    tool_status = attach_multi_agent_tools(client, agent_ids)
 
     # 3. Create shared context block
     block_id = create_swarm_context_block(
@@ -364,7 +478,8 @@ def setup_cross_agent_messaging(
 
     return {
         "session_tag": session_tag,
-        "multi_agent_enabled": multi_agent_ok,
+        "multi_agent_enabled": tool_status.get("async_enabled", False),
+        "broadcast_enabled": tool_status.get("broadcast_enabled", False),
         "swarm_context_block_id": block_id,
     }
 

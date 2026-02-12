@@ -40,6 +40,18 @@ def mock_letta_client():
     client.tools.upsert_from_function = Mock()
     client.tools.list = Mock(return_value=[])
 
+    # Mock conversations operations (Conversations API)
+    client.conversations = Mock()
+    client.conversations.create = Mock(
+        return_value=SimpleNamespace(id="conv-test-123")
+    )
+    client.conversations.messages = Mock()
+    client.conversations.messages.create = Mock(return_value=iter([]))
+    client.conversations.messages.list = Mock(return_value=[])
+    client.conversations.list = Mock(return_value=[])
+    client.conversations.retrieve = Mock()
+    client.conversations.update = Mock()
+
     return client
 
 

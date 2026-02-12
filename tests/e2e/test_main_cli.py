@@ -10,6 +10,7 @@ from unittest.mock import Mock
 import pytest
 
 from spds import main as main_module
+from spds.conversations import ConversationManager as _RealCM
 
 
 class DummySwarm:
@@ -50,6 +51,15 @@ def isolate_config(monkeypatch: pytest.MonkeyPatch):
     yield
 
 
+def _mock_cm_factory(mock_cm):
+    """Create a ConversationManager replacement that preserves parse_spds_summary."""
+    class _MockCMClass:
+        parse_spds_summary = staticmethod(_RealCM.parse_spds_summary)
+        def __new__(cls, client):
+            return mock_cm
+    return _MockCMClass
+
+
 def test_sessions_list_json(monkeypatch, capsys):
     """Test sessions list --json with mocked ConversationManager."""
     mock_conv = Mock()
@@ -69,7 +79,7 @@ def test_sessions_list_json(monkeypatch, capsys):
     }
 
     monkeypatch.setattr(
-        main_module, "ConversationManager", lambda client: mock_cm
+        main_module, "ConversationManager", _mock_cm_factory(mock_cm)
     )
 
     exit_code = main_module.main(
@@ -85,10 +95,11 @@ def test_sessions_list_json(monkeypatch, capsys):
 def test_sessions_resume_success_and_failure(monkeypatch, capsys):
     """Test sessions resume with mocked ConversationManager."""
     mock_cm = Mock()
-    mock_cm.get_session.return_value = Mock(id="conv-123")
+    mock_cm.get_session.return_value = Mock(id="conv-123", summary="")
+    mock_cm.list_messages.return_value = []
 
     monkeypatch.setattr(
-        main_module, "ConversationManager", lambda client: mock_cm
+        main_module, "ConversationManager", _mock_cm_factory(mock_cm)
     )
 
     ok_code = main_module.main(["sessions", "resume", "conv-123"])

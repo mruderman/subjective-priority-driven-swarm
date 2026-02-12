@@ -986,3 +986,57 @@ IMPORTANCE_TO_GROUP: 8"""
         # Should not raise an error
         str_repr = str(agent)
         assert "Test Agent" in str_repr or "SPDSAgent" in str_repr
+
+
+class TestConversationRouting:
+    """Tests for Conversations API routing in SPDSAgent."""
+
+    def test_conversation_id_defaults_none(self, mock_letta_client, sample_agent_state):
+        agent = SPDSAgent(sample_agent_state, mock_letta_client)
+        assert agent.conversation_id is None
+        assert agent._conversation_manager is None
+
+    def test_speak_routes_through_conversation_when_set(
+        self, mock_letta_client, sample_agent_state, mock_send_message_response
+    ):
+        """When conversation_id and _conversation_manager are set, speak() uses them."""
+        agent = SPDSAgent(sample_agent_state, mock_letta_client)
+        mock_cm = Mock()
+        mock_cm.send_and_collect.return_value = mock_send_message_response
+
+        agent.conversation_id = "conv-abc-123"
+        agent._conversation_manager = mock_cm
+
+        response = agent.speak("Previous conversation content")
+
+        # Should have called send_and_collect, NOT agents.messages.create
+        mock_cm.send_and_collect.assert_called_once()
+        call_kwargs = mock_cm.send_and_collect.call_args.kwargs
+        assert call_kwargs["conversation_id"] == "conv-abc-123"
+        assert len(call_kwargs["messages"]) == 2
+        mock_letta_client.agents.messages.create.assert_not_called()
+
+    def test_speak_falls_back_to_agents_api_when_no_conversation(
+        self, mock_letta_client, sample_agent_state, mock_send_message_response
+    ):
+        """Without conversation_id, speak() uses agents.messages.create as before."""
+        agent = SPDSAgent(sample_agent_state, mock_letta_client)
+        mock_letta_client.agents.messages.create.return_value = mock_send_message_response
+
+        # Leave conversation_id as None
+        response = agent.speak("Previous conversation content")
+
+        mock_letta_client.agents.messages.create.assert_called_once()
+        assert response == mock_send_message_response
+
+    def test_speak_falls_back_when_only_conversation_id_set(
+        self, mock_letta_client, sample_agent_state, mock_send_message_response
+    ):
+        """If conversation_id is set but _conversation_manager is None, fall back to agents API."""
+        agent = SPDSAgent(sample_agent_state, mock_letta_client)
+        agent.conversation_id = "conv-abc"
+        # _conversation_manager is still None
+        mock_letta_client.agents.messages.create.return_value = mock_send_message_response
+
+        response = agent.speak("content")
+        mock_letta_client.agents.messages.create.assert_called_once()

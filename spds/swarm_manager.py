@@ -10,7 +10,12 @@ from letta_client import NotFoundError
 
 from . import config
 from .config import logger
-from .cross_agent import setup_cross_agent_messaging, teardown_cross_agent_messaging
+from .conversations import ConversationManager
+from .cross_agent import (
+    detect_side_conversations,
+    setup_cross_agent_messaging,
+    teardown_cross_agent_messaging,
+)
 from .export_manager import ExportManager
 from .letta_api import letta_call
 from .memory_awareness import create_memory_awareness_for_agent
@@ -89,6 +94,8 @@ class SwarmManager:
         # Cross-agent messaging state (populated by _setup_cross_agent)
         self.session_id: str = str(uuid.uuid4())
         self._cross_agent_info: dict | None = None
+        # Conversations API manager for session-specific routing
+        self._conversation_manager = ConversationManager(client)
 
         logger.info(f"Initializing SwarmManager in {conversation_mode} mode.")
 
@@ -194,6 +201,76 @@ class SwarmManager:
             )
         except Exception as e:
             logger.warning("Cross-agent messaging teardown failed: %s", e)
+
+    def _create_agent_conversations(self, topic: str) -> None:
+        """Create a Conversations API session for each agent in this meeting.
+
+        Sets ``agent.conversation_id`` and ``agent._conversation_manager``
+        on each SPDSAgent so that ``speak()`` routes through the session-
+        specific conversation instead of the agent's default context window.
+
+        Failures are non-fatal: if conversation creation fails for an agent,
+        that agent falls back to ``agents.messages.create`` (default behaviour).
+        """
+        cm = getattr(self, "_conversation_manager", None)
+        if cm is None:
+            return
+        for agent in self.agents:
+            try:
+                conv_id = cm.create_agent_conversation(
+                    agent_id=agent.agent.id,
+                    session_id=self.session_id,
+                    agent_name=agent.name,
+                    topic=topic,
+                )
+                agent.conversation_id = conv_id
+                agent._conversation_manager = cm
+                logger.info(
+                    "Created conversation %s for agent %s", conv_id, agent.name
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to create conversation for agent %s: %s",
+                    agent.name, e,
+                )
+                agent.conversation_id = None
+                agent._conversation_manager = None
+
+    def _finalize_conversations(self) -> None:
+        """Update conversation summaries with final metadata at meeting end.
+
+        Adds message count, mode, and ``completed`` status to each
+        agent's conversation summary. Failures are logged but don't
+        block meeting teardown.
+        """
+        cm = getattr(self, "_conversation_manager", None)
+        if cm is None:
+            return
+
+        msg_count = len(getattr(self, "_history", []))
+        mode = getattr(self, "conversation_mode", "unknown")
+
+        # Collect all conversation IDs (agents + secretary)
+        targets = []
+        for agent in self.agents:
+            cid = getattr(agent, "conversation_id", None)
+            if cid:
+                targets.append((agent.name, cid))
+
+        sec = getattr(self, "_secretary", None)
+        if sec and getattr(sec, "conversation_id", None):
+            targets.append(("Secretary", sec.conversation_id))
+
+        for name, conv_id in targets:
+            try:
+                current = cm.get_session(conv_id)
+                old_summary = getattr(current, "summary", "") or ""
+                new_summary = f"{old_summary}|completed|msgs={msg_count}|mode={mode}"
+                cm.update_summary(conv_id, new_summary)
+            except Exception as e:
+                logger.warning(
+                    "Failed to finalize conversation %s for %s: %s", conv_id, name, e
+                )
 
     def _emit(self, message: str, *, level: str = "info") -> None:
         """Print a user-facing message and log it at the requested level."""
@@ -399,6 +476,44 @@ class SwarmManager:
             return f"[MCP result from {server_name}/{tool_name}]: {result}"
 
         return None
+
+    # ------------------------------------------------------------------
+    # Side-conversation awareness
+    # ------------------------------------------------------------------
+
+    def _resolve_agent_name(self, agent_id: str) -> str:
+        """Return the display name for an agent, falling back to the raw ID."""
+        for a in self.agents:
+            if getattr(a.agent, "id", None) == agent_id:
+                return a.name
+        return agent_id
+
+    def _check_side_conversations(self, agent, response) -> None:
+        """Detect and announce any cross-agent messages in *response*."""
+        convos = detect_side_conversations(response, agent.name)
+        for convo in convos:
+            if convo["type"] == "async":
+                recipient = self._resolve_agent_name(convo.get("recipient_id", ""))
+            else:
+                tags = convo.get("tags") or []
+                recipient = f"agents tagged {tags}"
+
+            preview = (convo.get("message_content") or "")[:100]
+            if len(convo.get("message_content") or "") > 100:
+                preview += "..."
+
+            notification = f"[Side channel] {convo['sender']} messaged {recipient}"
+            if preview:
+                notification += f": {preview}"
+
+            logger.info(notification)
+            self._append_history("System", notification)
+
+            if self.secretary:
+                try:
+                    self.secretary.observe_message("System", notification)
+                except Exception as exc:
+                    logger.debug("Secretary observe failed for side convo: %s", exc)
 
     def _append_history(self, speaker: str, message: str) -> None:
         """Append a ConversationMessage to history with current timestamp.
@@ -1290,6 +1405,7 @@ class SwarmManager:
                     mcp_text = self._check_and_fulfill_mcp_requests(agent, response)
                     if mcp_text:
                         message_text = self._normalize_agent_message(mcp_text, agent)
+                    self._check_side_conversations(agent, response)
 
                     # Validate response quality
                     if (
@@ -1397,6 +1513,7 @@ class SwarmManager:
                 mcp_text = self._check_and_fulfill_mcp_requests(agent, response)
                 if mcp_text:
                     message_text = self._normalize_agent_message(mcp_text, agent)
+                self._check_side_conversations(agent, response)
 
                 # Check for role change actions before displaying message
                 role_changed = self._process_agent_response_for_role_change(agent, message_text)
@@ -1472,6 +1589,7 @@ class SwarmManager:
                 mcp_text = self._check_and_fulfill_mcp_requests(agent, response)
                 if mcp_text:
                     message_text = self._normalize_agent_message(mcp_text, agent)
+                self._check_side_conversations(agent, response)
 
                 # Check for role change actions before displaying message
                 role_changed = self._process_agent_response_for_role_change(agent, message_text)
@@ -1544,6 +1662,7 @@ class SwarmManager:
             mcp_text = self._check_and_fulfill_mcp_requests(speaker, response)
             if mcp_text:
                 message_text = self._normalize_agent_message(mcp_text, speaker)
+            self._check_side_conversations(speaker, response)
 
             # Check for role change actions before displaying message
             role_changed = self._process_agent_response_for_role_change(speaker, message_text)
@@ -1612,6 +1731,7 @@ class SwarmManager:
             mcp_text = self._check_and_fulfill_mcp_requests(speaker, response)
             if mcp_text:
                 message_text = self._normalize_agent_message(mcp_text, speaker)
+            self._check_side_conversations(speaker, response)
 
             # Check for role change actions before displaying message
             role_changed = self._process_agent_response_for_role_change(speaker, message_text)
@@ -1675,7 +1795,26 @@ class SwarmManager:
                 {"Topic": topic},
             )
 
+        # Create session-specific conversations per agent
+        self._create_agent_conversations(topic)
+
         if self.secretary:
+            # Create a session-specific conversation for the secretary
+            cm = getattr(self, "_conversation_manager", None)
+            if cm and getattr(self.secretary, "agent", None):
+                try:
+                    sec_conv_id = cm.create_agent_conversation(
+                        agent_id=self.secretary.agent.id,
+                        session_id=self.session_id,
+                        agent_name="Secretary",
+                        topic=topic,
+                    )
+                    self.secretary.conversation_id = sec_conv_id
+                    self.secretary._conversation_manager = cm
+                    logger.info("Created conversation %s for secretary", sec_conv_id)
+                except Exception as e:
+                    logger.warning("Failed to create secretary conversation: %s", e)
+
             # Get participant names
             participant_names = [agent.name for agent in self.agents]
 
@@ -1709,6 +1848,9 @@ class SwarmManager:
                 "conversation_history_length": len(self.conversation_history),
             },
         )
+
+        # Finalize conversation summaries
+        self._finalize_conversations()
 
         # Clean up cross-agent session tags
         self._teardown_cross_agent()

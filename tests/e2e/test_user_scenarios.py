@@ -19,6 +19,39 @@ from spds.main import main
 from spds.swarm_manager import SwarmManager
 
 
+def _add_conversations_mock(mock_client, speak_responses):
+    """Add Conversations API mock to a client.
+
+    Args:
+        mock_client: The Mock client object.
+        speak_responses: List of SimpleNamespace speak responses. Each will be
+            converted to stream chunks for conversations.messages.create.
+    """
+    mock_client.conversations = Mock()
+    mock_client.conversations.create = Mock(
+        return_value=SimpleNamespace(id="conv-e2e-test")
+    )
+    mock_client.conversations.messages = Mock()
+    mock_client.conversations.messages.list = Mock(return_value=[])
+    mock_client.conversations.list = Mock(return_value=[])
+    mock_client.conversations.retrieve = Mock()
+    mock_client.conversations.update = Mock()
+
+    # Convert speak_responses to stream-compatible chunks
+    streams = []
+    for resp in speak_responses:
+        chunks = []
+        for msg in resp.messages:
+            # Add message_type so send_and_collect doesn't filter it out
+            chunk = SimpleNamespace(**vars(msg))
+            if not hasattr(chunk, "message_type"):
+                chunk.message_type = "assistant_message"
+            chunks.append(chunk)
+        streams.append(iter(chunks))
+
+    mock_client.conversations.messages.create = Mock(side_effect=streams)
+
+
 def make_agent_state(id: str, name: str, system: str, model: str, tools=None):
     """Build a minimally valid AgentState for current letta_client schema."""
     llm = LlmConfig(model=model, model_endpoint_type="openai", context_window=128000)
@@ -200,12 +233,12 @@ class TestE2EUserScenarios:
             ]
         )
 
-        # Set up mock responses in order
+        # Assessments go through agents.messages.create; speaking goes through conversations
         mock_client.agents.messages.create.side_effect = [
             assessment_responses[0],  # Alex assessment
             assessment_responses[1],  # Jordan assessment
-            speak_response,  # Alex speaking
         ]
+        _add_conversations_mock(mock_client, [speak_response])
 
         # Capture output
         captured_output = StringIO()
@@ -364,8 +397,8 @@ class TestE2EUserScenarios:
         mock_client.agents.messages.create.side_effect = [
             assessment_response_1,  # Agent 1 assessment (lower)
             assessment_response_2,  # Agent 2 assessment (higher)
-            speak_response,  # Agent 2 speaking
         ]
+        _add_conversations_mock(mock_client, [speak_response])
 
         # Capture output
         captured_output = StringIO()
@@ -495,8 +528,8 @@ class TestE2EUserScenarios:
         mock_client.agents.messages.create.side_effect = [
             assessment_response_1,
             assessment_response_2,
-            speak_response,
         ]
+        _add_conversations_mock(mock_client, [speak_response])
 
         # Capture output
         captured_output = StringIO()
@@ -622,8 +655,8 @@ class TestE2EUserScenarios:
         mock_client.agents.messages.create.side_effect = [
             creative_assessment,
             analytical_assessment,
-            creative_speak,
         ]
+        _add_conversations_mock(mock_client, [creative_speak])
 
         # Capture output
         captured_output = StringIO()

@@ -245,3 +245,69 @@ def test_extract_agent_response_handles_namespace_text(mock_letta_client):
 
     out = sec._extract_agent_response(response)
     assert out == "Namespace text content"
+
+
+# ------------------------------------------------------------------
+# Conversation routing tests (Phase 2)
+# ------------------------------------------------------------------
+
+from unittest.mock import Mock
+
+
+def test_secretary_conversation_id_defaults_none(mock_letta_client):
+    with patch("spds.secretary_agent.CreateBlockParam"):
+        sec = SecretaryAgent(client=mock_letta_client, mode="adaptive")
+    assert sec.conversation_id is None
+    assert sec._conversation_manager is None
+
+
+def test_secretary_observe_routes_through_conversation(mock_letta_client):
+    with patch("spds.secretary_agent.CreateBlockParam"):
+        sec = SecretaryAgent(client=mock_letta_client, mode="adaptive")
+
+    mock_cm = Mock()
+    mock_cm.send_and_collect.return_value = SimpleNamespace(messages=[])
+    sec.conversation_id = "conv-sec-1"
+    sec._conversation_manager = mock_cm
+
+    sec.observe_message("Alice", "hello world")
+
+    # Should route through send_and_collect, not agents.messages.create
+    mock_cm.send_and_collect.assert_called_once()
+    call_kwargs = mock_cm.send_and_collect.call_args.kwargs
+    assert call_kwargs["conversation_id"] == "conv-sec-1"
+    mock_letta_client.agents.messages.create.assert_not_called()
+
+
+def test_secretary_observe_falls_back_without_conversation(mock_letta_client):
+    with patch("spds.secretary_agent.CreateBlockParam"):
+        sec = SecretaryAgent(client=mock_letta_client, mode="adaptive")
+    mock_letta_client.agents.messages.create.return_value = SimpleNamespace(messages=[])
+
+    # Leave conversation_id as None
+    sec.observe_message("Alice", "hello")
+
+    mock_letta_client.agents.messages.create.assert_called_once()
+
+
+def test_secretary_generate_minutes_routes_through_conversation(mock_letta_client):
+    with patch("spds.secretary_agent.CreateBlockParam"):
+        sec = SecretaryAgent(client=mock_letta_client, mode="formal")
+
+    sec.meeting_metadata = {"topic": "Test", "meeting_type": "discussion"}
+    mock_cm = Mock()
+    # Content must be >50 chars to pass the length check in generate_minutes
+    minutes_text = (
+        "Meeting Minutes for Test Discussion\n"
+        "Attendees: Alice, Bob\n"
+        "Key Discussion Points: Various topics discussed in detail."
+    )
+    response = make_tool_response(minutes_text)
+    mock_cm.send_and_collect.return_value = response
+    sec.conversation_id = "conv-sec-2"
+    sec._conversation_manager = mock_cm
+
+    result = sec.generate_minutes()
+
+    mock_cm.send_and_collect.assert_called_once()
+    assert "Meeting Minutes" in result
