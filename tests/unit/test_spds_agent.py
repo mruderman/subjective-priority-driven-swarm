@@ -505,7 +505,7 @@ class TestSPDSAgent:
         mock_letta_client.agents.tools.detach.assert_called_once()
         assert call_counter["count"] == 2
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
-    @patch("spds.spds_agent.track_action", Mock())
+
     def test_get_full_assessment_with_tool_return(
         self,
         mock_assessment_func,
@@ -540,7 +540,7 @@ class TestSPDSAgent:
         assert agent.last_assessment.expertise_relevance == 9
 
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
-    @patch("spds.spds_agent.track_action", Mock())
+
     def test_get_full_assessment_parses_tool_call_arguments(
         self,
         mock_assessment_func,
@@ -582,7 +582,7 @@ class TestSPDSAgent:
         assert agent.last_assessment.importance_to_group == 7
 
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
-    @patch("spds.spds_agent.track_action", Mock())
+
     def test_get_full_assessment_fallback(
         self,
         mock_assessment_func,
@@ -615,7 +615,7 @@ class TestSPDSAgent:
         assert agent.last_assessment == sample_assessment
 
     @patch("spds.spds_agent.tools.perform_subjective_assessment")
-    @patch("spds.spds_agent.track_action", Mock())
+
     def test_get_full_assessment_tool_call_without_scores_uses_local_fallback(
         self,
         mock_assessment_func,

@@ -18,12 +18,6 @@ from spds.main import (
     list_sessions_command,
     main,
     resume_session_command,
-    setup_session_context,
-)
-from spds.session_context import (
-    clear_session_context,
-    get_current_session_id,
-    set_current_session_id,
 )
 
 # The real parse_spds_summary — used to wire into mocked ConversationManager
@@ -33,14 +27,6 @@ _real_parse_spds_summary = _RealCM.parse_spds_summary
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-@pytest.fixture(autouse=True)
-def _reset_session_context():
-    """Clear conversation context before and after each test."""
-    clear_session_context()
-    yield
-    clear_session_context()
-
 
 @pytest.fixture
 def mock_client():
@@ -64,36 +50,6 @@ def _make_message(role="user", content="Hello"):
     """Create a mock message object."""
     msg = SimpleNamespace(role=role, content=content)
     return msg
-
-
-# ---------------------------------------------------------------------------
-# setup_session_context
-# ---------------------------------------------------------------------------
-
-class TestSetupSessionContext:
-
-    def test_sets_context_from_session_id(self):
-        """setup_session_context sets the ContextVar when session_id is present."""
-        args = Namespace(session_id="conv-123")
-        result = setup_session_context(args)
-
-        assert result == "conv-123"
-        assert get_current_session_id() == "conv-123"
-
-    def test_returns_none_when_no_session_id(self):
-        """Returns None and does not set context when no session_id."""
-        args = Namespace(session_id=None)
-        result = setup_session_context(args)
-
-        assert result is None
-        assert get_current_session_id() is None
-
-    def test_returns_none_when_attr_missing(self):
-        """Returns None when args has no session_id attribute."""
-        args = Namespace()
-        result = setup_session_context(args)
-
-        assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +179,6 @@ class TestResumeSessionCommand:
             result = resume_session_command(args, client=mock_client)
 
         assert result == 0
-        assert get_current_session_id() == "conv-resume"
         output = capsys.readouterr().out
         assert "sess-x" in output
         assert "Alice" in output
@@ -404,64 +359,6 @@ class TestMainSessionIntegration:
             result = main(["sessions", "resume", "conv-resume-main"])
 
         assert result == 0
-        assert get_current_session_id() == "conv-resume-main"
-
-    def test_session_id_sets_context(self, mock_client):
-        """--session-id sets the conversation context before swarm starts."""
-        context_captured = {}
-
-        class MockSwarm:
-            def __init__(self, **kwargs):
-                context_captured["init"] = get_current_session_id()
-
-            def start_chat_with_topic(self, topic):
-                context_captured["chat"] = get_current_session_id()
-
-        with patch("spds.main.SwarmManager", MockSwarm), \
-             patch("spds.main.Letta", return_value=mock_client), \
-             patch("spds.main.config") as mock_config, \
-             patch("builtins.input", return_value="Test Topic"):
-            mock_config.get_letta_password.return_value = None
-            mock_config.LETTA_ENVIRONMENT = "SELF_HOSTED"
-            mock_config.LETTA_API_KEY = None
-            mock_config.LETTA_BASE_URL = "http://localhost:8283"
-            mock_config.AGENT_PROFILES = []
-            mock_config.get_agent_profiles_validated.return_value = Mock(
-                agents=[Mock(dict=lambda: {"name": "A", "persona": "p", "expertise": []})]
-            )
-
-            result = main(["--session-id", "conv-ctx-test"])
-
-        assert result == 0
-        assert context_captured.get("init") == "conv-ctx-test"
-        assert context_captured.get("chat") == "conv-ctx-test"
-
-    def test_no_session_flag_leaves_context_empty(self, mock_client):
-        """Running without --session-id leaves context as None."""
-        class MockSwarm:
-            def __init__(self, **kwargs):
-                pass
-
-            def start_chat_with_topic(self, topic):
-                pass
-
-        with patch("spds.main.SwarmManager", MockSwarm), \
-             patch("spds.main.Letta", return_value=mock_client), \
-             patch("spds.main.config") as mock_config, \
-             patch("builtins.input", return_value="Test Topic"):
-            mock_config.get_letta_password.return_value = None
-            mock_config.LETTA_ENVIRONMENT = "SELF_HOSTED"
-            mock_config.LETTA_API_KEY = None
-            mock_config.LETTA_BASE_URL = "http://localhost:8283"
-            mock_config.AGENT_PROFILES = []
-            mock_config.get_agent_profiles_validated.return_value = Mock(
-                agents=[Mock(dict=lambda: {"name": "A", "persona": "p", "expertise": []})]
-            )
-
-            result = main([])
-
-        assert result == 0
-        assert get_current_session_id() is None
 
     def test_sessions_help(self, capsys):
         """'sessions --help' exits cleanly with usage info."""

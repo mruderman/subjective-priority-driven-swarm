@@ -8,13 +8,6 @@ from letta_client.types import AgentState, CreateBlockParam, MessageCreateParam
 
 from . import config
 from .letta_api import letta_call
-from .session_tracking import (
-    track_action,
-    track_decision,
-    track_message,
-    track_system_event,
-)
-
 # spds/secretary_agent.py
 
 
@@ -217,17 +210,6 @@ class SecretaryAgent:
                 secretary_response = self._extract_agent_response(response)
                 print(f"🤖 Secretary: {secretary_response}")
 
-                # Track meeting start
-                track_system_event(
-                    event_type="meeting_started",
-                    details={
-                        "topic": topic,
-                        "participants": participants,
-                        "meeting_type": meeting_type,
-                        "secretary_mode": self.mode,
-                        "secretary_response": secretary_response,
-                    },
-                )
             else:
                 print(f"⚠️ Secretary may not have received meeting start notification")
         except Exception as e:
@@ -314,16 +296,6 @@ class SecretaryAgent:
                 )],
             )
 
-            # Track message observation
-            track_action(
-                actor="secretary",
-                action_type="observe_message",
-                details={
-                    "speaker": speaker,
-                    "message": message,
-                    "metadata": metadata or {},
-                },
-            )
         except Exception as e:
             # Don't print for every message - too noisy
             pass
@@ -353,16 +325,6 @@ class SecretaryAgent:
             )
             print(f"✅ Action item recorded: {description}")
 
-            # Track action item creation
-            track_action(
-                actor="secretary",
-                action_type="add_action_item",
-                details={
-                    "description": description,
-                    "assignee": assignee,
-                    "due_date": due_date,
-                },
-            )
         except Exception as e:
             print(f"❌ Failed to record action item: {e}")
 
@@ -385,12 +347,6 @@ class SecretaryAgent:
             )
             print(f"📋 Decision recorded: {decision}")
 
-            # Track decision recording
-            track_decision(
-                actor="secretary",
-                decision_type="record_decision",
-                details={"decision": decision, "context": context},
-            )
         except Exception as e:
             print(f"❌ Failed to record decision: {e}")
 

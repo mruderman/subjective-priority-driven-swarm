@@ -11,7 +11,6 @@ from letta_client import Letta
 
 from . import config
 from .conversations import ConversationManager
-from .session_context import set_current_session_id
 from .swarm_manager import SwarmManager
 
 logger = logging.getLogger(__name__)
@@ -297,19 +296,7 @@ def resume_session_command(args, client=None):
     else:
         print("No messages in this conversation.")
 
-    set_current_session_id(conversation_id)
     return 0
-
-
-def setup_session_context(args) -> Optional[str]:
-    """Set up session context based on CLI arguments."""
-    if getattr(args, "session_id", None):
-        set_current_session_id(args.session_id)
-        logger.info(f"Set conversation context: {args.session_id}")
-        return args.session_id
-
-    # No session management requested - return None
-    return None
 
 
 def main(argv=None):
@@ -426,9 +413,6 @@ def main(argv=None):
         else:
             sessions_parser.print_help()
             return 1
-
-    # Set up session context for main commands (before any swarm operations)
-    setup_session_context(args)
 
     if args.agent_ids:
         print("Mode: Loading existing agents by ID.")

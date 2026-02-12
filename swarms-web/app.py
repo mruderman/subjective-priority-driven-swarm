@@ -44,7 +44,6 @@ from spds.export_manager import (
 )
 from spds.message import get_new_messages_since_index
 from spds.secretary_agent import SecretaryAgent
-from spds.session_context import set_current_session_id
 # session_store deleted in Phase 5 — provide in-memory stub until web app
 # is migrated to ConversationManager (see design doc Phase 2b / Phase 5).
 try:
@@ -93,7 +92,6 @@ except ImportError:
     _stub_store = _StubSessionStore()
     def get_default_session_store():
         return _stub_store
-from spds.session_tracking import track_system_event, track_message, track_action
 from spds.swarm_manager import SwarmManager
 
 logger = logging.getLogger(__name__)
@@ -503,9 +501,6 @@ class WebSwarmManager:
                     },
                 )
 
-                # Track agent message to persistent store
-                track_message(agent.name, message_text, "assistant")
-
                 # Notify secretary
                 if self.swarm.secretary:
                     self.swarm.secretary.observe_message(agent.name, message_text)
@@ -575,9 +570,6 @@ class WebSwarmManager:
                     },
                 )
 
-                # Track agent response to persistent store
-                track_message(agent.name, message_text, "assistant")
-
                 # Add to conversation history
                 self.swarm._append_history(agent.name, message_text)
 
@@ -624,9 +616,6 @@ class WebSwarmManager:
                         "timestamp": datetime.now().isoformat(),
                     },
                 )
-
-                # Track agent message to persistent store
-                track_message(agent.name, message_text, "assistant")
 
                 self.swarm._append_history(agent.name, message_text)
 
@@ -682,9 +671,6 @@ class WebSwarmManager:
                 },
             )
 
-            # Track agent message to persistent store
-            track_message(speaker.name, message_text, "assistant")
-
             self.swarm._append_history(speaker.name, message_text)
 
             # Update all agent memories with this response
@@ -729,9 +715,6 @@ class WebSwarmManager:
                     "timestamp": datetime.now().isoformat(),
                 },
             )
-
-            # Track agent message to persistent store
-            track_message(speaker.name, message_text, "assistant")
 
             self.swarm._append_history(speaker.name, message_text)
 
@@ -823,9 +806,6 @@ def _restore_web_swarm_from_session(session_id, socketio_instance):
             elif action_type == "observe":
                 # Secretary observations are already in conversation history
                 pass
-
-    # Set session context
-    set_current_session_id(session_id)
 
     logger.info(f"Restored session {session_id} with {len(session_state.events)} events")
 
@@ -1021,18 +1001,6 @@ def start_session():
         }
         store._save_session_state(session_state)
 
-        # Set session context for event tracking
-        set_current_session_id(session_id)
-
-        # Track session creation event
-        track_system_event("session_created", {
-            "agent_ids": agent_ids,
-            "conversation_mode": conversation_mode,
-            "enable_secretary": enable_secretary,
-            "secretary_mode": secretary_mode,
-            "meeting_type": meeting_type
-        })
-
         # Create WebSwarmManager
         web_swarm = WebSwarmManager(
             session_id=session_id,
@@ -1177,9 +1145,6 @@ def resume_session():
             store.load(session_id)
         except ValueError:
             return jsonify({"ok": False, "error": "not_found"}), 404
-
-        # Set current session context
-        set_current_session_id(session_id)
 
         logger.info(f"Resumed session {session_id}")
 
@@ -1377,9 +1342,6 @@ def assign_secretary_route(session_id):
         session_handler = active_sessions[session_id]
         swarm = session_handler.swarm
 
-        # Set session context for event tracking
-        set_current_session_id(session_id)
-
         # Assign the role
         swarm.assign_role(agent_id, "secretary")
 
@@ -1390,13 +1352,6 @@ def assign_secretary_route(session_id):
                 "status": "error",
                 "message": "Failed to assign secretary role"
             }), 500
-
-        # Track role assignment to persistent store
-        track_action("system", "role_assignment", {
-            "agent_id": agent_id,
-            "agent_name": secretary_agent.name,
-            "role": "secretary"
-        })
 
         # Use the centralized notification function
         notify_secretary_change(session_id, swarm)
@@ -1459,33 +1414,17 @@ def on_start_chat(data):
     topic = data.get("topic")
 
     if session_id in active_sessions:
-        # Set session context for event tracking
-        set_current_session_id(session_id)
-
         web_swarm = active_sessions[session_id]
         web_swarm.start_web_chat(topic)
-
-        # Track chat started event
-        track_system_event("chat_started", {
-            "topic": topic,
-            "conversation_mode": web_swarm.swarm.conversation_mode,
-            "enable_secretary": web_swarm.swarm.enable_secretary
-        })
 
 
 @socketio.on("user_message")
 def on_user_message(data):
-    """Handle user message and track event."""
+    """Handle user message."""
     session_id = data.get("session_id")
     message = data.get("message")
 
     if session_id in active_sessions:
-        # Set session context for event tracking
-        set_current_session_id(session_id)
-
-        # Track user message to persistent store
-        track_message("user", message, "user")
-
         web_swarm = active_sessions[session_id]
         web_swarm.process_user_message(message)
 
@@ -1706,12 +1645,6 @@ def create_message():
 
         # Optional attachments
         attachments = data.get("attachments", [])
-
-        # Set session context
-        set_current_session_id(session_id)
-
-        # Track message with attachments in payload
-        from spds.session_tracking import track_message
 
         payload = {
             "content": message,

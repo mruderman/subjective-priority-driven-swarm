@@ -21,7 +21,6 @@ from .letta_api import letta_call
 from .memory_awareness import create_memory_awareness_for_agent
 from .message import ConversationMessage, convert_history_to_messages, messages_to_flat_format, get_new_messages_since_index
 from .secretary_agent import SecretaryAgent
-from .session_tracking import track_action, track_message, track_system_event
 from .spds_agent import SPDSAgent, format_group_message
 
 
@@ -72,7 +71,6 @@ class SwarmManager:
         from .message import ConversationMessage, convert_history_to_messages, messages_to_flat_format, get_new_messages_since_index
         # NOTE: Do NOT re-import SecretaryAgent here; use the module-level import so tests
         # can patch spds.swarm_manager.SecretaryAgent. Re-importing would bypass mocks.
-        from .session_tracking import track_action, track_message, track_system_event
         from .spds_agent import SPDSAgent
 
         self.client = client
@@ -828,9 +826,6 @@ class SwarmManager:
                 continue
 
             self._append_history("You", human_input)
-
-            # Track user message
-            track_message(actor="user", content=human_input, message_type="user")
 
             # Let secretary observe the human message
             if self.secretary:
@@ -1773,18 +1768,6 @@ class SwarmManager:
         """
         self._append_history("System", f"The topic is '{topic}'.")
 
-        # Track meeting start
-        track_system_event(
-            event_type="meeting_started",
-            details={
-                "topic": topic,
-                "meeting_type": self.meeting_type,
-                "conversation_mode": self.conversation_mode,
-                "agent_count": len(self.agents),
-                "secretary_enabled": getattr(self, "enable_secretary", False),
-            },
-        )
-
         # Update shared swarm_context block with topic
         cross_info = getattr(self, "_cross_agent_info", None)
         if cross_info and cross_info.get("swarm_context_block_id"):
@@ -1838,17 +1821,6 @@ class SwarmManager:
         _self._offer_export_options()_ to present export/export-command choices to the user.
         If no secretary is configured, this method is a no-op.
         """
-        # Track meeting end
-        track_system_event(
-            event_type="meeting_ended",
-            details={
-                "meeting_type": self.meeting_type,
-                "conversation_mode": self.conversation_mode,
-                "secretary_enabled": getattr(self, "enable_secretary", False),
-                "conversation_history_length": len(self.conversation_history),
-            },
-        )
-
         # Finalize conversation summaries
         self._finalize_conversations()
 

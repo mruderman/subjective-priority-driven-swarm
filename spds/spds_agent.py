@@ -11,12 +11,6 @@ from pydantic import BaseModel
 from . import config, tools
 from .letta_api import letta_call
 from .message import ConversationMessage, messages_to_flat_format
-from .session_tracking import (
-    track_action,
-    track_decision,
-    track_message,
-    track_tool_call,
-)
 try:
     from letta_client import APIError as ApiError
 except ImportError:  # pragma: no cover
@@ -417,16 +411,6 @@ IMPORTANCE_TO_GROUP: X
             try:
                 print(f"  [Getting real assessment from {self.name}...]")
 
-                track_action(
-                    actor=self.name,
-                    action_type="assessment_request",
-                    details={
-                        "topic": topic,
-                        "has_conversation_history": bool(conversation_history),
-                        "has_tools": has_tools,
-                    },
-                )
-
                 response = letta_call(
                     "agents.messages.create.assessment",
                     self.client.agents.messages.create,
@@ -439,46 +423,18 @@ IMPORTANCE_TO_GROUP: X
                     ],
                 )
 
-                # Track tool calls in the response
+                # Check for assessment tool usage in response
                 for msg in response.messages:
-                    # Check for tool_call_message type (new format)
                     if hasattr(msg, "message_type") and msg.message_type == "tool_call_message":
                         if hasattr(msg, "tool_call") and msg.tool_call:
                             tool_name = msg.tool_call.function.name if hasattr(msg.tool_call, "function") else None
-                            if tool_name == "send_message":
-                                track_tool_call(
-                                    actor=self.name,
-                                    tool_name="send_message",
-                                    arguments={"message": "assessment_response"},
-                                    result="success",
-                                )
-                            elif tool_name == "perform_subjective_assessment":
-                                track_tool_call(
-                                    actor=self.name,
-                                    tool_name="perform_subjective_assessment",
-                                    arguments={"assessment": "tool_based"},
-                                    result="success",
-                                )
+                            if tool_name == "perform_subjective_assessment":
                                 print(f"  [{self.name} used perform_subjective_assessment tool ✓]")
-                    # Also check legacy format for backward compatibility
                     elif hasattr(msg, "tool_calls") and getattr(msg, "tool_calls"):
                         for tool_call in msg.tool_calls:
                             if hasattr(tool_call, "function"):
                                 tool_name = getattr(tool_call.function, "name", None)
-                                if tool_name == "send_message":
-                                    track_tool_call(
-                                        actor=self.name,
-                                        tool_name="send_message",
-                                        arguments={"message": "assessment_response"},
-                                        result="success",
-                                    )
-                                elif tool_name == "perform_subjective_assessment":
-                                    track_tool_call(
-                                        actor=self.name,
-                                        tool_name="perform_subjective_assessment",
-                                        arguments={"assessment": "tool_based"},
-                                        result="success",
-                                    )
+                                if tool_name == "perform_subjective_assessment":
                                     print(f"  [{self.name} used perform_subjective_assessment tool ✓]")
 
                 candidate_texts = []
@@ -886,21 +842,6 @@ IMPORTANCE_TO_GROUP: X
         else:
             self.priority_score = 0
 
-        # Track the assessment decision
-        track_decision(
-            actor=self.name,
-            decision_type="motivation_assessment",
-            details={
-                "topic": original_topic,
-                "motivation_score": self.motivation_score,
-                "priority_score": self.priority_score,
-                "participation_threshold": config.PARTICIPATION_THRESHOLD,
-                "will_participate": self.motivation_score
-                >= config.PARTICIPATION_THRESHOLD,
-                "assessment": assessment.model_dump(),
-            },
-        )
-
     def _select_mode_for_message(self, message: str, attachments: list = None) -> str:
         """Select processing mode based on message content and attachments.
 
@@ -944,28 +885,6 @@ IMPORTANCE_TO_GROUP: X
         print(
             f"[DEBUG] Agent {self.name} selected mode: {selected_mode} for message with {len(attachments or [])} attachments"
         )
-
-        # Track the mode selection in session events
-        if attachments:
-            track_decision(
-                actor=self.name,
-                decision_type="mode_selection",
-                details={
-                    "selected_mode": selected_mode,
-                    "attachments_count": len(attachments),
-                    "has_images": any(
-                        att.get("kind") == "image" for att in attachments
-                    ),
-                    "has_documents": any(
-                        att.get("kind") == "document" for att in attachments
-                    ),
-                    "message_preview": (
-                        conversation_history[:100]
-                        if conversation_history
-                        else topic[:100]
-                    ),
-                },
-            )
 
         while True:
             has_tools = (
@@ -1053,10 +972,6 @@ IMPORTANCE_TO_GROUP: X
                 if self._response_contains_send_message(response):
                     logger.debug(f"[{self.name}] Response contains send_message tool call")
                     response = self._ensure_send_message_response(response, response_text)
-                    if response_text:
-                        track_message(
-                            actor=self.name, content=response_text, message_type="assistant"
-                        )
                     return response
                 elif response_text and len(response_text.strip()) > 10:  # Accept direct responses with substantial content
                     # Agent responded directly without using send_message tool - this is acceptable
@@ -1065,9 +980,6 @@ IMPORTANCE_TO_GROUP: X
                         extra={"response_length": len(response_text)}
                     )
                     response = self._ensure_send_message_response(response, response_text)
-                    track_message(
-                        actor=self.name, content=response_text, message_type="assistant"
-                    )
                     return response
                 else:
                     # No valid response content found - log detailed validation failure
@@ -1128,21 +1040,10 @@ IMPORTANCE_TO_GROUP: X
                             response = self._ensure_send_message_response(
                                 response, direct_response_text
                             )
-                            if direct_response_text:
-                                track_message(
-                                    actor=self.name,
-                                    content=direct_response_text,
-                                    message_type="assistant",
-                                )
                             return response
                         elif direct_response_text and len(direct_response_text.strip()) > 10:  # Accept direct responses
                             response = self._ensure_send_message_response(
                                 response, direct_response_text
-                            )
-                            track_message(
-                                actor=self.name,
-                                content=direct_response_text,
-                                message_type="assistant",
                             )
                             return response
                         else:

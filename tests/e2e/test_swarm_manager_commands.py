@@ -171,9 +171,6 @@ def configured_swarm_manager(monkeypatch: pytest.MonkeyPatch):
         "create_memory_awareness_for_agent",
         lambda client, agent: f"Awareness for {agent.id}",
     )
-    monkeypatch.setattr(swarm_manager, "track_message", lambda *_, **__: None)
-    monkeypatch.setattr(swarm_manager, "track_action", lambda *_, **__: None)
-    monkeypatch.setattr(swarm_manager, "track_system_event", lambda *_, **__: None)
     monkeypatch.setattr(swarm_manager.time, "sleep", lambda *_: None)
 
     profiles = [
