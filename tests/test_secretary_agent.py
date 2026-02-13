@@ -492,3 +492,89 @@ def test_generate_minutes_handles_exception(fixed_datetime, monkeypatch):
     result = secretary.generate_minutes()
 
     assert result.startswith("Error generating minutes: boom")
+
+
+# ============================================================================
+# Tests for SecretaryAgent.from_existing() classmethod
+# ============================================================================
+
+
+class TestFromExisting:
+    """Tests for SecretaryAgent.from_existing() classmethod."""
+
+    def _make_agent_state(self):
+        """Create a minimal mock AgentState for from_existing tests."""
+        return SimpleNamespace(id="ag-existing-123", name="Existing Secretary")
+
+    def test_from_existing_creates_instance_without_agent_creation(self):
+        """Verify from_existing() returns a SecretaryAgent without calling _create_secretary_agent."""
+        client = DummyClient()
+        agent_state = self._make_agent_state()
+
+        secretary = SecretaryAgent.from_existing(client, agent_state)
+
+        assert isinstance(secretary, SecretaryAgent)
+        # No agents should have been created via the client
+        assert client.agents.create_calls == []
+
+    def test_from_existing_sets_mode_defaults_to_adaptive(self):
+        """Verify mode defaults to 'adaptive' when not specified."""
+        client = DummyClient()
+        agent_state = self._make_agent_state()
+
+        secretary = SecretaryAgent.from_existing(client, agent_state)
+
+        assert secretary.mode == "adaptive"
+
+    def test_from_existing_sets_mode_can_be_overridden(self):
+        """Verify mode can be overridden to 'formal' or 'casual'."""
+        client = DummyClient()
+        agent_state = self._make_agent_state()
+
+        formal = SecretaryAgent.from_existing(client, agent_state, mode="formal")
+        casual = SecretaryAgent.from_existing(client, agent_state, mode="casual")
+
+        assert formal.mode == "formal"
+        assert casual.mode == "casual"
+
+    def test_from_existing_sets_metadata_as_empty(self):
+        """Verify meeting_metadata, conversation_log, action_items, decisions are initialized as empty."""
+        client = DummyClient()
+        agent_state = self._make_agent_state()
+
+        secretary = SecretaryAgent.from_existing(client, agent_state)
+
+        assert secretary.meeting_metadata == {}
+        assert secretary.conversation_log == []
+        assert secretary.action_items == []
+        assert secretary.decisions == []
+
+    def test_from_existing_has_agent(self):
+        """Verify .agent is set to the passed AgentState."""
+        client = DummyClient()
+        agent_state = self._make_agent_state()
+
+        secretary = SecretaryAgent.from_existing(client, agent_state)
+
+        assert secretary.agent is agent_state
+        assert secretary.agent.id == "ag-existing-123"
+        assert secretary.agent.name == "Existing Secretary"
+
+    def test_from_existing_has_conversation_fields(self):
+        """Verify conversation_id is None and _conversation_manager is None."""
+        client = DummyClient()
+        agent_state = self._make_agent_state()
+
+        secretary = SecretaryAgent.from_existing(client, agent_state)
+
+        assert secretary.conversation_id is None
+        assert secretary._conversation_manager is None
+
+    def test_from_existing_client_is_set(self):
+        """Verify .client is set to the passed client."""
+        client = DummyClient()
+        agent_state = self._make_agent_state()
+
+        secretary = SecretaryAgent.from_existing(client, agent_state)
+
+        assert secretary.client is client

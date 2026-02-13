@@ -836,3 +836,93 @@ def test_reset_agent_messages_success(capsys):
     mgr._reset_agent_messages("xyz")
     out = capsys.readouterr().out
     assert "Successfully reset messages for agent xyz" in out
+
+
+# ============================================================================
+# Tests for assign_role("secretary") and the secretary property wrapper
+# ============================================================================
+
+
+class TestAssignRoleSecretary:
+    """Tests for assign_role() with 'secretary' role and SecretaryAgent wrapper creation."""
+
+    def _make_mgr_with_agents(self, *agent_specs):
+        """Create a SwarmManager with stub SPDSAgent instances.
+
+        Each agent_spec is a tuple (id, name).
+        Returns (mgr, agents_list).
+        """
+        import spds.swarm_manager as sm
+
+        mgr = object.__new__(sm.SwarmManager)
+        mgr.agents = []
+        mgr.client = SimpleNamespace()  # Mock client; from_existing doesn't call create
+        mgr._secretary = None
+        mgr.secretary_agent_id = None
+        mgr._cross_agent_info = None
+
+        for agent_id, agent_name in agent_specs:
+            agent = SimpleNamespace(
+                agent=SimpleNamespace(id=agent_id, name=agent_name),
+                name=agent_name,
+                roles=[],
+            )
+            mgr.agents.append(agent)
+
+        return mgr
+
+    def test_assign_role_secretary_creates_wrapper(self):
+        """Calling assign_role(agent_id, 'secretary') should set self._secretary to a SecretaryAgent."""
+        from spds.secretary_agent import SecretaryAgent
+
+        mgr = self._make_mgr_with_agents(("ag-1", "Agent Alpha"))
+
+        mgr.assign_role("ag-1", "secretary")
+
+        assert isinstance(mgr._secretary, SecretaryAgent)
+        assert mgr.secretary_agent_id == "ag-1"
+
+    def test_assign_role_secretary_wrapper_has_mode(self):
+        """The SecretaryAgent wrapper should default to mode='adaptive' after assignment."""
+        mgr = self._make_mgr_with_agents(("ag-1", "Agent Alpha"))
+
+        mgr.assign_role("ag-1", "secretary")
+
+        assert mgr._secretary.mode == "adaptive"
+
+    def test_assign_role_secretary_clears_other_agents(self):
+        """Assigning secretary to agent B should remove 'secretary' role from agent A."""
+        mgr = self._make_mgr_with_agents(
+            ("ag-A", "Agent A"),
+            ("ag-B", "Agent B"),
+        )
+
+        # Assign secretary to A first
+        mgr.assign_role("ag-A", "secretary")
+        assert "secretary" in mgr.agents[0].roles
+        assert mgr.secretary_agent_id == "ag-A"
+
+        # Now reassign to B
+        mgr.assign_role("ag-B", "secretary")
+
+        # A should no longer have secretary role
+        assert "secretary" not in mgr.agents[0].roles
+        # B should have it
+        assert "secretary" in mgr.agents[1].roles
+        assert mgr.secretary_agent_id == "ag-B"
+        # The wrapper should point at B's agent_state
+        assert mgr._secretary.agent.id == "ag-B"
+
+    def test_secretary_property_returns_wrapper(self):
+        """The .secretary property should return the SecretaryAgent wrapper, not the SPDSAgent."""
+        from spds.secretary_agent import SecretaryAgent
+
+        mgr = self._make_mgr_with_agents(("ag-1", "Agent Alpha"))
+
+        mgr.assign_role("ag-1", "secretary")
+
+        result = mgr.secretary
+        assert isinstance(result, SecretaryAgent)
+        assert result is mgr._secretary
+        # Confirm it wraps the correct underlying agent
+        assert result.agent.id == "ag-1"
