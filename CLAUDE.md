@@ -224,8 +224,6 @@ spds/
 ├── mcp_launchpad.py           # MCP tool discovery and execution
 ├── mcp_config.py              # MCP server configuration management
 ├── letta_api.py               # Letta client wrapper and utilities
-├── session_context.py         # Conversation context ContextVar (stub)
-├── session_tracking.py        # Session tracking logging stubs
 ├── profiles_schema.py         # Agent profile validation schemas
 ├── memory_awareness.py        # Memory management utilities
 ├── message.py                 # ConversationMessage dataclass and utilities
@@ -244,7 +242,10 @@ tests/
 ├── unit/                      # Unit tests for individual components
 │   ├── test_tools.py
 │   ├── test_spds_agent.py
-│   ├── test_swarm_manager.py
+│   ├── test_swarm_manager_init.py
+│   ├── test_swarm_manager_modes.py
+│   ├── test_swarm_manager_utils.py
+│   ├── test_swarm_manager_conversations.py
 │   ├── test_secretary_agent.py
 │   ├── test_export_manager.py
 │   ├── test_cross_agent.py

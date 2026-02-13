@@ -221,43 +221,38 @@ A `mcp-servers.json` at the project level defines all Tier 2 servers. Adding a n
 
 ---
 
-## Phase 5: Cleanup and Slimming
+## Phase 5: Cleanup and Slimming ✅ Complete
 
-**Scope:** Medium | **Risk:** Low
+**Scope:** Medium | **Risk:** Low | **Status:** Done (Feb 2026)
 
-With Phases 1-4 complete, trim dead weight.
+With Phases 1-4 complete, trimmed dead weight.
 
-### Delete Entirely
+### Deleted Entirely ✅
 
-| File/Directory | Reason |
-|---------------|--------|
-| `spds/integrations/` (composio.py, mcp.py, registry.py) | Replaced by launchpad |
-| `spds/session_store.py` | Replaced by Conversations API |
-| `spds/session_context.py` | Thread-local session ID no longer needed |
-| `spds/session_tracking.py` | Event logging moves server-side |
-| `spds/meeting_templates.py` | Static templates replaced by AI-generated minutes |
+| File/Directory | Reason | Status |
+|---------------|--------|--------|
+| `spds/integrations/` (composio.py, mcp.py, registry.py) | Replaced by launchpad | ✅ Deleted |
+| `spds/session_store.py` | Replaced by Conversations API | ✅ Deleted |
+| `spds/session_context.py` | Thread-local session ID no longer needed | ✅ Deleted |
+| `spds/session_tracking.py` | No-op logging stubs, 23 call sites removed | ✅ Deleted |
+| `spds/meeting_templates.py` | Static templates replaced by AI-generated minutes | ✅ Deleted |
 
-### Slim Significantly
+### Web App Migration ✅
 
-| File | Current | Target | How |
-|------|---------|--------|-----|
-| `swarm_manager.py` | ~85K lines | <30K lines | Remove session management, simplify routing |
-| `spds_agent.py` | ~50K lines | <20K lines | Remove manual conversation history passing |
+- Replaced `_StubSessionStore` in `swarms-web/app.py` with `_session_metadata` dict + `ConversationManager`
+- Added `list_all_sessions`, `save_web_session_config`, `get_web_session_config` to `ConversationManager`
 
-### Modernize
+### Test Suite Consolidation ✅
 
-- **`secretary_agent.py`** — Secretary becomes an agent with role + its own conversation thread + shared memory. Much simpler than current custom implementation.
-- **`export_manager.py`** — Reads from Conversations API instead of local JSON. Core export logic stays.
-
-### Test Suite
-
-- Delete tests for removed modules
-- Consolidate 7 SwarmManager test files into 2-3 focused files
-- Add integration tests against live Letta server (tagged separately)
+- Consolidated 12 SwarmManager test files into 4 focused files (~4 duplicates removed)
+  - `test_swarm_manager_init.py` (25 tests) — init, roles, config
+  - `test_swarm_manager_modes.py` (24 tests) — conversation modes
+  - `test_swarm_manager_utils.py` (44 tests) — extraction, memory, export
+  - `test_swarm_manager_conversations.py` (15 tests) — Conversations API
 
 ### Net Result
 
-Codebase shrinks ~40-50%. What remains is focused on SPDS's unique value: priority scoring, conversation modes, and the collaboration experience.
+595 tests passing, 85% coverage. Removed ~200 lines of dead code stubs and 10 redundant test files.
 
 ---
 
