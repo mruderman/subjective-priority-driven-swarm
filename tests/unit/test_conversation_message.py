@@ -560,3 +560,315 @@ class TestConversationMessageIntegration:
         assert len(summary["participants"]) == 3
         assert "You" in summary["participants"]
         assert summary["message_count"] == 3
+
+
+class TestConversationMessageFromDict:
+    """Test from_dict deserialization with various timestamp formats and field combinations."""
+
+    def test_from_dict_with_iso_timestamp(self):
+        """Test from_dict correctly parses a standard ISO 8601 timestamp string."""
+        data = {
+            "sender": "Alice",
+            "content": "Hello from a dict with ISO timestamp.",
+            "timestamp": "2024-06-15T09:30:45",
+        }
+        msg = ConversationMessage.from_dict(data)
+
+        assert msg.sender == "Alice"
+        assert msg.content == "Hello from a dict with ISO timestamp."
+        assert msg.timestamp == datetime(2024, 6, 15, 9, 30, 45)
+        assert msg.timestamp.year == 2024
+        assert msg.timestamp.month == 6
+        assert msg.timestamp.hour == 9
+
+    def test_from_dict_with_timezone_z_format(self):
+        """Test from_dict handles timestamp ending with 'Z' (UTC shorthand)."""
+        from datetime import timezone
+
+        data = {
+            "sender": "Bob",
+            "content": "Message with Z-suffix UTC timestamp.",
+            "timestamp": "2025-03-20T18:00:00Z",
+        }
+        msg = ConversationMessage.from_dict(data)
+
+        assert msg.sender == "Bob"
+        assert msg.content == "Message with Z-suffix UTC timestamp."
+        # The 'Z' should be replaced with '+00:00' and parsed as UTC
+        assert msg.timestamp.tzinfo is not None
+        assert msg.timestamp == datetime(2025, 3, 20, 18, 0, 0, tzinfo=timezone.utc)
+
+    def test_from_dict_missing_required_fields_raises(self):
+        """Test that from_dict raises KeyError when required fields are missing."""
+        # Missing 'content'
+        with pytest.raises(KeyError):
+            ConversationMessage.from_dict({"sender": "Alice", "timestamp": "2024-01-01T00:00:00"})
+
+        # Missing 'sender'
+        with pytest.raises(KeyError):
+            ConversationMessage.from_dict({"content": "Hello", "timestamp": "2024-01-01T00:00:00"})
+
+        # Missing 'timestamp'
+        with pytest.raises(KeyError):
+            ConversationMessage.from_dict({"sender": "Alice", "content": "Hello"})
+
+    def test_from_dict_with_extra_fields_ignored(self):
+        """Test that from_dict ignores extra/unknown fields in the dict (like metadata)."""
+        data = {
+            "sender": "Carol",
+            "content": "Message with extra metadata fields.",
+            "timestamp": "2024-08-10T12:00:00",
+            "metadata": {"priority": 75, "mode": "hybrid"},
+            "extra_field": "should be ignored",
+        }
+        msg = ConversationMessage.from_dict(data)
+
+        assert msg.sender == "Carol"
+        assert msg.content == "Message with extra metadata fields."
+        assert msg.timestamp == datetime(2024, 8, 10, 12, 0, 0)
+        # Extra fields don't become attributes
+        assert not hasattr(msg, "metadata")
+        assert not hasattr(msg, "extra_field")
+
+    def test_from_dict_with_datetime_object_timestamp(self):
+        """Test from_dict when timestamp is already a datetime object (not a string)."""
+        ts = datetime(2024, 5, 1, 8, 15, 30)
+        data = {
+            "sender": "Dave",
+            "content": "Dict with datetime object timestamp.",
+            "timestamp": ts,
+        }
+        msg = ConversationMessage.from_dict(data)
+
+        assert msg.timestamp == ts
+        assert msg.sender == "Dave"
+
+    def test_from_dict_with_microseconds_in_iso(self):
+        """Test from_dict parses ISO timestamp that includes microseconds."""
+        data = {
+            "sender": "Eve",
+            "content": "Microsecond precision timestamp.",
+            "timestamp": "2024-11-05T14:30:45.123456",
+        }
+        msg = ConversationMessage.from_dict(data)
+
+        assert msg.timestamp.microsecond == 123456
+        assert msg.timestamp == datetime(2024, 11, 5, 14, 30, 45, 123456)
+
+
+class TestConversationMessageFromTuple:
+    """Test from_tuple conversion from legacy (speaker, content) tuples."""
+
+    def test_from_tuple_two_element(self):
+        """Test creating a ConversationMessage from a standard (speaker, content) tuple."""
+        ts = datetime(2024, 7, 1, 10, 0, 0)
+        msg = ConversationMessage.from_tuple(("Alice", "Hello from a tuple"), timestamp=ts)
+
+        assert msg.sender == "Alice"
+        assert msg.content == "Hello from a tuple"
+        assert msg.timestamp == ts
+
+    def test_from_tuple_two_element_default_timestamp(self):
+        """Test that from_tuple uses current time when no timestamp is provided."""
+        before = datetime.now()
+        msg = ConversationMessage.from_tuple(("Bob", "Tuple without explicit timestamp"))
+        after = datetime.now()
+
+        assert msg.sender == "Bob"
+        assert msg.content == "Tuple without explicit timestamp"
+        assert before <= msg.timestamp <= after
+
+    def test_from_tuple_rejects_single_element(self):
+        """Test that from_tuple raises ValueError for a 1-element tuple."""
+        with pytest.raises(ValueError, match="exactly 2 elements"):
+            ConversationMessage.from_tuple(("Alice",))
+
+    def test_from_tuple_rejects_three_element(self):
+        """Test that from_tuple raises ValueError for a 3-element tuple."""
+        with pytest.raises(ValueError, match="exactly 2 elements"):
+            ConversationMessage.from_tuple(("Alice", "Hello", {"extra": "data"}))
+
+    def test_from_tuple_rejects_empty_tuple(self):
+        """Test that from_tuple raises ValueError for an empty tuple."""
+        with pytest.raises(ValueError, match="exactly 2 elements"):
+            ConversationMessage.from_tuple(())
+
+    def test_from_tuple_preserves_special_characters(self):
+        """Test that from_tuple preserves special characters in content."""
+        content = "Multi-line\ncontent with special chars: @#$%^&*()"
+        msg = ConversationMessage.from_tuple(("Agent", content), timestamp=datetime.now())
+
+        assert msg.content == content
+        assert "\n" in msg.content
+
+    def test_from_tuple_human_sender(self):
+        """Test from_tuple with 'You' as the sender (human user)."""
+        msg = ConversationMessage.from_tuple(("You", "Human input via tuple"), timestamp=datetime.now())
+
+        assert msg.sender == "You"
+        assert msg.is_from_human()
+        assert not msg.is_from_agent()
+
+
+class TestConversationMessageComparisonExtended:
+    """Extended comparison tests including direct __lt__ usage and edge cases."""
+
+    def test_equality_same_messages(self):
+        """Two messages with identical sender, content, and timestamp are equal."""
+        ts = datetime(2024, 9, 1, 12, 0, 0)
+        msg1 = ConversationMessage("Alice", "Same content", ts)
+        msg2 = ConversationMessage("Alice", "Same content", ts)
+
+        assert msg1 == msg2
+        assert not (msg1 != msg2)
+
+    def test_equality_different_messages(self):
+        """Messages with different content are not equal."""
+        ts = datetime(2024, 9, 1, 12, 0, 0)
+        msg1 = ConversationMessage("Alice", "Content A", ts)
+        msg2 = ConversationMessage("Alice", "Content B", ts)
+
+        assert msg1 != msg2
+        assert not (msg1 == msg2)
+
+    def test_sorting_by_timestamp_via_lt(self):
+        """Test that sorted() uses __lt__ for timestamp-based ordering without a key function."""
+        base = datetime(2024, 1, 1, 0, 0, 0)
+        msg_early = ConversationMessage("A", "First", base)
+        msg_mid = ConversationMessage("B", "Second", base + timedelta(minutes=5))
+        msg_late = ConversationMessage("C", "Third", base + timedelta(minutes=10))
+
+        # Deliberately unsorted list
+        unsorted = [msg_late, msg_early, msg_mid]
+        result = sorted(unsorted)  # Uses __lt__ directly, no key=
+
+        assert result[0] is msg_early
+        assert result[1] is msg_mid
+        assert result[2] is msg_late
+
+    def test_lt_returns_not_implemented_for_non_message(self):
+        """Test that __lt__ returns NotImplemented when compared to a non-ConversationMessage."""
+        msg = ConversationMessage("Alice", "Test", datetime.now())
+        result = msg.__lt__("not a message")
+
+        assert result is NotImplemented
+
+    def test_eq_returns_false_for_non_message(self):
+        """Test that __eq__ returns False when compared to a non-ConversationMessage."""
+        msg = ConversationMessage("Alice", "Test", datetime.now())
+
+        assert msg != "not a message"
+        assert msg != 42
+        assert msg != None  # noqa: E711
+        assert msg != {"sender": "Alice", "content": "Test"}
+
+    def test_lt_consistent_ordering(self):
+        """Test that __lt__ provides a consistent total ordering for identical timestamps."""
+        ts = datetime(2024, 1, 1, 12, 0, 0)
+        msg1 = ConversationMessage("Alice", "Message", ts)
+        msg2 = ConversationMessage("Bob", "Message", ts)
+
+        # With same timestamp, neither should be less than the other
+        assert not (msg1 < msg2)
+        assert not (msg2 < msg1)
+
+    def test_sorting_large_list(self):
+        """Test sorting a large list of messages by timestamp."""
+        base = datetime(2024, 1, 1, 0, 0, 0)
+        messages = [
+            ConversationMessage(f"Agent{i}", f"Message {i}", base + timedelta(seconds=50 - i))
+            for i in range(50)
+        ]
+
+        result = sorted(messages)
+
+        # Verify sorted order
+        for i in range(1, len(result)):
+            assert result[i - 1].timestamp <= result[i].timestamp
+
+
+class TestConversationMessageSenderClassification:
+    """Test sender classification methods is_from_agent() and is_from_human()."""
+
+    def test_is_from_agent_with_agent_name(self):
+        """Agent names like 'Project Manager Alex' are classified as agent messages."""
+        msg = ConversationMessage("Project Manager Alex", "Status update.", datetime.now())
+
+        assert msg.is_from_agent() is True
+        assert msg.is_from_human() is False
+
+    def test_is_from_agent_with_generic_name(self):
+        """Generic agent names are classified as agent messages."""
+        msg = ConversationMessage("Agent_1", "Processing request.", datetime.now())
+
+        assert msg.is_from_agent() is True
+        assert msg.is_from_human() is False
+
+    def test_is_from_human_with_you(self):
+        """The sender 'You' is classified as a human message."""
+        msg = ConversationMessage("You", "What do you think?", datetime.now())
+
+        assert msg.is_from_human() is True
+        assert msg.is_from_agent() is False
+
+    def test_human_not_recognized_for_other_labels(self):
+        """Only 'You' is recognized as human; 'Human', 'User' are treated as agent names."""
+        # The implementation only checks for "You", so "Human" and "User" are agent senders
+        for label in ["Human", "User", "human", "user", "you"]:
+            msg = ConversationMessage(label, "Test message.", datetime.now())
+            assert msg.is_from_human() is False, f"'{label}' should not be classified as human"
+            assert msg.is_from_agent() is True, f"'{label}' should be classified as agent"
+
+    def test_is_from_agent_and_human_are_mutually_exclusive(self):
+        """is_from_agent and is_from_human should always be mutually exclusive."""
+        agent_msg = ConversationMessage("Agent", "Hello", datetime.now())
+        human_msg = ConversationMessage("You", "Hello", datetime.now())
+
+        assert agent_msg.is_from_agent() != agent_msg.is_from_human()
+        assert human_msg.is_from_agent() != human_msg.is_from_human()
+
+    def test_is_from_agent_with_special_sender_names(self):
+        """Special characters in agent names still classify as agent messages."""
+        special_names = ["AI-Bot-3000", "agent@system", "Secretary (Formal)"]
+        for name in special_names:
+            msg = ConversationMessage(name, "Test.", datetime.now())
+            assert msg.is_from_agent() is True
+
+
+class TestConversationMessagePostInit:
+    """Test __post_init__ validation behavior."""
+
+    def test_post_init_empty_content_raises(self):
+        """Empty string content raises ValueError during initialization."""
+        with pytest.raises(ValueError, match="Message content cannot be empty"):
+            ConversationMessage("Alice", "", datetime.now())
+
+    def test_post_init_whitespace_only_content_raises(self):
+        """Whitespace-only content raises ValueError during initialization."""
+        with pytest.raises(ValueError, match="Message content cannot be empty"):
+            ConversationMessage("Alice", "   \t\n  ", datetime.now())
+
+    def test_post_init_empty_sender_raises(self):
+        """Empty string sender raises ValueError during initialization."""
+        with pytest.raises(ValueError, match="Message sender cannot be empty"):
+            ConversationMessage("", "Valid content", datetime.now())
+
+    def test_post_init_invalid_timestamp_type_raises(self):
+        """Non-datetime timestamp raises TypeError during initialization."""
+        with pytest.raises(TypeError, match="Message timestamp must be a datetime object"):
+            ConversationMessage("Alice", "Valid content", "2024-01-01T00:00:00")
+
+    def test_post_init_none_timestamp_raises(self):
+        """None timestamp raises TypeError during initialization."""
+        with pytest.raises(TypeError, match="Message timestamp must be a datetime object"):
+            ConversationMessage("Alice", "Valid content", None)
+
+    def test_post_init_valid_minimal_content(self):
+        """Single character content passes validation."""
+        msg = ConversationMessage("Alice", "x", datetime.now())
+        assert msg.content == "x"
+
+    def test_post_init_none_sender_raises(self):
+        """None sender raises ValueError (falsy check)."""
+        with pytest.raises((ValueError, TypeError)):
+            ConversationMessage(None, "Valid content", datetime.now())
