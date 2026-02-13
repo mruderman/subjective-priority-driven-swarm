@@ -214,6 +214,88 @@ class TestParseSpdsummary:
         assert result == {"session_id": "s1", "agent_name": "", "topic": ""}
 
 
+# ------------------------------------------------------------------
+# Web session config methods
+# ------------------------------------------------------------------
+
+
+class TestWebSessionConfig:
+    """Tests for list_all_sessions, save_web_session_config, get_web_session_config."""
+
+    def test_list_all_sessions_returns_list(self, cm, mock_letta_client):
+        convs = [SimpleNamespace(id="c1"), SimpleNamespace(id="c2")]
+        mock_letta_client.conversations.list.return_value = SimpleNamespace(
+            conversations=convs
+        )
+        result = cm.list_all_sessions()
+        mock_letta_client.conversations.list.assert_called_once_with(limit=50)
+        assert result == convs
+
+    def test_list_all_sessions_empty(self, cm, mock_letta_client):
+        mock_letta_client.conversations.list.return_value = SimpleNamespace(
+            conversations=[]
+        )
+        result = cm.list_all_sessions()
+        assert result == []
+
+    def test_list_all_sessions_fallback_to_list(self, cm, mock_letta_client):
+        """When result has no .conversations attr, falls back to list()."""
+        items = [SimpleNamespace(id="c1")]
+        mock_letta_client.conversations.list.return_value = items
+        result = cm.list_all_sessions()
+        assert result == items
+
+    def test_save_web_session_config(self, cm, mock_letta_client):
+        mock_letta_client.conversations.create.return_value = SimpleNamespace(
+            id="conv-cfg-1"
+        )
+        config = {"agent_ids": ["ag-1", "ag-2"], "mode": "hybrid"}
+        cid = cm.save_web_session_config("ag-1", "web-sess-abc", config)
+
+        assert cid == "conv-cfg-1"
+        call_args = mock_letta_client.conversations.create.call_args
+        summary = call_args.kwargs["summary"]
+        # Summary should contain the prefix, session id, and JSON payload
+        assert summary.startswith("spds:web|config|web-sess-abc|")
+        import json
+        json_part = summary.split("web-sess-abc|", 1)[1]
+        assert json.loads(json_part) == config
+
+    def test_get_web_session_config_found(self, cm, mock_letta_client):
+        import json
+        config = {"agent_ids": ["ag-1"], "mode": "all-speak"}
+        summary = f"spds:web|config|sess-42|{json.dumps(config)}"
+        convs = [SimpleNamespace(id="c1", summary=summary)]
+        mock_letta_client.conversations.list.return_value = convs
+        result = cm.get_web_session_config("ag-1", "sess-42")
+        assert result == config
+
+    def test_get_web_session_config_not_found(self, cm, mock_letta_client):
+        """Returns None when no conversation matches the session ID."""
+        convs = [
+            SimpleNamespace(id="c1", summary="spds:web|config|other-sess|{}"),
+            SimpleNamespace(id="c2", summary="unrelated summary"),
+        ]
+        mock_letta_client.conversations.list.return_value = convs
+        result = cm.get_web_session_config("ag-1", "sess-missing")
+        assert result is None
+
+    def test_get_web_session_config_invalid_json(self, cm, mock_letta_client):
+        """Returns None when the JSON payload is malformed."""
+        summary = "spds:web|config|sess-bad|{not valid json"
+        convs = [SimpleNamespace(id="c1", summary=summary)]
+        mock_letta_client.conversations.list.return_value = convs
+        result = cm.get_web_session_config("ag-1", "sess-bad")
+        assert result is None
+
+    def test_get_web_session_config_none_summary(self, cm, mock_letta_client):
+        """Handles conversations with None summary gracefully."""
+        convs = [SimpleNamespace(id="c1", summary=None)]
+        mock_letta_client.conversations.list.return_value = convs
+        result = cm.get_web_session_config("ag-1", "sess-x")
+        assert result is None
+
+
 class TestStreamSkipTypes:
     def test_expected_types_present(self):
         assert "ping" in _STREAM_SKIP_TYPES
