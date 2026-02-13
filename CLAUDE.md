@@ -148,25 +148,6 @@ This project prioritizes continuity of agent experience over disposable workflow
 
 ## Development Notes
 
-### Current State (September 2025)
-- **🎉 Conversation Logic Refactor Completed**: Successfully implemented dynamic, context-aware agent interactions
-- **Real Agent Assessment**: Agents use their own LLMs for conversation evaluation (no more simulated logic)
-- **Interactive Agent Selection**: Checkbox UI for selecting agents from Letta server
-- **Four Conversation Modes**: Hybrid, All-Speak, Sequential, Pure Priority
-- **Authentication Fixed**: Proper self-hosted Letta server authentication with password
-- **Model Diversity**: Agents preserve their existing ADE model configurations
-- **Robust Response Parsing**: Handles both tool-based and regular agent responses
-- **Web GUI Implementation**: Full Flask-based web interface with WebSocket real-time communication
-- **Fixed Agent Response Issues**: Improved prompting for initial vs response phases in hybrid mode
-- **Token Limit Management**: Implemented proper stateful agent architecture using Letta's memory system
-- **Automatic Error Recovery**: Agent message history reset when token limits are exceeded
-- **ConversationMessage Architecture**: Structured message system implemented with incremental delivery
-- **Backward Compatibility**: Full compatibility maintained for existing conversation history interfaces
-- **Dynamic Context Assessment**: Agents now evaluate conversation relevance using recent messages instead of static topics
-- **Natural Conversation Flow**: Eliminated repetitive assessment patterns for more engaging interactions
-- **Role-Based Secretary System**: Flexible role management enabling dynamic secretary assignment and multi-role support
-- **Secretary UI Bug Fixed**: Proper status events and fallback handling for secretary initialization in web GUI
-
 ### Web GUI Setup
 The project includes a web GUI in the `swarms-web` directory:
 
@@ -187,14 +168,6 @@ python run.py  # http://localhost:5002
 - Live secretary commands and export functionality
 - Responsive Bootstrap 5 design with cyan/marigold/amber color scheme
 - Support for all conversation modes and secretary features
-
-**Fixed Issues:**
-- Agent prompting now distinguishes between initial thoughts and response phases
-- Improved message extraction to handle tool calls, tool returns, and assistant messages
-- Self-contained JavaScript to avoid complex dependency chains
-- Fixed duplicate message display by clearing socket event listeners before re-registering
-- Fixed participants list by correcting agent ID reference (agent.agent.id)
-- **Secretary Implementation Fixed**: Completely rewrote secretary to use proper Letta API patterns with real AI-powered meeting documentation
 
 ### Required Setup
 1. Create a local `.env` with server credentials (do not commit secrets):

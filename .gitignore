@@ -125,3 +125,15 @@ AGENTS.md
 .kiro/steering/byterover-rules.md
 .qoder/rules/byterover-rules.md
 .augment/rules/byterover-rules.md
+
+# Legacy AI tool configs (no longer used)
+.roo/
+.roomodes
+.openhands/
+
+# Coverage XML artifacts
+coverage-*.xml
+coverage-summary.md
+
+# Firebase debug log
+firebase-debug.log
