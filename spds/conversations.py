@@ -1,5 +1,6 @@
 # spds/conversations.py
 
+import json
 import logging
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
@@ -151,6 +152,72 @@ class ConversationManager:
             "created_at": conv.created_at.isoformat() if conv.created_at else None,
             "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
         }
+
+    # ------------------------------------------------------------------
+    # Web-facing helpers (used by swarms-web)
+    # ------------------------------------------------------------------
+
+    def list_all_sessions(self, limit: int = 50) -> List:
+        """List conversations across all agents (for web UI).
+
+        Args:
+            limit: Max number of conversations to return.
+
+        Returns:
+            List of Conversation objects.
+        """
+        result = self.client.conversations.list(limit=limit)
+        if hasattr(result, "conversations"):
+            return result.conversations
+        return list(result)
+
+    _WEB_CONFIG_PREFIX = "spds:web|config|"
+
+    def save_web_session_config(
+        self, agent_id: str, session_id: str, config_data: dict
+    ) -> str:
+        """Create a conversation that stores web session config.
+
+        The config dict is JSON-encoded in the conversation summary so it
+        can be recovered after a web app restart.
+
+        Args:
+            agent_id: A Letta agent ID to anchor the config conversation.
+            session_id: The web session UUID.
+            config_data: Dict with keys like agent_ids, conversation_mode, etc.
+
+        Returns:
+            The conversation ID of the config conversation.
+        """
+        config_json = json.dumps(config_data)
+        summary = f"{self._WEB_CONFIG_PREFIX}{session_id}|{config_json}"
+        return self.create_session(agent_id=agent_id, summary=summary)
+
+    def get_web_session_config(
+        self, agent_id: str, session_id: str
+    ) -> Optional[dict]:
+        """Retrieve web session config from conversation summaries.
+
+        Searches the agent's conversations for one whose summary encodes
+        the given session ID.
+
+        Args:
+            agent_id: The Letta agent ID that anchors the config.
+            session_id: The web session UUID to look for.
+
+        Returns:
+            The config dict, or None if not found.
+        """
+        prefix = f"{self._WEB_CONFIG_PREFIX}{session_id}|"
+        for conv in self.list_sessions(agent_id):
+            summary = getattr(conv, "summary", "") or ""
+            if summary.startswith(prefix):
+                try:
+                    return json.loads(summary[len(prefix):])
+                except json.JSONDecodeError:
+                    logger.warning(f"Malformed web config in conversation {conv.id}")
+                    return None
+        return None
 
     # ------------------------------------------------------------------
     # Phase 2: Conversations-routed messaging

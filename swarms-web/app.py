@@ -44,54 +44,33 @@ from spds.export_manager import (
 )
 from spds.message import get_new_messages_since_index
 from spds.secretary_agent import SecretaryAgent
-# session_store deleted in Phase 5 — provide in-memory stub until web app
-# is migrated to ConversationManager (see design doc Phase 2b / Phase 5).
-try:
-    from spds.session_store import get_default_session_store
-except ImportError:
-    import logging as _logging
-    _logging.getLogger(__name__).warning(
-        "spds.session_store removed; web app session routes use in-memory stub"
-    )
+# ---------------------------------------------------------------------------
+# Session metadata registry — lightweight replacement for the old session store.
+# Uses a plain dict for in-memory tracking; ConversationManager provides
+# server-side persistence via the Letta Conversations API.
+# ---------------------------------------------------------------------------
+_session_metadata: dict = {}  # session_id → metadata dict
 
-    class _StubSessionStore:
-        """Minimal in-memory stub replacing JsonSessionStore."""
-        def __init__(self):
-            self._sessions = {}
 
-        def create(self, session_id=None, title=None, tags=None):
-            from types import SimpleNamespace
-            from datetime import datetime, timezone
-            from uuid import uuid4
-            sid = session_id or str(uuid4())
-            now = datetime.now(timezone.utc)
-            meta = SimpleNamespace(id=sid, created_at=now, last_updated=now, title=title, tags=tags or [])
-            state = SimpleNamespace(meta=meta, events=[], extras=None)
-            self._sessions[sid] = state
-            return state
+def _register_session(session_id: str, title: str = None, tags: list = None,
+                      config_data: dict = None) -> dict:
+    """Register a new session with metadata."""
+    now = datetime.now(timezone.utc)
+    meta = {
+        "id": session_id,
+        "created_at": now.isoformat(),
+        "last_updated": now.isoformat(),
+        "title": title,
+        "tags": tags or [],
+        "config": config_data,
+    }
+    _session_metadata[session_id] = meta
+    return meta
 
-        def load(self, session_id):
-            if session_id not in self._sessions:
-                raise ValueError(f"Session {session_id} not found")
-            return self._sessions[session_id]
 
-        def list_sessions(self):
-            return [s.meta for s in self._sessions.values()]
-
-        def save_event(self, event):
-            sid = getattr(event, "session_id", None)
-            if sid and sid in self._sessions:
-                self._sessions[sid].events.append(event)
-
-        def touch(self, session_id):
-            pass
-
-        def delete(self, session_id):
-            self._sessions.pop(session_id, None)
-
-    _stub_store = _StubSessionStore()
-    def get_default_session_store():
-        return _stub_store
+def _get_session_meta(session_id: str) -> dict | None:
+    """Get session metadata, or None if not found."""
+    return _session_metadata.get(session_id)
 from spds.swarm_manager import SwarmManager
 
 logger = logging.getLogger(__name__)
@@ -741,7 +720,11 @@ class WebSwarmManager:
 
 
 def _restore_web_swarm_from_session(session_id, socketio_instance):
-    """Restore a WebSwarmManager from persistent session storage.
+    """Restore a WebSwarmManager from session metadata.
+
+    Looks up the session config from the in-memory registry and creates
+    a fresh WebSwarmManager.  Conversation history is maintained on the
+    Letta server side, so there is no need to replay local events.
 
     Args:
         session_id: The session ID to restore
@@ -751,19 +734,14 @@ def _restore_web_swarm_from_session(session_id, socketio_instance):
         WebSwarmManager: Restored swarm manager instance
 
     Raises:
-        ValueError: If session not found in persistent store
+        ValueError: If session not found in registry
     """
-    # Load session state from persistent store
-    store = get_default_session_store()
-    session_state = store.load(session_id)
-
-    # Extract configuration from extras
-    if not session_state.extras or "config" not in session_state.extras:
+    meta = _get_session_meta(session_id)
+    if not meta or not meta.get("config"):
         raise ValueError(f"Session {session_id} has no configuration data")
 
-    session_config = session_state.extras["config"]
+    session_config = meta["config"]
 
-    # Create WebSwarmManager with original configuration
     web_swarm = WebSwarmManager(
         session_id=session_id,
         socketio_instance=socketio_instance,
@@ -774,41 +752,7 @@ def _restore_web_swarm_from_session(session_id, socketio_instance):
         meeting_type=session_config.get("meeting_type", "discussion"),
     )
 
-    # Rebuild conversation history and state from events
-    for event in session_state.events:
-        if event.type == "message":
-            speaker = event.actor
-            content = event.payload.get("content", "")
-            # Append to conversation history
-            web_swarm.swarm._append_history(speaker, content)
-
-        elif event.type == "system":
-            event_type = event.payload.get("event_type")
-
-            if event_type == "chat_started":
-                # Restore current topic
-                web_swarm.current_topic = event.payload.get("topic")
-
-            elif event_type == "phase_change":
-                # Phase changes are transient, no need to restore
-                pass
-
-        elif event.type == "action":
-            action_type = event.payload.get("action_type")
-
-            if action_type == "role_assignment":
-                # Restore secretary role assignment
-                agent_id = event.payload.get("agent_id")
-                role = event.payload.get("role")
-                if role == "secretary" and agent_id:
-                    web_swarm.swarm.assign_role(agent_id, "secretary")
-
-            elif action_type == "observe":
-                # Secretary observations are already in conversation history
-                pass
-
-    logger.info(f"Restored session {session_id} with {len(session_state.events)} events")
-
+    logger.info(f"Restored session {session_id} from registry")
     return web_swarm
 
 
@@ -980,26 +924,21 @@ def start_session():
         secretary_mode = data.get("secretary_mode", "adaptive")
         meeting_type = data.get("meeting_type", "discussion")
 
-        # Create persistent session with configuration in extras
-        store = get_default_session_store()
+        # Register session metadata
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        session_state = store.create(
-            session_id=session_id,
-            title=f"Swarm Session {timestamp}",
-            tags=["web", conversation_mode]
-        )
-
-        # Store configuration in session extras
-        session_state.extras = {
-            "config": {
-                "agent_ids": agent_ids,
-                "conversation_mode": conversation_mode,
-                "enable_secretary": enable_secretary,
-                "secretary_mode": secretary_mode,
-                "meeting_type": meeting_type
-            }
+        session_config = {
+            "agent_ids": agent_ids,
+            "conversation_mode": conversation_mode,
+            "enable_secretary": enable_secretary,
+            "secretary_mode": secretary_mode,
+            "meeting_type": meeting_type,
         }
-        store._save_session_state(session_state)
+        _register_session(
+            session_id,
+            title=f"Swarm Session {timestamp}",
+            tags=["web", conversation_mode],
+            config_data=session_config,
+        )
 
         # Create WebSwarmManager
         web_swarm = WebSwarmManager(
@@ -1053,29 +992,15 @@ def sessions_page():
 def get_sessions():
     """Get list of sessions with optional limit."""
     try:
-        store = get_default_session_store()
-        sessions = store.list_sessions()
+        sessions = list(_session_metadata.values())
 
         # Apply limit if provided
         limit = request.args.get("limit", type=int)
         if limit and limit > 0:
             sessions = sessions[:limit]
 
-        # Convert to JSON-serializable format
-        session_list = []
-        for session_meta in sessions:
-            session_list.append(
-                {
-                    "id": session_meta.id,
-                    "created_at": session_meta.created_at.isoformat(),
-                    "last_updated": session_meta.last_updated.isoformat(),
-                    "title": session_meta.title,
-                    "tags": session_meta.tags,
-                }
-            )
-
-        logger.debug(f"Listed {len(session_list)} sessions")
-        return jsonify(session_list)
+        logger.debug(f"Listed {len(sessions)} sessions")
+        return jsonify(sessions)
 
     except Exception as e:
         logger.error(f"Error listing sessions: {e}")
@@ -1100,23 +1025,12 @@ def create_session():
         if tags is not None and not isinstance(tags, list):
             return jsonify({"error": "tags must be an array"}), 400
 
-        store = get_default_session_store()
-        session_state = store.create(title=title, tags=tags)
+        session_id = str(uuid.uuid4())
+        meta = _register_session(session_id, title=title, tags=tags)
 
-        logger.info(f"Created session {session_state.meta.id} with title: {title}")
+        logger.info(f"Created session {meta['id']} with title: {title}")
 
-        return (
-            jsonify(
-                {
-                    "id": session_state.meta.id,
-                    "created_at": session_state.meta.created_at.isoformat(),
-                    "last_updated": session_state.meta.last_updated.isoformat(),
-                    "title": session_state.meta.title,
-                    "tags": session_state.meta.tags,
-                }
-            ),
-            201,
-        )
+        return jsonify(meta), 201
 
     except Exception as e:
         logger.error(f"Error creating session: {e}")
@@ -1138,12 +1052,7 @@ def resume_session():
         if not session_id:
             return jsonify({"error": "id is required"}), 400
 
-        store = get_default_session_store()
-
-        # Check if session exists
-        try:
-            store.load(session_id)
-        except ValueError:
+        if not _get_session_meta(session_id) and session_id not in active_sessions:
             return jsonify({"ok": False, "error": "not_found"}), 404
 
         logger.info(f"Resumed session {session_id}")
@@ -1161,10 +1070,7 @@ def get_session_exports(session_id):
     """Get list of export files for a session."""
     try:
         # Validate session exists
-        store = get_default_session_store()
-        try:
-            store.load(session_id)
-        except ValueError:
+        if not _get_session_meta(session_id) and session_id not in active_sessions:
             return jsonify({"error": "Session not found"}), 404
 
         # Get exports directory for this session
@@ -1221,10 +1127,7 @@ def trigger_session_export(session_id):
     """Trigger export for a session."""
     try:
         # Validate session exists
-        store = get_default_session_store()
-        try:
-            store.load(session_id)
-        except ValueError:
+        if not _get_session_meta(session_id) and session_id not in active_sessions:
             return jsonify({"ok": False, "error": "Session not found"}), 404
 
         # Create exports directory for this session
@@ -1236,17 +1139,22 @@ def trigger_session_export(session_id):
         created_files = []
 
         try:
-            # Build messages from session events for export
-            session_state = store.load(session_id)
+            # Build messages from the active swarm's conversation history
             messages_for_export = []
-            for event in sorted(session_state.events, key=lambda e: e.ts):
-                if event.type == "message":
-                    messages_for_export.append({
-                        "message_type": event.payload.get("message_type", "message"),
-                        "role": event.actor,
-                        "content": event.payload.get("content", ""),
-                        "created_at": event.ts.isoformat(),
-                    })
+            web_swarm = active_sessions.get(session_id)
+            if web_swarm:
+                history = getattr(web_swarm.swarm, "conversation_history", "")
+                for line in history.strip().split("\n"):
+                    if not line.strip():
+                        continue
+                    if ": " in line:
+                        role, content = line.split(": ", 1)
+                        messages_for_export.append({
+                            "message_type": "message",
+                            "role": role,
+                            "content": content,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        })
 
             # Export to JSON
             json_path = export_session_to_json(
@@ -1284,10 +1192,7 @@ def download_session_export(session_id, filename):
     """Download a specific export file for a session."""
     try:
         # Validate session exists
-        store = get_default_session_store()
-        try:
-            store.load(session_id)
-        except ValueError:
+        if not _get_session_meta(session_id) and session_id not in active_sessions:
             return jsonify({"error": "Session not found"}), 404
 
         # Security: Prevent path traversal
@@ -1665,9 +1570,8 @@ def create_message():
             payload=payload,
         )
 
-        # Save event
-        store = get_default_session_store()
-        store.save_event(event)
+        # Event is tracked via the WebSwarmManager's conversation history;
+        # no separate event store needed.
 
         logger.info(
             f"Message created with {len(attachments)} attachments for session {session_id}"
