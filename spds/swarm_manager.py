@@ -693,6 +693,10 @@ class SwarmManager:
             logger.info(f"Assigned role '{role}' to {agent.name}")
             if role == "secretary":
                 self.secretary_agent_id = agent.agent.id
+                # Create a proper SecretaryAgent wrapper so .mode, .observe_message, etc. work
+                self._secretary = SecretaryAgent.from_existing(
+                    self.client, agent.agent
+                )
                 # Clear other agents' secretary role if exclusive
                 for other_agent in self.agents:
                     if other_agent.agent.id != agent_id and "secretary" in other_agent.roles:

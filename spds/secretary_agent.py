@@ -34,6 +34,21 @@ class SecretaryAgent:
         # Create the secretary agent
         self._create_secretary_agent()
 
+    @classmethod
+    def from_existing(cls, client: Letta, agent_state: AgentState, mode: str = "adaptive"):
+        """Wrap an existing Letta agent as a SecretaryAgent without creating a new one."""
+        instance = object.__new__(cls)
+        instance.client = client
+        instance.mode = mode
+        instance.agent = agent_state
+        instance.meeting_metadata = {}
+        instance.conversation_log = []
+        instance.action_items = []
+        instance.decisions = []
+        instance.conversation_id = None
+        instance._conversation_manager = None
+        return instance
+
     def _create_secretary_agent(self):
         """Creates or retrieves a specialized secretary agent using reuse-first policy."""
 
