@@ -249,6 +249,49 @@ def mock_mcp_letta_client(mock_letta_client):
     return mock_letta_client
 
 
+class MockSyncArrayPage:
+    """Mock that mimics the real Letta SDK SyncArrayPage behavior.
+
+    The real ``SyncArrayPage[T]`` returned by SDK ``.list()`` methods is:
+    - iterable  (supports ``for item in page``)
+    - NOT subscriptable  (``page[0]`` raises ``TypeError``)
+    - does NOT support ``len()``  (``len(page)`` raises ``TypeError``)
+    - convertible to a plain list via ``list(page)``
+
+    Use this mock to verify that application code correctly wraps paginated
+    results with ``list()`` instead of assuming subscript access.
+    """
+
+    def __init__(self, items):
+        self._items = list(items)
+
+    def __iter__(self):
+        return iter(self._items)
+
+    def __getitem__(self, index):
+        raise TypeError(
+            f"'{type(self).__name__}' object is not subscriptable"
+        )
+
+    def __len__(self):
+        raise TypeError(
+            f"object of type '{type(self).__name__}' has no len()"
+        )
+
+    def __bool__(self):
+        # Truthiness should still work (the real SDK page is truthy when non-empty)
+        return bool(self._items)
+
+    def __repr__(self):
+        return f"MockSyncArrayPage({self._items!r})"
+
+
+@pytest.fixture
+def mock_sync_array_page():
+    """Factory fixture: returns a callable that wraps items in MockSyncArrayPage."""
+    return lambda items: MockSyncArrayPage(items)
+
+
 @pytest.fixture(autouse=True)
 def set_ephemeral_agents_env(monkeypatch):
     """Set SPDS_ALLOW_EPHEMERAL_AGENTS to 'true' for all tests."""
