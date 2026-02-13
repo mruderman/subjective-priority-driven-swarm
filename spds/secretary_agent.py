@@ -83,12 +83,12 @@ class SecretaryAgent:
                 print(f"⚠️ Failed to retrieve secretary by ID {sec_id}: {e}")
         if sec_name:
             try:
-                found = letta_call(
+                found = list(letta_call(
                     "secretary.agent.list",
                     self.client.agents.list,
                     name=sec_name,
                     limit=1,
-                )
+                ))
                 if found:
                     self.agent = found[0]
                     print(f"✅ Reusing secretary agent by name: {sec_name}")

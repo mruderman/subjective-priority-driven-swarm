@@ -279,7 +279,8 @@ class SPDSAgent:
 
         if not tools_list:
             return None
-        return tools_list[0]
+        tools_result = list(tools_list)
+        return tools_result[0] if tools_result else None
 
     def _get_full_assessment(self, conversation_history: str = "", topic: str = ""):
         """Calls the agent's LLM to perform subjective assessment.

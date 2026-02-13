@@ -85,6 +85,7 @@ def check_agent_by_name(client: Letta, agent_name: str) -> Dict:
             ],
         }
 
+    agents = list(agents)
     if len(agents) > 1:
         logger.warning(f"Multiple agents found with name '{agent_name}', using first match")
 

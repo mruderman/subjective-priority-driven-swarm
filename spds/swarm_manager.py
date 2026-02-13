@@ -609,7 +609,8 @@ class SwarmManager:
                     level="warning",
                 )
                 continue
-            self.agents.append(SPDSAgent(found_agents[0], self.client))
+            agents_list = list(found_agents)
+            self.agents.append(SPDSAgent(agents_list[0], self.client))
 
     def _create_agents_from_profiles(self, agent_profiles: list):
         """

@@ -201,11 +201,11 @@ class MCPLaunchpad:
 
         # Check for existing block first
         try:
-            existing_blocks = letta_call(
+            existing_blocks = list(letta_call(
                 "blocks.list(tool_ecosystem)",
                 self._client.blocks.list,
                 label="tool_ecosystem",
-            )
+            ))
             if existing_blocks:
                 block = existing_blocks[0]
                 self._ecosystem_block_id = block.id
