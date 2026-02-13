@@ -11,8 +11,6 @@
 - Root configs: `pyproject.toml`, `.flake8`, `pytest.ini`, `.pre-commit-config.yaml`, `Makefile`.
 - Agent configs: `creative_swarm.json`, `openai_swarm.json`, `tool_swarm.json`, `vision_swarm.json`.
 
-**🎉 Recent Major Achievement**: Completed conversation logic refactor (September 2025) - implemented dynamic, context-aware agent interactions with ConversationMessage architecture for incremental delivery.
-
 ## Build, Test, and Development Commands
 - Create env and install: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
 - Web UI deps: `pip install -r swarms-web/requirements.txt && pip install git+https://github.com/letta-ai/letta-flask.git`

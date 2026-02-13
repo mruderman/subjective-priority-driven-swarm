@@ -290,34 +290,7 @@ tests/
 
 ### Role-Based Secretary Assignment
 
-The SPDS system now supports flexible role assignment for the secretary position through the core role management system:
-
-#### Assignment Methods:
-
-1. **User Pre-specification (CLI)** _(Coming Soon)_:
-   ```bash
-   python -m spds.main --secretary "Agent Name"
-   ```
-
-2. **User Pre-specification (Web GUI)** _(Coming Soon)_:
-   - Click the journal icon next to any participant's name
-   - Secretary badge will appear on the selected agent
-
-3. **Agent Nomination (Autonomous)** _(Tool Created, Handler Implementation Coming Soon)_:
-   - Agents can nominate each other using the `propose_secretary_nomination` tool
-   - Nominated agent receives a prompt to accept or decline
-   - Acceptance automatically assigns the secretary role
-
-4. **No Secretary Mode**:
-   - If no secretary is assigned, the swarm operates without meeting documentation
-   - All agents receive incremental conversation history
-
-#### Role System Architecture:
-
-- **Multi-role Support**: Agents can have multiple roles (future-proofing)
-- **Dynamic Assignment**: Roles can be changed mid-session via `SwarmManager.assign_role()`
-- **Persistence**: Role assignments persist for the session duration
-- **Flexible Access**: Agents with the secretary role automatically receive full conversation history
+The system supports flexible role assignment with multi-role support, dynamic mid-session changes, and session-scoped persistence. If no secretary is assigned, the swarm operates without meeting documentation.
 
 #### Core Role Management API:
 
@@ -347,9 +320,8 @@ agent = swarm_manager.get_agent_by_id("agent-id-123")
 ## Secretary Implementation Details
 
 ### Technical Architecture
-The secretary agent implementation was completely rewritten to use proper Letta API patterns:
 
-#### Agent Creation with Memory Blocks
+#### Agent Creation
 ```python
 self.agent = self.client.agents.create(
     name=name,
@@ -365,26 +337,7 @@ self.agent = self.client.agents.create(
 )
 ```
 
-### Troubleshooting note
-
-If you encounter an installation error when trying to install `letta-flask`
-from GitHub (for example: "No matching distribution found for
-typing>=3.10.0.0"), see the `Troubleshooting` section in `README.md`.
-
-Practical quick workarounds include:
-
-- Use the repository's local `letta_flask` shim (recommended for local
-    development) — run the web server from the repo root and Python will
-    import the local package.
-- Install the upstream package without dependencies:
-
-    ```bash
-    pip install --no-deps git+https://github.com/letta-ai/letta-flask.git
-    ```
-
-If you'd like, I can also prepare a temporary wheel with corrected metadata
-for your environment.
-#### Active Message Processing
+#### Message Observation
 ```python
 def observe_message(self, speaker: str, message: str, metadata: Optional[Dict] = None):
     self.client.agents.messages.create(
@@ -393,27 +346,22 @@ def observe_message(self, speaker: str, message: str, metadata: Optional[Dict] =
     )
 ```
 
-#### AI-Generated Meeting Minutes
+#### Minutes Generation
 ```python
 def generate_minutes(self) -> str:
     minutes_request = (f"Please generate meeting minutes for our {self.meeting_metadata.get('meeting_type', 'discussion')} about '{self.meeting_metadata.get('topic', 'Unknown Topic')}'. Use {self.mode} style documentation...")
     response = self.client.agents.messages.create(agent_id=self.agent.id, messages=[MessageCreate(role="user", content=minutes_request)])
 ```
 
-### Key Improvements
-- **Real AI Processing**: Secretary now uses actual Letta agent AI instead of static formatting
-- **Active Communication**: Uses `client.agents.messages.create()` for real-time processing
-- **Memory Persistence**: Meeting context stored in agent memory blocks
-- **Agent Reuse**: Prevents duplicate secretary creation by checking existing agents
-- **Proper Response Extraction**: Handles Letta agent responses correctly
+### Troubleshooting note
 
-### Fixed Issues
-- **Static Implementation**: Removed all static minute generation methods
-- **Duplicate Agents**: Added agent reuse logic to prevent multiple secretary instances
-- **PostgreSQL Errors**: Addressed by focusing on proper Letta API usage
-- **UI Updates**: WebSocket integration for real-time secretary status updates
-- **Token Limit Errors**: Completely refactored to use Letta's stateful agent design instead of passing conversation history
-- **Memory Management**: Agents now maintain their own memory via Letta, eliminating token overflow issues
+If you encounter an installation error when trying to install `letta-flask`
+from GitHub (for example: "No matching distribution found for
+typing>=3.10.0.0"), see the `Troubleshooting` section in `README.md`.
+Workarounds: use the local `letta_flask` shim (run web server from repo root), or install without dependencies:
+```bash
+pip install --no-deps git+https://github.com/letta-ai/letta-flask.git
+```
 
 ## Agent Autonomy and Memory Management Philosophy
 

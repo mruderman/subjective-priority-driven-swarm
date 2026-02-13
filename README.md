@@ -6,8 +6,6 @@ Multi-agent group chat with real Letta agents. Use a modern Web GUI or a friendl
 
 This project implements a multi-agent group chat system using the Subjective Priority-Driven Swarm (SPDS) framework, where AI agents autonomously decide when to contribute to conversations based on internal priority calculations. Built on the Letta platform, it features real computational beings from a Letta ADE server. Available as both a CLI application and a modern web interface, it features intuitive agent selection and multiple conversation modes for rich, dynamic discussions.
 
-**🎉 Major Update**: Successfully completed conversation logic refactor (September 2025) - now featuring dynamic, context-aware agent interactions with natural conversation flow and incremental message delivery.
-
 **Key Innovation**: Agents use their own LLM models to perform real subjective assessment of conversations, creating authentic computational personalities that naturally respond, agree, disagree, and build on each other's ideas. The system now uses recent conversation context instead of static topics for more relevant and engaging interactions.
 
 ## 🎭 Conversation Modes
@@ -55,6 +53,9 @@ This project implements a multi-agent group chat system using the Subjective Pri
 - **💬 Human-in-the-Loop**: Seamless interaction between human beings and computational beings
 - **⌨️ Live Commands**: Real-time meeting management with slash commands
 - **🚀 WebSocket Communication**: Real-time updates and live agent responses in web interface
+- **🔗 Cross-Agent Messaging**: Agents communicate autonomously via direct messaging
+- **🧰 MCP Launchpad**: On-demand tool discovery for agents via semantic search
+- **💾 Session Persistence**: Server-side conversation persistence via Letta Conversations API
 
 ## Quick Start
 
@@ -70,6 +71,8 @@ cd swarms-web && python run.py   # http://localhost:5002
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python3 -m spds.main
+python3 -m spds.main sessions list   # List saved sessions
+python3 -m spds.main sessions resume <ID>  # Resume a session
 ```
 
 ## Configuration

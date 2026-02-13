@@ -2,8 +2,6 @@
 
 This guide helps you get the project running quickly for both the Web GUI and CLI.
 
-**🎉 Recent Update**: Successfully completed conversation logic refactor (September 2025) - now featuring dynamic, context-aware agent interactions with natural conversation flow.
-
 ## Prerequisites
 - Python 3.10+
 - A Letta ADE server (cloud or self-hosted)
