@@ -370,19 +370,18 @@ class SwarmManager:
         return get_new_messages_since_index(self._history, last_idx)
 
     def _normalize_agent_message(self, message_text: str, agent=None) -> str:
-        """Normalize agent output for downstream display and tests.
+        """Normalize agent output for downstream display.
 
         If an agent returned an error-wrapped message (produced by SPDSAgent when
-        encountering errors), map it to a short human-friendly fallback so
-        existing tests that expect the simple fallback string continue to pass.
-        We still log the original message via logger for diagnostics.
+        encountering errors), surface the error explicitly so users can diagnose
+        issues instead of seeing a vague fallback.
 
         Args:
             message_text: The message text to normalize
             agent: Optional SPDSAgent instance for enhanced logging
 
         Returns:
-            Normalized message text
+            Normalized message text — errors are surfaced, not hidden
         """
         if not message_text:
             return message_text
@@ -394,18 +393,13 @@ class SwarmManager:
         )
 
         if is_error:
+            agent_name = agent.name if agent else "unknown agent"
             logger = config.logger
-            # Log full error BEFORE normalizing for debugging
             logger.warning(
-                f"Normalizing error response from {agent.name if agent else 'unknown agent'}",
-                extra={
-                    "agent_name": agent.name if agent else "unknown",
-                    "agent_id": agent.agent.id if agent else "unknown",
-                    "original_message": message_text,
-                    "message_preview": message_text[:200],
-                }
+                f"Agent error response from {agent_name}: {message_text[:200]}"
             )
-            return "I have some thoughts but I'm having trouble phrasing them."
+            # Surface the error to the user instead of masking it
+            return f"[Agent error] {message_text}"
         return message_text
 
     def _check_and_fulfill_mcp_requests(self, agent, response) -> Optional[str]:
@@ -1127,6 +1121,9 @@ class SwarmManager:
         )
         start_time = time.time()
         for agent in self.agents:
+            # Skip agents with the secretary role — they observe, not speak
+            if "secretary" in agent.roles:
+                continue
             # Get recent messages since agent's last turn for dynamic assessment
             recent_messages = self.get_new_messages_since_last_turn(agent)
 
@@ -1174,7 +1171,7 @@ class SwarmManager:
             )
 
         motivated_agents = sorted(
-            [agent for agent in self.agents if agent.priority_score > 0],
+            [agent for agent in self.agents if agent.priority_score > 0 and "secretary" not in agent.roles],
             key=lambda x: x.priority_score,
             reverse=True,
         )
@@ -1336,12 +1333,10 @@ class SwarmManager:
                     break
 
             if not message_text:
-                message_text = (
-                    "I have some thoughts but I'm having trouble phrasing them."
-                )
+                message_text = "[No response extracted from agent]"
 
         except Exception as e:
-            message_text = "I have some thoughts but I'm having trouble phrasing them."
+            message_text = f"[Agent response error: {e}]"
             logger.error(f"Error extracting response - {e}")
 
         return message_text
@@ -1411,7 +1406,8 @@ class SwarmManager:
                     if (
                         message_text
                         and len(message_text.strip()) > 10
-                        and "having trouble" not in message_text.lower()
+                        and not message_text.startswith("[Agent error")
+                        and not message_text.startswith("[No response")
                     ):
                         # Good response
                         break
@@ -1530,14 +1526,10 @@ class SwarmManager:
                 # Notify secretary
                 self._notify_secretary_agent_response(agent.name, message_text)
             except Exception as e:
-                # Surface a simple fallback message to stdout so tests and the UI see a concise
-                # human-friendly fallback, while also emitting a debug-formatted error for logs.
-                fallback = "I have some thoughts but I'm having trouble phrasing them."
+                fallback = f"[Agent error: {e}]"
                 self._emit(f"{agent.name}: {fallback}")
-                # Append normalized fallback to conversation history for downstream consumers
                 self._append_history(agent.name, fallback)
                 agent.last_message_index = len(self._history) - 1
-                # Emit a debug-level sentinel that some tests expect verbatim.
                 self._emit(f"[Debug: Error in response round - {e}]", level="error")
 
         # Log overall turn timing
@@ -1608,10 +1600,9 @@ class SwarmManager:
                 # Notify secretary
                 self._notify_secretary_agent_response(agent.name, message_text)
             except Exception as e:
-                fallback = "I have some thoughts but I'm having trouble expressing them clearly."
+                fallback = f"[Agent error: {e}]"
                 self._emit(f"{agent.name}: {fallback}")
                 self._append_history(agent.name, fallback)
-                # Update agent's last message index
                 agent.last_message_index = len(self._history) - 1
                 self._emit(
                     f"Error in all-speak response - {e}",
@@ -1678,12 +1669,10 @@ class SwarmManager:
             # Notify secretary
             self._notify_secretary_agent_response(speaker.name, message_text)
         except Exception as e:
-            fallback = "I have some thoughts but I'm having trouble phrasing them."
+            fallback = f"[Agent error: {e}]"
             self._emit(f"{speaker.name}: {fallback}")
             self._append_history(speaker.name, fallback)
-            # Update agent's last message index
             speaker.last_message_index = len(self._history) - 1
-            # Notify secretary of fallback too
             self._notify_secretary_agent_response(speaker.name, fallback)
             self._emit(
                 f"[Debug: Error in sequential response - {e}]",
@@ -1747,12 +1736,10 @@ class SwarmManager:
             # Notify secretary
             self._notify_secretary_agent_response(speaker.name, message_text)
         except Exception as e:
-            fallback = "I have thoughts on this topic but I'm having difficulty expressing them."
+            fallback = f"[Agent error: {e}]"
             self._emit(f"{speaker.name}: {fallback}")
             self._append_history(speaker.name, fallback)
-            # Update agent's last message index
             speaker.last_message_index = len(self._history) - 1
-            # Notify secretary of fallback too
             self._notify_secretary_agent_response(speaker.name, fallback)
             self._emit(
                 f"Error in pure priority response - {e}",

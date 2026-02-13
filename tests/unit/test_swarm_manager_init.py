@@ -352,6 +352,8 @@ def test_start_chat_basic_flow(
         mock_agent.priority_score = 30.0
         mock_agent.motivation_score = 50
         mock_agent.assess_motivation_and_priority = Mock()
+        mock_agent.roles = []
+        mock_agent.last_message_index = -1
 
         # Mock successful speak
         mock_response = SimpleNamespace(

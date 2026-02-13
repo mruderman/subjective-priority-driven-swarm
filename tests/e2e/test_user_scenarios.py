@@ -786,8 +786,8 @@ class TestE2EUserScenarios:
         assert "Error Testing" in caplog.text
         assert "Assessing agent motivations" in caplog.text
         assert (
-            "Error Test Agent: I have some thoughts but I'm having trouble phrasing them."
-            in caplog.text
+            "Error Test Agent: [Agent error:" in caplog.text
+            or "Error Test Agent: [No response extracted from agent]" in caplog.text
             or "Error in sequential response" in caplog.text
         )
         assert "Exiting chat" in caplog.text

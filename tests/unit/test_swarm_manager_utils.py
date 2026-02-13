@@ -318,7 +318,7 @@ def test_extract_agent_response_variants(
     empty_response = SimpleNamespace(messages=[empty_message])
     assert (
         manager._extract_agent_response(empty_response)
-        == "I have some thoughts but I'm having trouble phrasing them."
+        == "[No response extracted from agent]"
     )
 
 
@@ -1110,7 +1110,7 @@ def test_extract_agent_response_tool_return_and_break(monkeypatch):
     # tool_return present -> continue and default fallback
     resp1 = types.SimpleNamespace(messages=[Msg(tool_return=True)])
     fallback = mgr._extract_agent_response(resp1)
-    assert "trouble phrasing" in fallback
+    assert fallback == "[No response extracted from agent]"
 
     # extraction_successful -> break early on second message
     tf = TF("send_message", '{"message": "X"}')
@@ -1344,7 +1344,7 @@ def test_extract_agent_response_various_shapes():
     tf2 = ToolFunction("send_message", "{bad json")
     msg2 = Msg(tool_calls=[ToolCall(tf2)])
     resp2 = type("R", (), {"messages": [msg2]})
-    assert "trouble phrasing" in mgr._extract_agent_response(resp2)
+    assert mgr._extract_agent_response(resp2) == "[No response extracted from agent]"
 
     # Case 3: assistant message with content string
     msg3 = Msg(message_type="assistant_message", content="Assistant text")
@@ -1367,7 +1367,7 @@ def test_extract_agent_response_various_shapes():
 
     # Case 6: empty messages -> default
     resp6 = type("R", (), {"messages": []})
-    assert "trouble phrasing" in mgr._extract_agent_response(resp6)
+    assert mgr._extract_agent_response(resp6) == "[No response extracted from agent]"
 
 
 # ============================================================================

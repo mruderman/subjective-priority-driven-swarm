@@ -115,12 +115,16 @@ def test_agent_turn_with_motivated_agents(mock_letta_client, sample_agent_profil
         mock_agent1.priority_score = 15.0
         mock_agent1.motivation_score = 40
         mock_agent1.assess_motivation_and_priority = Mock()
+        mock_agent1.roles = []
+        mock_agent1.last_message_index = -1
 
         mock_agent2 = Mock(spec=SPDSAgent)
         mock_agent2.name = "Agent 2"
         mock_agent2.priority_score = 25.0  # Higher priority
         mock_agent2.motivation_score = 50
         mock_agent2.assess_motivation_and_priority = Mock()
+        mock_agent2.roles = []
+        mock_agent2.last_message_index = -1
 
         # Mock speak response
         mock_response = SimpleNamespace(
@@ -173,12 +177,16 @@ def test_agent_turn_with_no_motivated_agents(mock_letta_client, sample_agent_pro
         mock_agent1.priority_score = 0.0
         mock_agent1.motivation_score = 20
         mock_agent1.assess_motivation_and_priority = Mock()
+        mock_agent1.roles = []
+        mock_agent1.last_message_index = -1
 
         mock_agent2 = Mock(spec=SPDSAgent)
         mock_agent2.name = "Agent 2"
         mock_agent2.priority_score = 0.0
         mock_agent2.motivation_score = 15
         mock_agent2.assess_motivation_and_priority = Mock()
+        mock_agent2.roles = []
+        mock_agent2.last_message_index = -1
 
         mock_create.side_effect = [mock_agent1, mock_agent2]
 
@@ -212,6 +220,8 @@ def test_agent_turn_with_speak_error(mock_letta_client, sample_agent_profiles):
         mock_agent.priority_score = 30.0
         mock_agent.motivation_score = 50
         mock_agent.assess_motivation_and_priority = Mock()
+        mock_agent.roles = []
+        mock_agent.last_message_index = -1
 
         # Mock speak to raise an exception
         mock_agent.speak.side_effect = Exception("API Error")
@@ -235,7 +245,7 @@ def test_agent_turn_with_speak_error(mock_letta_client, sample_agent_profiles):
 
         # Should handle the error gracefully
         assert (
-            "Error Agent: I have some thoughts but I'm having trouble phrasing them."
+            "Error Agent: [Agent error: API Error]"
             in output
         )
         assert (
@@ -505,7 +515,7 @@ def test_sequential_turn_handles_exception_fallback(
 
     manager._sequential_turn([failing_agent], "Topic")
 
-    fallback = "I have some thoughts but I'm having trouble phrasing them."
+    fallback = "[Agent error: fail]"
     assert f"Agent 1: {fallback}" in manager.conversation_history
     manager._notify_secretary_agent_response.assert_called_with("Agent 1", fallback)
 
@@ -538,9 +548,7 @@ def test_pure_priority_turn_handles_exception(
 
     manager._pure_priority_turn([failing_agent], "Topic")
 
-    fallback = (
-        "I have thoughts on this topic but I'm having difficulty expressing them."
-    )
+    fallback = "[Agent error: fail]"
     assert f"Agent 1: {fallback}" in manager.conversation_history
     manager._notify_secretary_agent_response.assert_called_with("Agent 1", fallback)
 
@@ -553,6 +561,8 @@ class DummyAgent:
         self.name = name
         self.priority_score = prio
         self.motivation_score = 40
+        self.roles = []
+        self.last_message_index = -1
 
     def assess_motivation_and_priority(self, topic):
         pass
@@ -687,6 +697,8 @@ class FakeAgent:
         self.priority_score = 1.0
         self.text = text
         self.raise_on_speak = raise_on_speak
+        self.roles = []
+        self.last_message_index = -1
 
     def assess_motivation_and_priority(self, topic):
         # leave priority_score as-is
@@ -783,10 +795,7 @@ def test_sequential_turn_fairness_and_fallback(monkeypatch, capsys):
     mgr2 = make_mgr_with_agents([a3])
     mgr2._notify_secretary_agent_response = lambda n, m: None
     mgr2._sequential_turn([a3], "topic")
-    assert (
-        "having trouble" in mgr2.conversation_history
-        or "trouble" in mgr2.conversation_history
-    )
+    assert "[Agent error:" in mgr2.conversation_history
 
 
 def test_pure_priority_turn_fallback_and_notify():
@@ -806,7 +815,7 @@ def test_pure_priority_turn_fallback_and_notify():
 
     mgr._pure_priority_turn([a1], "topic")
     # fallback message should be present
-    assert any("thoughts" in v for v in mgr.conversation_history.splitlines())
+    assert any("[Agent error:" in v for v in mgr.conversation_history.splitlines())
     # secretary should have observed fallback
     assert sec._observed
 
@@ -821,6 +830,8 @@ def test_agent_turn_no_motivated_prints(capsys):
         priority_score=0.0,
         motivation_score=0,
         assess_motivation_and_priority=lambda t, u: None,
+        roles=[],
+        last_message_index=-1,
     )
     mgr.agents = [a]
     mgr.conversation_mode = "hybrid"
@@ -838,6 +849,8 @@ def test_all_speak_fallback_on_exception(monkeypatch):
             self.agent = Inner()
             self.name = name
             self.priority_score = 1.0
+            self.roles = []
+            self.last_message_index = -1
 
         def speak(self, conversation_history=None):
             raise RuntimeError("fail")
@@ -850,7 +863,7 @@ def test_all_speak_fallback_on_exception(monkeypatch):
 
     mgr._all_speak_turn(motivated_agents=mgr.agents, topic="t")
     # fallback message added
-    assert any("trouble" in line for line in mgr.conversation_history.splitlines())
+    assert any("[Agent error:" in line for line in mgr.conversation_history.splitlines())
 
 
 def test_hybrid_turn_initial_exception_and_instruction_error(monkeypatch, capsys):
@@ -864,6 +877,8 @@ def test_hybrid_turn_initial_exception_and_instruction_error(monkeypatch, capsys
             self.priority_score = 1.0
             self.expertise = "testing"
             self._raise = raise_on_speak
+            self.roles = []
+            self.last_message_index = -1
 
         def speak(self, conversation_history=None):
             if self._raise:
@@ -903,6 +918,8 @@ def test_pure_priority_turn_success():
             self.agent = Inner()
             self.name = name
             self.priority_score = 1.0
+            self.roles = []
+            self.last_message_index = -1
 
         def speak(self, conversation_history=None):
             return types.SimpleNamespace(
@@ -933,6 +950,8 @@ class FakeAgentObj:
         self.name = name
         self.motivation_score = 0
         self.priority_score = priority
+        self.roles = []
+        self.last_message_index = -1
 
     def assess_motivation_and_priority(self, topic):
         # For tests we toggle priority based on stored attribute
@@ -973,6 +992,8 @@ def test_agent_turn_dispatches_modes(mock_letta_client):
     for a in mgr.agents:
         a.assess_motivation_and_priority = Mock()
         a.priority_score = 5
+        a.roles = []
+        a.last_message_index = -1
         a.speak = Mock(
             return_value=SimpleNamespace(messages=[SimpleNamespace(content="hi")])
         )
@@ -1001,6 +1022,8 @@ class DummyAgentExtract:
         self.name = name
         self.priority_score = 10
         self.motivation_score = 40
+        self.roles = []
+        self.last_message_index = -1
 
     def assess_motivation_and_priority(self, topic):
         pass

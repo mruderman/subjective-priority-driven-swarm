@@ -232,6 +232,8 @@ class TestModelDiversity:
             mock_agent.priority_score = 20.0 + i * 10  # Different priorities
             mock_agent.motivation_score = 40 + i * 5
             mock_agent.assess_motivation_and_priority = Mock()
+            mock_agent.roles = []
+            mock_agent.last_message_index = -1
 
             # Mock speak response specific to the model
             mock_response = SimpleNamespace(
@@ -347,6 +349,8 @@ class TestModelDiversity:
             mock_agent.priority_score = 10.0 + i * 5
             mock_agent.motivation_score = 30 + i * 3
             mock_agent.assess_motivation_and_priority = Mock()
+            mock_agent.roles = []
+            mock_agent.last_message_index = -1
 
             # Mock speak response
             mock_response = SimpleNamespace(
